@@ -1,4 +1,4 @@
-# Deneb - Decentralized directory syncronization
+# Deneb - decentralized directory syncronization
 
 ## Overview
 
