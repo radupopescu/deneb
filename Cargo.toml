@@ -1,0 +1,6 @@
+[package]
+name = "deneb"
+version = "0.1.0"
+authors = ["Radu Popescu <mail@radupopescu.net>"]
+
+[dependencies]
