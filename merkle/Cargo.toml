@@ -1,0 +1,7 @@
+[package]
+name = "merkle"
+version = "0.1.0"
+authors = ["Radu Popescu <mail@radupopescu.net>"]
+
+[dependencies]
+rust-crypto = "~0.2.36"
