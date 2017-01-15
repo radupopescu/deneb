@@ -45,7 +45,7 @@ impl Tree {
         Tree { root: Rc::new(Element::Empty) }
     }
 
-    pub fn from<T: Hashable>(vals: &Vec<T>) -> Result<Tree, errors::MerkleError> {
+    pub fn from<T: Hashable>(vals: &[T]) -> Result<Tree, errors::MerkleError> {
         let mut nodes = Vec::new();
         for v in vals.into_iter() {
             let h = v.hash()?;
@@ -68,6 +68,10 @@ impl Tree {
             current_length = nodes.len();
         }
         Ok(Self::new())
+    }
+
+    pub fn root_hash(&self) -> Result<Vec<u8>, errors::MerkleError> {
+        self.root.hash()
     }
 
     fn reduce(n1: &Rc<Element>, n2: &Rc<Element>) -> Rc<Element> {
@@ -104,10 +108,4 @@ impl Default for Tree {
     fn default() -> Self {
         Self::new()
     }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {}
 }
