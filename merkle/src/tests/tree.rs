@@ -3,7 +3,7 @@ extern crate crypto;
 use super::super::tree::*;
 
 fn get_hash(values: &[&str]) -> Vec<u8> {
-    if let Ok(tree) = Tree::from(values) {
+    if let Ok(tree) = Tree::new(values) {
         if let Ok(hash) = tree.root_hash() {
             hash
         } else {
@@ -25,7 +25,6 @@ fn tree_of_single_leaf() {
 }
 
 #[test]
-
 fn tree_of_two_leaves() {
     assert_ne!(get_hash(&["ala", "bala"]), []);
 }
