@@ -1,6 +1,7 @@
 extern crate crypto;
 
 use super::super::tree::*;
+use super::super::errors::*;
 
 fn get_hash(values: &[&str]) -> Vec<u8> {
     if let Ok(tree) = Tree::new(values) {
@@ -16,7 +17,13 @@ fn get_hash(values: &[&str]) -> Vec<u8> {
 
 #[test]
 fn empty_tree() {
-    assert_eq!(get_hash(&[]), []);
+    let err = Tree::new(&[] as &[&str]);
+    match err {
+        Err(MerkleError::EmptyInput) => (),
+        _ => {
+            panic!("Tree::new(&[]) should return MerkleError::EmptyInput");
+        }
+    }
 }
 
 #[test]

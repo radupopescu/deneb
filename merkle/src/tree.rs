@@ -9,6 +9,7 @@ pub trait Hashable {
     fn hash(&self) -> Result<Vec<u8>, errors::MerkleError>;
 }
 
+#[derive(Debug)]
 pub struct Tree {
     root: Element,
 }
@@ -97,12 +98,16 @@ impl<'a> Hashable for &'a str {
 
 impl Tree {
     pub fn new<T: Hashable>(vals: &[T]) -> Result<Tree, errors::MerkleError> {
-        let mut nodes = Vec::new();
-        for v in vals.into_iter() {
-            let h = v.hash()?;
-            nodes.push(Element::Leaf { hash: h });
+        if vals.is_empty() {
+            Err(errors::MerkleError::EmptyInput)
+        } else {
+            let mut nodes = Vec::new();
+            for v in vals.into_iter() {
+                let h = v.hash()?;
+                nodes.push(Element::Leaf { hash: h });
+            }
+            Ok(Tree { root: build(&nodes[..]) })
         }
-        Ok(Tree { root: build(&nodes[..]) })
     }
 
     pub fn root_hash(&self) -> Result<Vec<u8>, errors::MerkleError> {
