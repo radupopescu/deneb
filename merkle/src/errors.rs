@@ -7,6 +7,7 @@ use std::string::FromUtf8Error;
 pub enum MerkleError {
     Hash(io::Error),
     String(FromUtf8Error),
+    EmptyInput,
 }
 
 impl fmt::Display for MerkleError {
@@ -14,6 +15,7 @@ impl fmt::Display for MerkleError {
         match *self {
             MerkleError::Hash(ref err) => err.fmt(f),
             MerkleError::String(ref err) => err.fmt(f),
+            MerkleError::EmptyInput => f.write_str("Empty input"),
         }
     }
 }
@@ -23,6 +25,7 @@ impl Error for MerkleError {
         match *self {
             MerkleError::Hash(ref err) => err.description(),
             MerkleError::String(ref err) => err.description(),
+            MerkleError::EmptyInput => "Empty input",
         }
     }
 
@@ -30,6 +33,7 @@ impl Error for MerkleError {
         match *self {
             MerkleError::Hash(ref err) => Some(err),
             MerkleError::String(ref err) => Some(err),
+            MerkleError::EmptyInput => None,
         }
     }
 }
