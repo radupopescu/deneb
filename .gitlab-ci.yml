@@ -2,9 +2,14 @@ test:stable:
   image: jimmycuadra/rust
   tags:
     - gitlab-org
+  cache:
+    paths:
+      - target/
+      - cargo/
   variables:
-    CARGO_HOME: "/cache/stable/.cargo"
+    CARGO_HOME: $CI_PROJECT_DIR/cargo
   script:
+    - rustc --version && cargo --version
     - ./ci/test_with_crates.sh
 
 test:nightly:
@@ -12,7 +17,12 @@ test:nightly:
   image: schickling/rust
   tags:
     - gitlab-org
+  cache:
+    paths:
+      - target/
+      - cargo/
   variables:
-    CARGO_HOME: "/cache/nightly/.cargo"
+    CARGO_HOME: $CI_PROJECT_DIR/cargo
   script:
+    - rustc --version && cargo --version
     - ./ci/test_with_crates.sh
