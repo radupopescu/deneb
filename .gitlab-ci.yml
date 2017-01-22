@@ -1,24 +1,18 @@
 test:stable:
   image: jimmycuadra/rust
-
   tags:
     - docker
-
   variables:
-    CARGO_HOME: "/source/.cargo"
-
+    CARGO_HOME: "/cache/stable/.cargo"
   script:
     - ./ci/test_with_crates.sh
 
 test:nightly:
-
+  allow_failure: true
   image: schickling/rust
-
   tags:
     - docker
-
   variables:
-    CARGO_HOME: "/source/.cargo"
-
+    CARGO_HOME: "/cache/nightly/.cargo"
   script:
     - ./ci/test_with_crates.sh
