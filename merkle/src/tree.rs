@@ -2,6 +2,7 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 
 use std::rc::Rc;
+use std::str::from_utf8;
 
 use errors;
 
@@ -26,35 +27,34 @@ struct Element {
 }
 
 /// Recursively build the Merkle tree
-fn build(vals: &[Element]) -> Element {
+fn build(vals: &[Element]) -> Result<Element, errors::MerkleError> {
     match vals.len() {
-        1 => vals[0].clone(),
+        1 => Ok(vals[0].clone()),
         2 => reduce(&vals[0], &vals[1]),
         _ => {
-            reduce(&build(&vals[0..vals.len() / 2]),
-                   &build(&vals[vals.len() / 2 + 1..]))
+            reduce(&build(&vals[0..vals.len() / 2])?,
+                   &build(&vals[vals.len() / 2 + 1..])?)
         }
     }
 }
 
-fn reduce(n1: &Element, n2: &Element) -> Element {
+fn reduce(n1: &Element, n2: &Element) -> Result<Element, errors::MerkleError> {
     let (&Element { hash: ref h1, .. }, &Element { hash: ref h2, .. }) = (n1, n2);
-    Element {
-        hash: combine_hashes(h1, h2),
+    Ok(Element {
+        hash: combine_hashes(h1, h2)?,
         children: Some(Children {
             left: Rc::new(n1.clone()),
             right: Rc::new(n2.clone()),
         }),
-    }
+    })
 }
 
-fn combine_hashes(h1: &Vec<u8>, h2: &Vec<u8>) -> Vec<u8> {
+fn combine_hashes(h1: &Vec<u8>, h2: &Vec<u8>) -> Result<Vec<u8>, errors::MerkleError> {
     let mut hasher = Sha256::new();
-    let h1 = String::from_utf8(h1.clone()).unwrap();
-    let h2 = String::from_utf8(h2.clone()).unwrap();
-    let h = h1 + h2.as_str();
+    let h1 = String::from_utf8(h1.clone())?;
+    let h = h1 + from_utf8(h2)?;
     hasher.input_str(h.as_str());
-    Vec::from(hasher.result_str())
+    Ok(Vec::from(hasher.result_str()))
 }
 
 impl<'a> Hashable for &'a str {
@@ -78,7 +78,7 @@ impl Tree {
                     children: None,
                 });
             }
-            Ok(Tree { root: build(&nodes[..]) })
+            Ok(Tree { root: build(&nodes[..])? })
         }
     }
 
