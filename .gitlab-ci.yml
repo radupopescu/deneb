@@ -1,7 +1,7 @@
 test:stable:
   image: jimmycuadra/rust
   tags:
-    - docker
+    - gitlab-org
   variables:
     CARGO_HOME: "/cache/stable/.cargo"
   script:
@@ -11,7 +11,7 @@ test:nightly:
   allow_failure: true
   image: schickling/rust
   tags:
-    - docker
+    - gitlab-org
   variables:
     CARGO_HOME: "/cache/nightly/.cargo"
   script:
