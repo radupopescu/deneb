@@ -1,19 +1,24 @@
-stable:
+test:stable:
+  image: jimmycuadra/rust
+
   tags:
     - docker
 
-  before_script:
-    - docker pull jimmycuandra/rust
+  variables:
+    CARGO_HOME: "/source/.cargo"
 
   script:
-    - docker run -it --rm -e CARGO_HOME=/source/.cargo -v /cache:/source/.cargo -v $(pwd):/source jimmycuadra/rust sh -c "cd merkle && cargo test && cd ../ && cargo test"
+    - ./ci/test_with_crates.sh
 
-nightly:
+test:nightly:
+
+  image: schickling/rust
+
   tags:
     - docker
 
-  before_script:
-    - docker pull schickling/rust
+  variables:
+    CARGO_HOME: "/source/.cargo"
 
   script:
-    - docker run -it --rm -e CARGO_HOME=/source/.cargo -v /cache:/source/.cargo -v $(pwd):/source schickling/rust sh -c "cd merkle && cargo test && cd ../ && cargo test"
+    - ./ci/test_with_crates.sh
