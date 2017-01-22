@@ -5,11 +5,7 @@ use super::super::errors::*;
 
 fn get_hash(values: &[&str]) -> Vec<u8> {
     if let Ok(tree) = Tree::new(values) {
-        if let Ok(hash) = tree.root_hash() {
-            hash
-        } else {
-            panic!("Could not compute root hash of tree.");
-        }
+        tree.root_hash().clone()
     } else {
         panic!("Could not build Merkle tree.");
     }

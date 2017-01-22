@@ -72,22 +72,6 @@ fn combine_hashes(h1: &Vec<u8>, h2: &Vec<u8>) -> Vec<u8> {
     Vec::from(hasher.result_str())
 }
 
-impl Hashable for Element {
-    fn hash(&self) -> Result<Vec<u8>, errors::MerkleError> {
-        match *self {
-            Element::Leaf { ref hash } => Ok(hash.clone()),
-            Element::Node { ref left, ref right, .. } => {
-                let mut hasher = Sha256::new();
-                let h1 = String::from_utf8(left.hash()?)?;
-                let h2 = String::from_utf8(right.hash()?)?;
-                let h3 = h1 + h2.as_str();
-                hasher.input_str(h3.as_str());
-                Ok(Vec::from(hasher.result_str()))
-            }
-        }
-    }
-}
-
 impl<'a> Hashable for &'a str {
     fn hash(&self) -> Result<Vec<u8>, errors::MerkleError> {
         let mut hasher = Sha256::new();
@@ -110,7 +94,10 @@ impl Tree {
         }
     }
 
-    pub fn root_hash(&self) -> Result<Vec<u8>, errors::MerkleError> {
-        self.root.hash()
+    pub fn root_hash(&self) -> &Vec<u8> {
+        match self.root {
+            Element::Leaf { ref hash } => hash,
+            Element::Node { ref hash, .. } => hash,
+        }
     }
 }
