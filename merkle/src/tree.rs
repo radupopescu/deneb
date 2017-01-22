@@ -9,19 +9,20 @@ pub trait Hashable {
     fn hash(&self) -> Result<Vec<u8>, errors::MerkleError>;
 }
 
-#[derive(Debug)]
 pub struct Tree {
     root: Element,
 }
 
-#[derive(Clone,Debug)]
-enum Element {
-    Leaf { hash: Vec<u8> },
-    Node {
-        hash: Vec<u8>,
-        left: Rc<Element>,
-        right: Rc<Element>,
-    },
+#[derive(Clone)]
+struct Children {
+    left: Rc<Element>,
+    right: Rc<Element>,
+}
+
+#[derive(Clone)]
+struct Element {
+    hash: Vec<u8>,
+    children: Option<Children>,
 }
 
 /// Recursively build the Merkle tree
@@ -37,29 +38,13 @@ fn build(vals: &[Element]) -> Element {
 }
 
 fn reduce(n1: &Element, n2: &Element) -> Element {
-    match (n1, n2) {
-        (&Element::Leaf { hash: ref h1 }, &Element::Leaf { hash: ref h2 }) => {
-            Element::Node {
-                hash: combine_hashes(h1, h2),
-                left: Rc::new(n1.clone()),
-                right: Rc::new(n2.clone()),
-            }
-        }
-        (&Element::Node { hash: ref h1, .. }, &Element::Node { hash: ref h2, .. }) => {
-            Element::Node {
-                hash: combine_hashes(h1, h2),
-                left: Rc::new(n1.clone()),
-                right: Rc::new(n2.clone()),
-            }
-        }
-        (&Element::Node { hash: ref h1, .. }, &Element::Leaf { hash: ref h2 }) => {
-            Element::Node {
-                hash: combine_hashes(h1, h2),
-                left: Rc::new(n1.clone()),
-                right: Rc::new(n2.clone()),
-            }
-        }
-        (&Element::Leaf { .. }, &Element::Node { .. }) => reduce(n2, n1),
+    let (&Element { hash: ref h1, .. }, &Element { hash: ref h2, .. }) = (n1, n2);
+    Element {
+        hash: combine_hashes(h1, h2),
+        children: Some(Children {
+            left: Rc::new(n1.clone()),
+            right: Rc::new(n2.clone()),
+        }),
     }
 }
 
@@ -88,16 +73,16 @@ impl Tree {
             let mut nodes = Vec::new();
             for v in vals.into_iter() {
                 let h = v.hash()?;
-                nodes.push(Element::Leaf { hash: h });
+                nodes.push(Element {
+                    hash: h,
+                    children: None,
+                });
             }
             Ok(Tree { root: build(&nodes[..]) })
         }
     }
 
     pub fn root_hash(&self) -> &Vec<u8> {
-        match self.root {
-            Element::Leaf { ref hash } => hash,
-            Element::Node { ref hash, .. } => hash,
-        }
+        &(self.root.hash)
     }
 }
