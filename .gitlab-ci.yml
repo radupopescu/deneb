@@ -1,0 +1,19 @@
+stable:
+  tags:
+    - docker
+
+  before_script:
+    - docker pull jimmycuandra/rust
+
+  script:
+    - docker run -it --rm -e CARGO_HOME=/source/.cargo -v /cache:/source/.cargo -v $(pwd):/source jimmycuadra/rust sh -c "cd merkle && cargo test && cd ../ && cargo test"
+
+nightly:
+  tags:
+    - docker
+
+  before_script:
+    - docker pull schickling/rust
+
+  script:
+    - docker run -it --rm -e CARGO_HOME=/source/.cargo -v /cache:/source/.cargo -v $(pwd):/source schickling/rust sh -c "cd merkle && cargo test && cd ../ && cargo test"
