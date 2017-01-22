@@ -1,10 +1,9 @@
 test:stable:
   image: jimmycuadra/rust
-  tags:
-    - gitlab-org
   cache:
     paths:
       - target/
+      - merkle/target/
       - cargo/
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/cargo
@@ -15,11 +14,10 @@ test:stable:
 test:nightly:
   allow_failure: true
   image: schickling/rust
-  tags:
-    - gitlab-org
   cache:
     paths:
       - target/
+      - merkle/target/
       - cargo/
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/cargo
