@@ -1,11 +1,8 @@
 [root]
-name = "deneb"
+name = "merkle"
 version = "0.1.0"
 dependencies = [
- "clap 2.19.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "merkle 0.1.0",
  "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -34,6 +31,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "deneb"
+version = "0.1.0"
+dependencies = [
+ "clap 2.19.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "merkle 0.1.0",
+ "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "gcc"
 version = "0.3.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -51,13 +58,6 @@ dependencies = [
 name = "libc"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "merkle"
-version = "0.1.0"
-dependencies = [
- "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "rand"

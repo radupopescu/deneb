@@ -7,5 +7,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 clap = "~2.19.0"
 time = "0.1.35"
 rust-crypto = "~0.2.36"
-
 merkle = {path = "merkle", version = "~0.1.0"}
+
+[workspace]
+members = ["merkle"]
