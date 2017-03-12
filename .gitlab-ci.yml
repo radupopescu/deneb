@@ -23,4 +23,4 @@ test:nightly:
     CARGO_HOME: $CI_PROJECT_DIR/cargo
   script:
     - rustc --version && cargo --version
-    - cargo --verbose --jobs 1 --all
+    - cargo test --verbose --jobs 1 --all
