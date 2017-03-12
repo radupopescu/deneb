@@ -9,7 +9,7 @@ test:stable:
     CARGO_HOME: $CI_PROJECT_DIR/cargo
   script:
     - rustc --version && cargo --version
-    - cargo --verbose --jobs 1 --all
+    - cargo test --verbose --jobs 1 --all
 
 test:nightly:
   allow_failure: true
