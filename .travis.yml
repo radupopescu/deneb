@@ -21,4 +21,4 @@ cache:
 
 script:
     - rustc --version && cargo --version
-    - ./ci/test_with_crates.sh
+    - cargo test --verbose --jobs 1 --all
