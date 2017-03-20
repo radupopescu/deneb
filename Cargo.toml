@@ -5,9 +5,10 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [dependencies]
 clap = "^2.20.0"
-time = "^0.1.0"
-rust-crypto = "^0.2.0"
+error-chain = "^0.10.0"
+log = "^0.3.7"
 merkle = {path = "merkle", version = "^0.1.0"}
+time = "^0.1.0"
 
 [workspace]
 members = ["merkle"]
