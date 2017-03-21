@@ -8,6 +8,7 @@ extern crate error_chain;
 extern crate log;
 extern crate log4rs;
 extern crate merkle;
+extern crate nix;
 
 pub mod errors;
 pub mod logging;
