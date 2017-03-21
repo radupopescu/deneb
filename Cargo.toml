@@ -7,6 +7,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 clap = "^2.20.0"
 error-chain = "^0.10.0"
 log = "^0.3.7"
+log4rs = "^0.6.0"
 merkle = {path = "merkle", version = "^0.1.0"}
 time = "^0.1.0"
 
