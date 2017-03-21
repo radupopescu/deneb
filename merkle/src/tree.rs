@@ -4,10 +4,10 @@ use crypto::sha2::Sha256;
 use std::rc::Rc;
 use std::str::from_utf8;
 
-use errors;
+use errors::*;
 
 pub trait Hashable {
-    fn hash(&self) -> Result<Vec<u8>, errors::MerkleError>;
+    fn hash(&self) -> Result<Vec<u8>>;
 }
 
 pub struct Tree {
@@ -27,7 +27,7 @@ struct Element {
 }
 
 /// Recursively build the Merkle tree
-fn build(vals: &[Element]) -> Result<Element, errors::MerkleError> {
+fn build(vals: &[Element]) -> Result<Element> {
     match vals.len() {
         1 => Ok(vals[0].clone()),
         2 => reduce(&vals[0], &vals[1]),
@@ -38,7 +38,7 @@ fn build(vals: &[Element]) -> Result<Element, errors::MerkleError> {
     }
 }
 
-fn reduce(n1: &Element, n2: &Element) -> Result<Element, errors::MerkleError> {
+fn reduce(n1: &Element, n2: &Element) -> Result<Element> {
     let (&Element { hash: ref h1, .. }, &Element { hash: ref h2, .. }) = (n1, n2);
     Ok(Element {
         hash: combine_hashes(h1, h2)?,
@@ -49,7 +49,7 @@ fn reduce(n1: &Element, n2: &Element) -> Result<Element, errors::MerkleError> {
     })
 }
 
-fn combine_hashes(h1: &Vec<u8>, h2: &Vec<u8>) -> Result<Vec<u8>, errors::MerkleError> {
+fn combine_hashes(h1: &Vec<u8>, h2: &Vec<u8>) -> Result<Vec<u8>> {
     let mut hasher = Sha256::new();
     let h1 = String::from_utf8(h1.clone())?;
     let h = h1 + from_utf8(h2)?;
@@ -58,7 +58,7 @@ fn combine_hashes(h1: &Vec<u8>, h2: &Vec<u8>) -> Result<Vec<u8>, errors::MerkleE
 }
 
 impl<'a> Hashable for &'a str {
-    fn hash(&self) -> Result<Vec<u8>, errors::MerkleError> {
+    fn hash(&self) -> Result<Vec<u8>> {
         let mut hasher = Sha256::new();
         hasher.input_str(self);
         Ok(Vec::from(hasher.result_str()))
@@ -66,9 +66,9 @@ impl<'a> Hashable for &'a str {
 }
 
 impl Tree {
-    pub fn new<T: Hashable>(vals: &[T]) -> Result<Tree, errors::MerkleError> {
+    pub fn new<T: Hashable>(vals: &[T]) -> Result<Tree> {
         if vals.is_empty() {
-            Err(errors::MerkleError::EmptyInput)
+            bail!(ErrorKind::EmptyInputError)
         } else {
             let mut nodes = Vec::new();
             for v in vals.into_iter() {
@@ -89,7 +89,6 @@ impl Tree {
 
 #[cfg(test)]
 mod tests {
-    use errors::*;
     use super::*;
 
     fn get_hash(values: &[&str]) -> Vec<u8> {
@@ -104,7 +103,7 @@ mod tests {
     fn empty_tree() {
         let err = Tree::new(&[] as &[&str]);
         match err {
-            Err(MerkleError::EmptyInput) => (),
+            Err(Error(ErrorKind::EmptyInputError, _)) => (),
             _ => {
                 panic!("Tree::new(&[]) should return MerkleError::EmptyInput");
             }
