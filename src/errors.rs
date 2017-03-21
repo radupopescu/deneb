@@ -18,6 +18,11 @@ error_chain! {
         Log4rsConfigError(log4rs::config::Errors) #[doc="log4rs config error"];
     }
 
-    errors {}
+    errors {
+        MissingCommandLineParameter(p: String) {
+            description("Missing command-line parameters")
+            display("Missing command-line parameters: '{}'", p)
+        }
+    }
 }
 

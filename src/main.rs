@@ -28,3 +28,6 @@ fn main() {
         ::std::process::exit(1)
     }
 }
+    let Parameters { dir } = read_params()?;
+    info!("Dir: {}", dir);
+

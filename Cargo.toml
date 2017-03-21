@@ -4,9 +4,9 @@ version = "0.1.0"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [dependencies]
-clap = "^2.20.0"
+clap = "^2.21.0"
 error-chain = "^0.10.0"
-log = "^0.3.7"
+log = "^0.3.0"
 log4rs = "^0.6.0"
 merkle = {path = "merkle", version = "^0.1.0"}
 time = "^0.1.0"
