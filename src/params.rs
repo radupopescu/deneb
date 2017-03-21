@@ -1,9 +1,11 @@
 use clap::{App, Arg};
 
+use std::path::PathBuf;
+
 use errors::*;
 
 pub struct Parameters {
-    pub dir: String,
+    pub dir: PathBuf,
 }
 
 pub fn read_params() -> Result<Parameters> {
@@ -20,10 +22,10 @@ pub fn read_params() -> Result<Parameters> {
             .help("Work directory"))
         .get_matches();
 
-    let dir = matches
-        .value_of("dir")
-        .map(|d| d.to_string())
-        .ok_or(ErrorKind::MissingCommandLineParameter("dir".to_owned()))?;
+    let dir = PathBuf::from(matches
+                           .value_of("dir")
+                           .map(|d| d.to_string())
+                           .ok_or(ErrorKind::MissingCommandLineParameter("dir".to_owned()))?);
 
     Ok(Parameters { dir: dir })
 }

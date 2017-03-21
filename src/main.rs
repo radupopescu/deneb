@@ -1,17 +1,19 @@
 extern crate deneb;
-extern crate merkle;
 #[macro_use]
 extern crate log;
+extern crate merkle;
+extern crate nix;
 
 use std::fs::{read_dir, DirEntry};
 use std::path::Path;
+
+use nix::sys::stat;
 
 use deneb::errors::*;
 use deneb::logging;
 use deneb::params::{read_params, Parameters};
 
-// one possible implementation of walking a directory only visiting files
-fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> Result<()> {
+fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry) -> Result<()>) -> Result<()> {
     if dir.is_dir() {
         for entry in read_dir(dir)? {
             let entry = entry?;
@@ -19,26 +21,28 @@ fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry)) -> Result<()> {
             if path.is_dir() {
                 visit_dirs(&path, cb)?;
             } else {
-                cb(&entry);
+                cb(&entry)?;
             }
         }
     }
     Ok(())
 }
 
-fn list_info(entry: &DirEntry) {
-    if let Ok(metadata) = entry.metadata() {
-        info!("Path: {:?}; metadata: {:?}", entry.path(), metadata);
-    }
+fn list_info(entry: &DirEntry) -> Result<()> {
+    let stats = stat::stat(entry.path().as_path())?;
+    let metadata = entry.metadata()?;
+    info!("Path: {:?}, uid: {}, gid: {}, metadata: {:?}",
+          entry.path(), stats.st_uid, stats.st_gid, metadata);
+    Ok(())
 }
 
 fn run() -> Result<()> {
     logging::init().chain_err(|| "Could not initialize log4rs")?;
     info!("Welcome to Deneb!");
 
-    let Parameters { dir } = read_params()?;
-    info!("Dir: {}", dir);
-    let _ = visit_dirs(Path::new(dir.as_str()), &list_info)?;
+    let Parameters { dir } = read_params().chain_err(|| "Could not read command-line parameters")?;
+    info!("Dir: {}", dir.display());
+    let _ = visit_dirs(dir.as_path(), &list_info)?;
 
     Ok(())
 }
