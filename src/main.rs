@@ -4,45 +4,22 @@ extern crate log;
 extern crate merkle;
 extern crate nix;
 
-use std::fs::{read_dir, DirEntry};
-use std::path::Path;
-
-use nix::sys::stat;
-
 use deneb::errors::*;
+use deneb::fs;
 use deneb::logging;
-use deneb::params::{read_params, Parameters};
-
-fn visit_dirs(dir: &Path, cb: &Fn(&DirEntry) -> Result<()>) -> Result<()> {
-    if dir.is_dir() {
-        for entry in read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                visit_dirs(&path, cb)?;
-            } else {
-                cb(&entry)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-fn list_info(entry: &DirEntry) -> Result<()> {
-    let stats = stat::stat(entry.path().as_path())?;
-    let metadata = entry.metadata()?;
-    info!("Path: {:?}, uid: {}, gid: {}, metadata: {:?}",
-          entry.path(), stats.st_uid, stats.st_gid, metadata);
-    Ok(())
-}
+use deneb::params::AppParameters;
 
 fn run() -> Result<()> {
     logging::init().chain_err(|| "Could not initialize log4rs")?;
     info!("Welcome to Deneb!");
 
-    let Parameters { dir } = read_params().chain_err(|| "Could not read command-line parameters")?;
-    info!("Dir: {}", dir.display());
-    let _ = visit_dirs(dir.as_path(), &list_info)?;
+    let AppParameters { sync_dir, work_dir } = AppParameters::read()
+        .chain_err(|| "Could not read command-line parameters")?;
+    info!("Sync dir: {:?}", sync_dir);
+    info!("Work dir: {:?}", work_dir);
+
+    let _ = fs::visit_dirs(sync_dir.as_path(), &fs::list_info)?;
+    let _ = fs::visit_dirs(work_dir.as_path(), &fs::list_info)?;
 
     Ok(())
 }
@@ -55,8 +32,8 @@ fn main() {
             error!("caused by: {}", e);
         }
 
-        if let Some(backtrace) = e.backtrace() {
-            error!("backtrace: {:?}", backtrace);
+        if let Some(bt) = e.backtrace() {
+            error!("Backtrace: {:?}", bt);
         }
 
         ::std::process::exit(1)

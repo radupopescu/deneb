@@ -11,5 +11,6 @@ extern crate merkle;
 extern crate nix;
 
 pub mod errors;
+pub mod fs;
 pub mod logging;
 pub mod params;
