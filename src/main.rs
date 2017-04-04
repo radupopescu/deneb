@@ -4,8 +4,8 @@ extern crate log;
 extern crate merkle;
 extern crate nix;
 
+use deneb::catalog::Catalog;
 use deneb::errors::*;
-use deneb::fs;
 use deneb::logging;
 use deneb::params::AppParameters;
 
@@ -18,8 +18,8 @@ fn run() -> Result<()> {
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
-    let _ = fs::visit_dirs(sync_dir.as_path(), &fs::list_info)?;
-    let _ = fs::visit_dirs(work_dir.as_path(), &fs::list_info)?;
+    let catalog = Catalog::from_dir(sync_dir.as_path())?;
+    catalog.show();
 
     Ok(())
 }
