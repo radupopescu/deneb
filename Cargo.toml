@@ -5,6 +5,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [dependencies]
 clap = "^2.21.0"
+chrono = "^0.3.0"
 error-chain = "^0.10.0"
 log = "^0.3.0"
 log4rs = "^0.6.0"
