@@ -1,6 +1,7 @@
 use log;
 use log4rs;
 use nix;
+use notify;
 use time::OutOfRangeError;
 
 use std::io;
@@ -20,6 +21,7 @@ error_chain! {
         LogError(log::SetLoggerError) #[doc="log error"];
         Log4rsConfigError(log4rs::config::Errors) #[doc="log4rs config error"];
         NixError(nix::Error) #[doc="nix error"];
+        NotifyError(notify::Error) #[doc="notify error"];
         DurationOutOfRangeError(OutOfRangeError) #[doc="duration out-of-range error"];
         SystemTimeError(time::SystemTimeError) #[doc="system time conversion error"];
     }
