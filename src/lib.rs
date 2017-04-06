@@ -19,3 +19,4 @@ pub mod fs;
 pub mod hash;
 pub mod logging;
 pub mod params;
+pub mod watch;

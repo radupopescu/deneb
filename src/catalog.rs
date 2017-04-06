@@ -107,7 +107,7 @@ impl Catalog {
         if self.items.len() > 0 {
             info!("Catalog contents:");
             for i in &self.items {
-                info!("{}", i);
+                info!("Name: {:?}", i.name);
             }
         } else {
             info!("Catalog empty.");
