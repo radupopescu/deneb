@@ -11,8 +11,8 @@ fn run() -> Result<()> {
     logging::init().chain_err(|| "Could not initialize log4rs")?;
     info!("Welcome to Deneb!");
 
-    let AppParameters { sync_dir, work_dir } = AppParameters::read()
-        .chain_err(|| "Could not read command-line parameters")?;
+    let AppParameters { sync_dir, work_dir, mount_point } =
+        AppParameters::read().chain_err(|| "Could not read command-line parameters")?;
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
