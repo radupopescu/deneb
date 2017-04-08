@@ -25,9 +25,9 @@ error_chain! {
     }
 
     errors {
-        MissingCommandLineParameter(p: String) {
-            description("Missing command-line parameters")
-            display("Missing command-line parameters: '{}'", p)
+        CommandLineParameter(p: String) {
+            description("Command-line parameter error")
+            display("Command-line parameter error: '{}'", p)
         }
     }
 }

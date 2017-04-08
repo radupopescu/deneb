@@ -4,14 +4,14 @@ use log4rs::config::{Appender, Config, Root};
 
 use errors::*;
 
-pub fn init() -> Result<()> {
+pub fn init(log_level: LogLevelFilter) -> Result<()> {
     let stdout = ConsoleAppender::builder().build();
 
     let config = Config::builder().appender(Appender::builder().build("stdout", Box::new(stdout)))
         .build(Root::builder()
                .appender("stdout")
                // Just enable all logging levels for now
-               .build(LogLevelFilter::Trace))?;
+               .build(log_level))?;
 
     let _ = ::log4rs::init_config(config)?;
     Ok(())
