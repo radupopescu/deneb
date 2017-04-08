@@ -6,7 +6,6 @@ use deneb::catalog::Catalog;
 use deneb::errors::*;
 use deneb::logging;
 use deneb::params::AppParameters;
-use deneb::watch::DirectoryWatcher;
 
 fn run() -> Result<()> {
     logging::init().chain_err(|| "Could not initialize log4rs")?;
@@ -20,10 +19,6 @@ fn run() -> Result<()> {
     let catalog = Catalog::from_dir(sync_dir.as_path())?;
     info!("Catalog populated with initial contents.");
     catalog.show();
-
-    let mut watcher = DirectoryWatcher::new()?;
-    watcher.watch_path(sync_dir.as_path())?;
-    watcher.run();
 
     Ok(())
 }

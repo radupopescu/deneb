@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fs::{DirEntry, FileType, Permissions};
+use std::fs::{DirEntry, FileType, Permissions, read_dir};
 use std::path::{Path, PathBuf};
 use std::time::{UNIX_EPOCH, SystemTime};
 
@@ -10,7 +10,6 @@ use nix::sys::stat::stat;
 
 use errors::*;
 
-use fs;
 use hash::Hash;
 
 struct Item {
@@ -82,7 +81,7 @@ impl Catalog {
 
     pub fn from_dir(dir: &Path) -> Result<Catalog> {
         let mut catalog = Catalog::new();
-        let _ = fs::visit_dirs(dir, &mut |e| catalog.add_item(e))?;
+        let _ = visit_dirs(dir, &mut |e| catalog.add_item(e))?;
         Ok(catalog)
     }
 
@@ -113,6 +112,20 @@ impl Catalog {
             info!("Catalog empty.");
         }
     }
+}
+
+fn visit_dirs(dir: &Path, cb: &mut FnMut(&DirEntry) -> Result<()>) -> Result<()> {
+    if dir.is_dir() {
+        for entry in read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            cb(&entry)?;
+            if path.is_dir() {
+                visit_dirs(&path, cb)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
