@@ -4,6 +4,8 @@ extern crate deneb;
 extern crate log;
 extern crate notify;
 
+use log::LogLevelFilter;
+
 use deneb::catalog::Catalog;
 use deneb::errors::*;
 use deneb::logging;
@@ -77,10 +79,10 @@ mod watch {
 
             let sync_dir = PathBuf::from(matches.value_of("sync_dir")
                 .map(|d| d.to_string())
-                .ok_or(ErrorKind::MissingCommandLineParameter("sync_dir".to_owned()))?);
+                .ok_or(ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
             let work_dir = PathBuf::from(matches.value_of("work_dir")
                 .map(|d| d.to_string())
-                .ok_or(ErrorKind::MissingCommandLineParameter("sync_dir".to_owned()))?);
+                .ok_or(ErrorKind::CommandLineParameter("work_dir missing".to_owned()))?);
 
             Ok(Params {
                 sync_dir: sync_dir,
@@ -91,7 +93,7 @@ mod watch {
 }
 
 fn run() -> Result<()> {
-    logging::init().chain_err(|| "Could not initialize log4rs")?;
+    logging::init(LogLevelFilter::Trace).chain_err(|| "Could not initialize log4rs")?;
     info!("Deneb - dir watcher!");
 
     let watch::Params { sync_dir, work_dir } =
@@ -99,7 +101,7 @@ fn run() -> Result<()> {
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
-    let catalog = Catalog::from_dir(sync_dir.as_path())?;
+    let catalog : Catalog<&[u8]> = Catalog::from_dir(sync_dir.as_path())?;
     info!("Catalog populated with initial contents.");
     catalog.show();
 
