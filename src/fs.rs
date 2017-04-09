@@ -1,7 +1,7 @@
 use fuse::{FileAttr, FileType, Filesystem, Request, ReplyAttr};
 use time::Timespec;
 
-use nix::libc::{ENOENT, ENOSYS};
+use nix::libc::ENOSYS;
 
 pub struct Fs;
 
