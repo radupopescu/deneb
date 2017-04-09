@@ -51,13 +51,13 @@ impl AppParameters {
 
         let sync_dir = PathBuf::from(matches.value_of("sync_dir")
             .map(|d| d.to_string())
-            .ok_or(ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
+            .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
         let work_dir = PathBuf::from(matches.value_of("work_dir")
             .map(|d| d.to_string())
-            .ok_or(ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
+            .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
         let mount_point = PathBuf::from(matches.value_of("mount_point")
             .map(|d| d.to_string())
-            .ok_or(ErrorKind::CommandLineParameter("mount_point missing".to_owned()))?);
+            .ok_or_else(|| ErrorKind::CommandLineParameter("mount_point missing".to_owned()))?);
         let log_level = match matches.value_of("log_level") {
             Some("off") => LogLevelFilter::Off,
             Some("error") => LogLevelFilter::Error,

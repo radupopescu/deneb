@@ -79,10 +79,10 @@ mod watch {
 
             let sync_dir = PathBuf::from(matches.value_of("sync_dir")
                 .map(|d| d.to_string())
-                .ok_or(ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
+                .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
             let work_dir = PathBuf::from(matches.value_of("work_dir")
                 .map(|d| d.to_string())
-                .ok_or(ErrorKind::CommandLineParameter("work_dir missing".to_owned()))?);
+                .ok_or_else(|| ErrorKind::CommandLineParameter("work_dir missing".to_owned()))?);
 
             Ok(Params {
                 sync_dir: sync_dir,

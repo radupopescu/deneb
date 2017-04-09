@@ -80,7 +80,7 @@ impl<H> Catalog<H> where H: Hash + Default {
 
     pub fn from_dir(dir: &Path) -> Result<Catalog<H>> {
         let mut catalog = Catalog::new();
-        let _ = visit_dirs(dir, &mut |e| catalog.add_item(e))?;
+        visit_dirs(dir, &mut |e| catalog.add_item(e))?;
         Ok(catalog)
     }
 
@@ -102,7 +102,7 @@ impl<H> Catalog<H> where H: Hash + Default {
     }
 
     pub fn show(&self) {
-        if self.items.len() > 0 {
+        if !self.items.is_empty() {
             info!("Catalog contents:");
             for i in &self.items {
                 info!("Name: {:?}", i.name);

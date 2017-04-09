@@ -5,7 +5,6 @@ extern crate chrono;
 #[macro_use]
 extern crate error_chain;
 extern crate fuse;
-#[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 extern crate log4rs;
