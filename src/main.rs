@@ -8,20 +8,28 @@ use deneb::errors::*;
 use deneb::fs::Fs;
 use deneb::logging;
 use deneb::params::AppParameters;
+use deneb::store::HashMapStore;
 
 fn run() -> Result<()> {
     let AppParameters { sync_dir, work_dir, mount_point, log_level } =
         AppParameters::read().chain_err(|| "Could not read command-line parameters")?;
+
     logging::init(log_level).chain_err(|| "Could not initialize log4rs")?;
+
     info!("Welcome to Deneb!");
     info!("Log level: {}", log_level);
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
-    let catalog = Catalog::from_dir(sync_dir.as_path())?;
+    // Create an object store
+    let store: HashMapStore<&[u8]> = HashMapStore::new();
+
+    // Create the file metadata catalog and populate it with the contents of "sync_dir"
+    let catalog : Catalog<&[u8]> = Catalog::from_dir(sync_dir.as_path())?;
     info!("Catalog populated with initial contents.");
     catalog.show();
 
+    // Create the file system data structure
     let file_system = Fs;
     fuse::mount(file_system, &mount_point, &[])?;
 

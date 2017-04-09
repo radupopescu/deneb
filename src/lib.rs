@@ -16,6 +16,6 @@ extern crate time;
 pub mod catalog;
 pub mod errors;
 pub mod fs;
-pub mod hash;
 pub mod logging;
 pub mod params;
+pub mod store;
