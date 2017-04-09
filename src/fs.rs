@@ -3,9 +3,21 @@ use time::Timespec;
 
 use nix::libc::ENOSYS;
 
-pub struct Fs;
+use catalog::Catalog;
+use store::Store;
 
-impl Filesystem for Fs {
+pub struct Fs<H, S> {
+    catalog: Catalog<H>,
+    store: S,
+}
+
+impl<H, S> Fs<H, S> {
+    pub fn new(catalog: Catalog<H>, store: S) -> Fs<H, S> {
+        Fs { catalog: catalog, store: store }
+    }
+}
+
+impl<H, S> Filesystem for Fs<H, S> {
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         info!("getattr(ino={})", ino);
         let ts = Timespec::new(0, 0);

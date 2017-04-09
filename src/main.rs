@@ -22,7 +22,7 @@ fn run() -> Result<()> {
     info!("Work dir: {:?}", work_dir);
 
     // Create an object store
-    let _: HashMapStore<&[u8]> = HashMapStore::new();
+    let store: HashMapStore<&[u8]> = HashMapStore::new();
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
     let catalog : Catalog<&[u8]> = Catalog::from_dir(sync_dir.as_path())?;
@@ -30,7 +30,7 @@ fn run() -> Result<()> {
     catalog.show();
 
     // Create the file system data structure
-    let file_system = Fs;
+    let file_system = Fs::new(catalog, store);
     fuse::mount(file_system, &mount_point, &[])?;
 
     Ok(())
