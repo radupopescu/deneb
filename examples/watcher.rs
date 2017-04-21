@@ -101,9 +101,9 @@ fn run() -> Result<()> {
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
-    let catalog : Catalog<&[u8]> = Catalog::from_dir(sync_dir.as_path())?;
+    let catalog : Catalog = Catalog::from_dir(sync_dir.as_path())?;
     info!("Catalog populated with initial contents.");
-    catalog.show();
+    catalog.show_stats();
 
     let mut watcher = watch::DirectoryWatcher::new();
     let _ = watcher.watch_path(sync_dir.as_path());

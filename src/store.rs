@@ -1,29 +1,30 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 
-pub trait Store<K> {
-    fn get(&self, hash: &K) -> Option<&[u8]>;
+use hash::ContentHash;
 
-    fn put(&mut self, hash: K, contents: &[u8]);
+pub trait Store {
+    fn get(&self, hash: &ContentHash) -> Option<&[u8]>;
+
+    fn put(&mut self, hash: ContentHash, contents: &[u8]);
 }
 
-pub struct HashMapStore<K> {
-    objects: HashMap<K, Vec<u8>>,
+#[derive(Default)]
+pub struct HashMapStore {
+    objects: HashMap<ContentHash, Vec<u8>>,
 }
-
-impl<K> HashMapStore<K> where K: Hash + Eq + PartialEq {
-    pub fn new() -> HashMapStore<K> {
-        HashMapStore { objects: HashMap::new() }
+impl HashMapStore {
+    pub fn new() -> HashMapStore {
+        Self::default()
     }
 }
 
-impl<K> Store<K> for HashMapStore<K> where K: Hash + Eq + PartialEq {
-    fn get(&self, hash: &K) -> Option<&[u8]> {
-        self.objects.get(&hash).map(|v| v.as_slice())
+impl Store for HashMapStore {
+    fn get(&self, hash: &ContentHash) -> Option<&[u8]> {
+        self.objects.get(hash).map(|v| v.as_slice())
     }
 
-    fn put(&mut self, hash: K, contents: &[u8]) {
-        self.objects.entry(hash).or_insert(contents.to_vec());
+    fn put(&mut self, hash: ContentHash, contents: &[u8]) {
+        self.objects.entry(hash).or_insert_with(|| contents.to_vec());
     }
 }
 
@@ -33,11 +34,11 @@ mod tests {
 
     #[test]
     fn create_put_get() {
-        let mut store: HashMapStore<String> = HashMapStore::new();
-        let k1 = "some_key";
+        let mut store: HashMapStore = HashMapStore::new();
+        let k1 = "some_key".as_ref();
         let v1: Vec<u8> = vec![1,2,3];
-        store.put(k1.to_owned(), v1.as_slice());
-        if let Some(v2) = store.get("some_key".to_owned()) {
+        store.put(ContentHash::from(k1), v1.as_slice());
+        if let Some(v2) = store.get(&ContentHash::from(k1)) {
             println!("v1 = {:?}, v2 = {:?}", v1, v2);
         } else {
             println!("store.get returned None");

@@ -1,130 +1,165 @@
-use std::fmt;
-use std::fs::{DirEntry, FileType, Permissions, read_dir};
-use std::hash::Hash;
-use std::path::{Path, PathBuf};
-use std::time::{UNIX_EPOCH, SystemTime};
+use fuse::{FileAttr, FileType};
+use nix::libc::mode_t;
+use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, stat};
 
-use chrono::datetime::DateTime;
-use chrono::offset::utc::UTC;
-use chrono::naive::datetime::NaiveDateTime;
-use nix::sys::stat::stat;
+use std::cmp::{min, max};
+use std::collections::HashMap;
+use std::fmt;
+use std::fs::read_dir;
+use std::i32::MAX;
+use std::path::{Path, PathBuf};
+use time::Timespec;
 
 use errors::*;
+use hash::ContentHash;
 
-struct Item<H> {
-    name: PathBuf,
-    uid: u32,
-    gid: u32,
-    file_type: FileType,
-    permissions: Permissions,
-    creation_time: Option<SystemTime>,
-    access_time: Option<SystemTime>,
-    modification_time: Option<SystemTime>,
-    content_hash: H,
+struct INode {
+    attributes: FileAttr,
+    content_hash: ContentHash,
 }
 
-fn system_to_date_time(st: &Option<SystemTime>) -> Result<DateTime<UTC>> {
-    if let Some(st) = *st {
-        let duration = ::chrono::Duration::from_std(st.duration_since(UNIX_EPOCH)?)?;
-        let unix = NaiveDateTime::from_timestamp(0, 0);
-        let final_time = unix + duration;
-        Ok(DateTime::<UTC>::from_utc(final_time, UTC))
-    } else {
-        bail!("No system time given")
-    }
-}
-
-impl<H> fmt::Display for Item<H> where H: fmt::Debug {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match (system_to_date_time(&self.creation_time),
-               system_to_date_time(&self.access_time),
-               system_to_date_time(&self.modification_time)) {
-            (Ok(ct), Ok(at), Ok(mt)) => {
-                write!(f,
-                       "Path: {:?}, uid: {}, gid: {}, file_type: {:?}, permissions: {:?}, \
-                        creation_time: {}, access_time: {}, modification_time: {}, content_hash: \
-                        {:?}",
-                       self.name,
-                       self.uid,
-                       self.gid,
-                       self.file_type,
-                       self.permissions,
-                       ct,
-                       at,
-                       mt,
-                       self.content_hash)
-            }
-            _ => {
-                write!(f,
-                       "Path: {:?}, uid: {}, gid: {}, file_type: {:?}, permissions: {:?}, \
-                        content_hash: {:?}",
-                       self.name,
-                       self.uid,
-                       self.gid,
-                       self.file_type,
-                       self.permissions,
-                       self.content_hash)
-            }
-        }
-    }
-}
-
-pub struct Catalog<H> {
-    items: Vec<Item<H>>,
-}
-
-impl<H> Catalog<H> where H: Hash + Default {
-    pub fn new() -> Catalog<H> {
-        Catalog { items: Vec::new() }
-    }
-
-    pub fn from_dir(dir: &Path) -> Result<Catalog<H>> {
-        let mut catalog = Catalog::new();
-        visit_dirs(dir, &mut |e| catalog.add_item(e))?;
-        Ok(catalog)
-    }
-
-    pub fn add_item(&mut self, entry: &DirEntry) -> Result<()> {
-        let stats = stat(entry.path().as_path())?;
-        let metadata = entry.metadata()?;
-        self.items.push(Item {
-            name: entry.path(),
+impl INode {
+    fn new(index: u64, path: &Path, hash: ContentHash) -> Result<INode> {
+        let stats = stat(path)?;
+        let mut attributes = FileAttr {
+            ino: index,
+            size: max::<i64>(stats.st_size, 0) as u64,
+            blocks: max::<i64>(stats.st_blocks, 0) as u64,
+            atime: Timespec {
+                sec: stats.st_atime,
+                nsec: min::<i64>(stats.st_atime_nsec, MAX as i64) as i32,
+            },
+            mtime: Timespec {
+                sec: stats.st_mtime,
+                nsec: min::<i64>(stats.st_mtime_nsec, MAX as i64) as i32,
+            },
+            ctime: Timespec {
+                sec: stats.st_ctime,
+                nsec: min::<i64>(stats.st_ctime_nsec, MAX as i64) as i32,
+            },
+            crtime: Timespec { sec: 0, nsec: 0 },
+            kind: mode_to_file_type(stats.st_mode),
+            perm: mode_to_permissions(stats.st_mode),
+            nlink: 0,
             uid: stats.st_uid,
             gid: stats.st_gid,
-            file_type: metadata.file_type(),
-            permissions: metadata.permissions(),
-            creation_time: metadata.created().ok(),
-            access_time: metadata.accessed().ok(),
-            modification_time: metadata.modified().ok(),
-            content_hash: H::default(),
-        });
+            rdev: 0,
+            flags: 0,
+        };
+        #[cfg(target_os="macos")]
+        {
+            attributes.crtime = Timespec {
+                sec: stats.st_birthtime,
+                nsec: min::<i64>(stats.st_birthtime_nsec, MAX as i64) as i32,
+            };
+        }
+
+        Ok(INode {
+               attributes: attributes,
+               content_hash: hash,
+           })
+    }
+}
+
+impl fmt::Display for INode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+               "Attributes: {:?}, content_hash: {:?}",
+               self.attributes,
+               self.content_hash)
+    }
+}
+
+struct IndexGenerator {
+    current_index: u64,
+}
+impl Default for IndexGenerator {
+    fn default() -> IndexGenerator {
+        IndexGenerator { current_index: 1 }
+    }
+}
+impl IndexGenerator {
+    fn get_next(&mut self) -> u64 {
+        self.current_index += 1;
+        self.current_index
+    }
+}
+
+pub struct Catalog {
+    inodes: HashMap<u64, INode>,
+    dir_entries: HashMap<u64, HashMap<PathBuf, u64>>,
+    index_generator: IndexGenerator,
+}
+
+impl Catalog {
+    pub fn from_dir(dir: &Path) -> Result<Catalog> {
+        let mut catalog = Catalog {
+            inodes: HashMap::new(),
+            dir_entries: HashMap::new(),
+            index_generator: IndexGenerator::default(),
+        };
+        catalog.add_root(dir)?;
+        catalog.visit_dirs(dir, 1)?;
+        Ok(catalog)
+    }
+    pub fn add_root(&mut self, root: &Path) -> Result<()> {
+        let inode = INode::new(1, root, ContentHash::new())?;
+        self.inodes.insert(1, inode);
         Ok(())
     }
 
-    pub fn show(&self) {
-        if !self.items.is_empty() {
-            info!("Catalog contents:");
-            for i in &self.items {
-                info!("Name: {:?}", i.name);
+    pub fn add_inode(&mut self, entry: &Path, content_hash: ContentHash) -> Result<u64> {
+        let index = self.index_generator.get_next();
+        let inode = INode::new(index, entry, content_hash)?;
+        self.inodes.insert(index, inode);
+        Ok(index)
+    }
+
+    pub fn show_stats(&self) {
+        info!("Catalog stats: number of inodes: {}, number of dir entries: {}",
+              self.inodes.len(),
+              self.dir_entries.len());
+    }
+
+    // TODO: With this recursion, the following things need to happen:
+    //       1. Create inodes for all the directory entries
+    //       2. Create dentries
+    //       3. The content hash of a directory is computed based on the content hashes of
+    //          all the dentries contained within (the visit dir function could return this)
+    fn visit_dirs(&mut self, dir: &Path, parent: u64) -> Result<()> {
+        for entry in read_dir(dir)? {
+            let path = (entry?).path();
+            let index = self.add_inode(&path.as_path(), ContentHash::new())?;
+            if path.is_dir() {
+                self.visit_dirs(&path, index)?;
             }
-        } else {
-            info!("Catalog empty.");
         }
+        Ok(())
     }
 }
 
-fn visit_dirs(dir: &Path, cb: &mut FnMut(&DirEntry) -> Result<()>) -> Result<()> {
-    if dir.is_dir() {
-        for entry in read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            cb(&entry)?;
-            if path.is_dir() {
-                visit_dirs(&path, cb)?;
-            }
-        }
+fn mode_to_file_type(mode: mode_t) -> FileType {
+    let ft = mode & S_IFMT.bits();
+    if ft == S_IFDIR.bits() {
+        FileType::Directory
+    } else if ft == S_IFCHR.bits() {
+        FileType::CharDevice
+    } else if ft == S_IFBLK.bits() {
+        FileType::BlockDevice
+    } else if ft == S_IFREG.bits() {
+        FileType::RegularFile
+    } else if ft == S_IFLNK.bits() {
+        FileType::Symlink
+    } else if ft == S_IFIFO.bits() {
+        FileType::NamedPipe
+    } else {
+        // S_IFSOCK???
+        panic!("Unknown file mode: {}. Could not identify file type.", mode);
     }
-    Ok(())
+}
+
+fn mode_to_permissions(mode: mode_t) -> u16 {
+    mode & !S_IFMT.bits()
 }
 
 #[cfg(test)]
@@ -132,8 +167,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_system_time_to_date_time() {
-        let st = Some(SystemTime::now());
-        println!("{}", system_to_date_time(&st).unwrap());
+    fn mode_to_file_type_test() {
+        let stats = stat("/etc").unwrap();
+        assert_eq!(mode_to_file_type(stats.st_mode), FileType::Directory);
+
+        let stats = stat("/etc/hosts").unwrap();
+        assert_eq!(mode_to_file_type(stats.st_mode), FileType::RegularFile);
+    }
+
+    #[test]
+    fn mode_to_permissions_test() {
+        let stats = stat("/etc/hosts").unwrap();
+        assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
     }
 }

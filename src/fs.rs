@@ -6,18 +6,18 @@ use nix::libc::ENOSYS;
 use catalog::Catalog;
 use store::Store;
 
-pub struct Fs<H, S> {
-    catalog: Catalog<H>,
+pub struct Fs<S> {
+    catalog: Catalog,
     store: S,
 }
 
-impl<H, S> Fs<H, S> {
-    pub fn new(catalog: Catalog<H>, store: S) -> Fs<H, S> {
+impl<S> Fs<S> where S: Store {
+    pub fn new(catalog: Catalog, store: S) -> Fs<S> {
         Fs { catalog: catalog, store: store }
     }
 }
 
-impl<H, S> Filesystem for Fs<H, S> {
+impl<S> Filesystem for Fs<S> {
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         info!("getattr(ino={})", ino);
         let ts = Timespec::new(0, 0);
