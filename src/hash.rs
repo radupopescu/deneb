@@ -1,16 +1,15 @@
 #[derive(Debug,Hash,Eq,PartialEq,Default)]
-pub struct ContentHash {
-    hash: Vec<u8>,
-}
+pub struct ContentHash(Vec<u8>);
+
 impl ContentHash {
     pub fn new() -> ContentHash {
-        ContentHash { hash: vec![] }
+        ContentHash(vec![])
     }
 }
 
 impl<'a> From<&'a [u8]> for ContentHash {
     fn from(other: &'a [u8]) -> Self {
-        ContentHash { hash: other.to_owned() }
+        ContentHash(other.to_owned())
     }
 }
 
