@@ -55,9 +55,9 @@ impl INode {
         }
 
         Ok(INode {
-               attributes: attributes,
-               content_hash: hash,
-           })
+            attributes: attributes,
+            content_hash: hash,
+        })
     }
 }
 
@@ -102,6 +102,7 @@ impl Catalog {
         catalog.visit_dirs(dir, 1)?;
         Ok(catalog)
     }
+
     pub fn add_root(&mut self, root: &Path) -> Result<()> {
         let inode = INode::new(1, root, ContentHash::new())?;
         self.inodes.insert(1, inode);
@@ -116,20 +117,30 @@ impl Catalog {
     }
 
     pub fn show_stats(&self) {
-        info!("Catalog stats: number of inodes: {}, number of dir entries: {}",
-              self.inodes.len(),
-              self.dir_entries.len());
+        info!("Catalog stats: number of inodes: {}", self.inodes.len());
+        info!("Directory entries:");
+        for (k1,v1) in self.dir_entries.iter() {
+            for (k2, v2) in v1.iter() {
+                info!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
+            }
+        }
     }
 
-    // TODO: With this recursion, the following things need to happen:
-    //       1. Create inodes for all the directory entries
-    //       2. Create dentries
-    //       3. The content hash of a directory is computed based on the content hashes of
-    //          all the dentries contained within (the visit dir function could return this)
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) {
+        let dir = self.dir_entries.entry(parent);
+        let mut dir_entry = dir.or_insert_with(|| {
+            let mut dir_entry = HashMap::new();
+            dir_entry.insert(name.to_owned(), index);
+            dir_entry
+        });
+        dir_entry.entry(name.to_owned()).or_insert_with(|| index);
+    }
+
     fn visit_dirs(&mut self, dir: &Path, parent: u64) -> Result<()> {
         for entry in read_dir(dir)? {
             let path = (entry?).path();
             let index = self.add_inode(&path.as_path(), ContentHash::new())?;
+            self.add_dir_entry(parent, &path.as_path(), index);
             if path.is_dir() {
                 self.visit_dirs(&path, index)?;
             }
