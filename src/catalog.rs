@@ -117,11 +117,11 @@ impl Catalog {
     }
 
     pub fn show_stats(&self) {
-        info!("Catalog stats: number of inodes: {}", self.inodes.len());
-        info!("Directory entries:");
+        debug!("Catalog stats: number of inodes: {}", self.inodes.len());
+        debug!("Directory entries:");
         for (k1,v1) in self.dir_entries.iter() {
             for (k2, v2) in v1.iter() {
-                info!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
+                debug!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
             }
         }
     }
