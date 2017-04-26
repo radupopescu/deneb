@@ -99,6 +99,7 @@ impl Catalog {
             index_generator: IndexGenerator::default(),
         };
         catalog.add_root(dir)?;
+        catalog.add_dir_entry(1, Path::new("/"), 1);
         catalog.visit_dirs(dir, 1)?;
         Ok(catalog)
     }
