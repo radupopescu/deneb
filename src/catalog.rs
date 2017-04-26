@@ -139,8 +139,12 @@ impl Catalog {
     fn visit_dirs(&mut self, dir: &Path, parent: u64) -> Result<()> {
         for entry in read_dir(dir)? {
             let path = (entry?).path();
-            let index = self.add_inode(&path.as_path(), ContentHash::new())?;
-            self.add_dir_entry(parent, &path.as_path(), index);
+            let fpath = &path.as_path();
+            let fname = Path::new(fpath
+                                  .file_name()
+                                  .ok_or_else(|| "Could not get file name from path")?);
+            let index = self.add_inode(fpath, ContentHash::new())?;
+            self.add_dir_entry(parent, fname, index);
             if path.is_dir() {
                 self.visit_dirs(&path, index)?;
             }
