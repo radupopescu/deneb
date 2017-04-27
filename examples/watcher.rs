@@ -101,7 +101,7 @@ fn run() -> Result<()> {
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
-    let catalog : Catalog = Catalog::from_dir(sync_dir.as_path())?;
+    let catalog : Catalog = Catalog::with_dir(sync_dir.as_path())?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
 

@@ -25,7 +25,7 @@ fn run() -> Result<()> {
     let store: HashMapStore = HashMapStore::new();
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
-    let catalog : Catalog= Catalog::from_dir(sync_dir.as_path())?;
+    let catalog : Catalog= Catalog::with_dir(sync_dir.as_path())?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
 

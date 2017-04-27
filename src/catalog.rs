@@ -55,9 +55,9 @@ impl INode {
         }
 
         Ok(INode {
-            attributes: attributes,
-            content_hash: hash,
-        })
+               attributes: attributes,
+               content_hash: hash,
+           })
     }
 }
 
@@ -92,7 +92,7 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    pub fn from_dir(dir: &Path) -> Result<Catalog> {
+    pub fn with_dir(dir: &Path) -> Result<Catalog> {
         let mut catalog = Catalog {
             inodes: HashMap::new(),
             dir_entries: HashMap::new(),
@@ -111,7 +111,7 @@ impl Catalog {
     pub fn show_stats(&self) {
         debug!("Catalog stats: number of inodes: {}", self.inodes.len());
         debug!("Directory entries:");
-        for (k1,v1) in self.dir_entries.iter() {
+        for (k1, v1) in self.dir_entries.iter() {
             for (k2, v2) in v1.iter() {
                 debug!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
             }
@@ -134,10 +134,10 @@ impl Catalog {
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) {
         let dir = self.dir_entries.entry(parent);
         let mut dir_entry = dir.or_insert_with(|| {
-            let mut dir_entry = HashMap::new();
-            dir_entry.insert(name.to_owned(), index);
-            dir_entry
-        });
+                                                   let mut dir_entry = HashMap::new();
+                                                   dir_entry.insert(name.to_owned(), index);
+                                                   dir_entry
+                                               });
         dir_entry.entry(name.to_owned()).or_insert_with(|| index);
     }
 
@@ -146,8 +146,8 @@ impl Catalog {
             let path = (entry?).path();
             let fpath = &path.as_path();
             let fname = Path::new(fpath
-                                  .file_name()
-                                  .ok_or_else(|| "Could not get file name from path")?);
+                                      .file_name()
+                                      .ok_or_else(|| "Could not get file name from path")?);
             let index = self.add_inode(fpath, ContentHash::new())?;
             self.add_dir_entry(parent, fname, index);
             if path.is_dir() {
