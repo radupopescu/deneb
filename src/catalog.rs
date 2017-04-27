@@ -13,8 +13,8 @@ use time::Timespec;
 use errors::*;
 use hash::ContentHash;
 
-struct INode {
-    attributes: FileAttr,
+pub struct INode {
+    pub attributes: FileAttr,
     content_hash: ContentHash,
 }
 
@@ -104,17 +104,8 @@ impl Catalog {
         Ok(catalog)
     }
 
-    pub fn add_root(&mut self, root: &Path) -> Result<()> {
-        let inode = INode::new(1, root, ContentHash::new())?;
-        self.inodes.insert(1, inode);
-        Ok(())
-    }
-
-    pub fn add_inode(&mut self, entry: &Path, content_hash: ContentHash) -> Result<u64> {
-        let index = self.index_generator.get_next();
-        let inode = INode::new(index, entry, content_hash)?;
-        self.inodes.insert(index, inode);
-        Ok(index)
+    pub fn get_inode(&self, index: &u64) -> Option<&INode> {
+        self.inodes.get(index)
     }
 
     pub fn show_stats(&self) {
@@ -125,6 +116,19 @@ impl Catalog {
                 debug!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
             }
         }
+    }
+
+    fn add_root(&mut self, root: &Path) -> Result<()> {
+        let inode = INode::new(1, root, ContentHash::new())?;
+        self.inodes.insert(1, inode);
+        Ok(())
+    }
+
+    fn add_inode(&mut self, entry: &Path, content_hash: ContentHash) -> Result<u64> {
+        let index = self.index_generator.get_next();
+        let inode = INode::new(index, entry, content_hash)?;
+        self.inodes.insert(index, inode);
+        Ok(index)
     }
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) {
