@@ -108,6 +108,10 @@ impl Catalog {
         self.inodes.get(index)
     }
 
+    pub fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
+        self.dir_entries.get(parent)
+    }
+
     pub fn show_stats(&self) {
         debug!("Catalog stats: number of inodes: {}", self.inodes.len());
         debug!("Directory entries:");
