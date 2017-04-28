@@ -1,10 +1,10 @@
-use fuse::{Filesystem, Request, ReplyAttr, ReplyEmpty, ReplyEntry, ReplyOpen};
+use fuse::{Filesystem, Request, ReplyAttr, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen};
 use nix::libc::EINVAL;
 use time::Timespec;
 
 use std::ffi::OsStr;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use catalog::Catalog;
 use store::Store;
@@ -13,7 +13,7 @@ pub struct Fs<S> {
     catalog: Catalog,
     _store: S,
 
-    open_dirs: HashMap<u64, HashMap<PathBuf, u64>>,
+    open_dirs: HashMap<u64, Vec<(PathBuf, u64)>>,
 }
 
 impl<S> Fs<S>
@@ -70,10 +70,15 @@ impl<S> Filesystem for Fs<S> {
     }
 
     fn opendir(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
+        debug!("opendir - ino: {}", ino);
         match self.catalog.get_dir_entries(&ino) {
             Some(entries) => {
-                // TODO: This copying is very wasteful. Maybe improve with Rc<...>?
-                self.open_dirs.insert(ino, (*entries).clone());
+                // TODO: This copying is quite wasteful. Maybe improve with Rc<...>?
+                let mut es = Vec::new();
+                for (path, index) in entries.iter() {
+                    es.push((path.to_owned(), *index));
+                }
+                self.open_dirs.insert(ino, es);
                 reply.opened(ino, flags);
             }
             None => {
@@ -82,7 +87,8 @@ impl<S> Filesystem for Fs<S> {
         }
     }
 
-    fn releasedir(&mut self, _req: &Request, _ino: u64, fh: u64, _flags: u32, reply: ReplyEmpty) {
+    fn releasedir(&mut self, _req: &Request, ino: u64, fh: u64, _flags: u32, reply: ReplyEmpty) {
+        debug!("releasedir - ino: {}", ino);
         match self.open_dirs.remove(&fh) {
             Some(_) => {
                 reply.ok();
@@ -93,7 +99,28 @@ impl<S> Filesystem for Fs<S> {
         }
     }
 
-    // fn readdir(&mut self, _req: &Request, _ino: u64, _fh: u64, _offset: u64, reply: ReplyDirectory) {}
+    fn readdir(&mut self, _req: &Request, ino: u64, fh: u64, offset: u64, mut reply: ReplyDirectory) {
+        debug!("readdir - ino: {}, fh: {}, offset: {}", ino, fh, offset);
+        let mut index = offset as usize;
+        match self.open_dirs.get(&fh) {
+            Some(entries) => {
+                while index < entries.len() {
+                    let (ref name, idx) = entries[index];
+                    if let Some(inode) = self.catalog.get_inode(&idx) {
+                        if ! reply.add(idx, index as u64 + 1, inode.attributes.kind, name) {
+                            index = index + 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                reply.ok();
+            }
+            None => {
+                reply.error(EINVAL);
+            }
+        }
+    }
 }
 
 /*

@@ -99,7 +99,6 @@ impl Catalog {
             index_generator: IndexGenerator::default(),
         };
         catalog.add_root(dir)?;
-        catalog.add_dir_entry(1, Path::new("/"), 1);
         catalog.visit_dirs(dir, 1)?;
         Ok(catalog)
     }
@@ -146,6 +145,8 @@ impl Catalog {
     }
 
     fn visit_dirs(&mut self, dir: &Path, parent: u64) -> Result<()> {
+        self.add_dir_entry(parent, Path::new("."), parent);
+        self.add_dir_entry(parent, Path::new(".."), parent);
         for entry in read_dir(dir)? {
             let path = (entry?).path();
             let fpath = &path.as_path();
