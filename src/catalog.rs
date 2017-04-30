@@ -1,6 +1,6 @@
 use fuse::{FileAttr, FileType};
 use nix::libc::mode_t;
-use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, stat};
+use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, lstat};
 
 use std::cmp::{min, max};
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ pub struct INode {
 
 impl INode {
     fn new(index: u64, path: &Path, hashes: &[ContentHash]) -> Result<INode> {
-        let stats = stat(path)?;
+        let stats = lstat(path)?;
         let mut attributes = FileAttr {
             ino: index,
             size: max::<i64>(stats.st_size, 0) as u64,
@@ -197,16 +197,16 @@ mod tests {
 
     #[test]
     fn mode_to_file_type_test() {
-        let stats = stat("/etc").unwrap();
+        let stats = lstat("/usr").unwrap();
         assert_eq!(mode_to_file_type(stats.st_mode), FileType::Directory);
 
-        let stats = stat("/etc/hosts").unwrap();
+        let stats = lstat("/etc/hosts").unwrap();
         assert_eq!(mode_to_file_type(stats.st_mode), FileType::RegularFile);
     }
 
     #[test]
     fn mode_to_permissions_test() {
-        let stats = stat("/etc/hosts").unwrap();
+        let stats = lstat("/etc/hosts").unwrap();
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
     }
 }
