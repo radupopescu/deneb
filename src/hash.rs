@@ -1,4 +1,4 @@
-#[derive(Debug,Hash,Eq,PartialEq,Default)]
+#[derive(Clone,Debug,Hash,Eq,PartialEq,Default)]
 pub struct ContentHash(Vec<u8>);
 
 impl ContentHash {

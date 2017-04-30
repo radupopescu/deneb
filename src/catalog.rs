@@ -15,11 +15,11 @@ use hash::ContentHash;
 
 pub struct INode {
     pub attributes: FileAttr,
-    content_hash: ContentHash,
+    content_hash: Vec<ContentHash>,
 }
 
 impl INode {
-    fn new(index: u64, path: &Path, hash: ContentHash) -> Result<INode> {
+    fn new(index: u64, path: &Path, hashes: &[ContentHash]) -> Result<INode> {
         let stats = stat(path)?;
         let mut attributes = FileAttr {
             ino: index,
@@ -56,7 +56,7 @@ impl INode {
 
         Ok(INode {
                attributes: attributes,
-               content_hash: hash,
+               content_hash: hashes.to_vec(),
            })
     }
 }
@@ -122,14 +122,14 @@ impl Catalog {
     }
 
     fn add_root(&mut self, root: &Path) -> Result<()> {
-        let inode = INode::new(1, root, ContentHash::new())?;
+        let inode = INode::new(1, root, &[ContentHash::new()])?;
         self.inodes.insert(1, inode);
         Ok(())
     }
 
-    fn add_inode(&mut self, entry: &Path, content_hash: ContentHash) -> Result<u64> {
+    fn add_inode(&mut self, entry: &Path, content_hashes: &[ContentHash]) -> Result<u64> {
         let index = self.index_generator.get_next();
-        let inode = INode::new(index, entry, content_hash)?;
+        let inode = INode::new(index, entry, content_hashes)?;
         self.inodes.insert(index, inode);
         Ok(index)
     }
@@ -157,7 +157,7 @@ impl Catalog {
             let fname = Path::new(fpath
                                       .file_name()
                                       .ok_or_else(|| "Could not get file name from path")?);
-            let index = self.add_inode(fpath, ContentHash::new())?;
+            let index = self.add_inode(fpath, &[ContentHash::new()])?;
             self.add_dir_entry(dir_index, fname, index);
             if path.is_dir() {
                 self.visit_dirs(&path, index, dir_index)?;
