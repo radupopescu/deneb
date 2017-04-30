@@ -99,7 +99,7 @@ impl Catalog {
             index_generator: IndexGenerator::default(),
         };
         catalog.add_root(dir)?;
-        catalog.visit_dirs(dir, 1)?;
+        catalog.visit_dirs(dir, 1, 1)?;
         Ok(catalog)
     }
 
@@ -142,11 +142,15 @@ impl Catalog {
                                                    dir_entry
                                                });
         dir_entry.entry(name.to_owned()).or_insert_with(|| index);
+        if let Some(inode) = self.inodes.get_mut(&index) {
+            inode.attributes.nlink += 1;
+        }
     }
 
-    fn visit_dirs(&mut self, dir: &Path, parent: u64) -> Result<()> {
-        self.add_dir_entry(parent, Path::new("."), parent);
-        self.add_dir_entry(parent, Path::new(".."), parent);
+    fn visit_dirs(&mut self, dir: &Path, dir_index: u64, parent_index: u64) -> Result<()> {
+        self.add_dir_entry(dir_index, Path::new("."), dir_index);
+        self.add_dir_entry(dir_index, Path::new(".."), parent_index);
+
         for entry in read_dir(dir)? {
             let path = (entry?).path();
             let fpath = &path.as_path();
@@ -154,9 +158,9 @@ impl Catalog {
                                       .file_name()
                                       .ok_or_else(|| "Could not get file name from path")?);
             let index = self.add_inode(fpath, ContentHash::new())?;
-            self.add_dir_entry(parent, fname, index);
+            self.add_dir_entry(dir_index, fname, index);
             if path.is_dir() {
-                self.visit_dirs(&path, index)?;
+                self.visit_dirs(&path, index, dir_index)?;
             }
         }
         Ok(())
