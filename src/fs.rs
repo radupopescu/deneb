@@ -16,7 +16,7 @@ struct OpenFileContext;
 
 pub struct Fs<S> {
     catalog: Catalog,
-    _store: S,
+    store: S,
 
     open_dirs: HashMap<u64, Vec<(PathBuf, u64)>>,
     open_files: HashMap<u64, OpenFileContext>,
@@ -28,14 +28,16 @@ impl<S> Fs<S>
     pub fn new(catalog: Catalog, store: S) -> Fs<S> {
         Fs {
             catalog: catalog,
-            _store: store,
+            store: store,
             open_dirs: HashMap::new(),
             open_files: HashMap::new(),
         }
     }
 }
 
-impl<S> Filesystem for Fs<S> {
+impl<S> Filesystem for Fs<S>
+    where S: Store
+{
     // Filesystem lifetime callbacks
 
     // fn init(&mut self, _req: &Request) -> Result<(), c_int> { Ok(()) }
@@ -161,10 +163,27 @@ impl<S> Filesystem for Fs<S> {
             offset: u64,
             size: u32,
             reply: ReplyData) {
-        debug!("read - ino: {}, fh: {}, offset: {}, size: {}", ino, fh, offset, size);
+        debug!("read - ino: {}, fh: {}, offset: {}, size: {}",
+               ino,
+               fh,
+               offset,
+               size);
         match self.open_files.get(&fh) {
             Some(_ctx) => {
-                reply.data(&"MP!\n".as_bytes()[offset as usize..]);
+                if let Some(inode) = self.catalog.get_inode(&fh) {
+                    let digests = &inode.digests;
+                    if !digests.is_empty() {
+                        if let Some(blob) = self.store.get(&digests[0]) {
+                            reply.data(&blob[offset as usize..]);
+                        } else {
+                            reply.error(EINVAL);
+                        }
+                    } else {
+                        reply.error(EINVAL);
+                    }
+                } else {
+                    reply.error(EINVAL);
+                }
             }
             None => {
                 reply.error(EINVAL);
@@ -322,4 +341,3 @@ impl<S> Filesystem for Fs<S> {
     fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {}
      */
 }
-

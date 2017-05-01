@@ -20,7 +20,7 @@ use store::Store;
 
 pub struct INode {
     pub attributes: FileAttr,
-    content_hash: Vec<Digest>,
+    pub digests: Vec<Digest>,
 }
 
 impl INode {
@@ -61,7 +61,7 @@ impl INode {
 
         Ok(INode {
                attributes: attributes,
-               content_hash: hashes.to_vec(),
+               digests: hashes.to_vec(),
            })
     }
 }
@@ -69,9 +69,9 @@ impl INode {
 impl fmt::Display for INode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-               "Attributes: {:?}, content_hash: {:?}",
+               "Attributes: {:?}, digests: {:?}",
                self.attributes,
-               self.content_hash)
+               self.digests)
     }
 }
 
@@ -132,9 +132,9 @@ impl Catalog {
         Ok(())
     }
 
-    fn add_inode(&mut self, entry: &Path, content_hashes: &[Digest]) -> Result<u64> {
+    fn add_inode(&mut self, entry: &Path, digests: &[Digest]) -> Result<u64> {
         let index = self.index_generator.get_next();
-        let inode = INode::new(index, entry, content_hashes)?;
+        let inode = INode::new(index, entry, digests)?;
         self.inodes.insert(index, inode);
         Ok(index)
     }
