@@ -9,12 +9,12 @@ extern crate fuse;
 extern crate log;
 extern crate log4rs;
 extern crate nix;
+extern crate rust_sodium;
 extern crate time;
 
 pub mod catalog;
 pub mod errors;
 pub mod fs;
-pub mod hash;
 pub mod logging;
 pub mod params;
 pub mod store;
