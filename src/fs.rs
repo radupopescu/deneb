@@ -1,6 +1,8 @@
 use fuse::{Filesystem, Request, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
-           ReplyOpen, ReplyStatfs};
-use nix::libc::EINVAL;
+           ReplyOpen};
+use fuse::consts::FOPEN_KEEP_CACHE;
+use nix::libc::{O_WRONLY, O_RDWR};
+use nix::libc::{EINVAL, EACCES};
 use time::Timespec;
 
 use std::ffi::OsStr;
@@ -10,11 +12,14 @@ use std::path::PathBuf;
 use catalog::Catalog;
 use store::Store;
 
+struct OpenFileContext;
+
 pub struct Fs<S> {
     catalog: Catalog,
     _store: S,
 
     open_dirs: HashMap<u64, Vec<(PathBuf, u64)>>,
+    open_files: HashMap<u64, OpenFileContext>,
 }
 
 impl<S> Fs<S>
@@ -25,6 +30,7 @@ impl<S> Fs<S>
             catalog: catalog,
             _store: store,
             open_dirs: HashMap::new(),
+            open_files: HashMap::new(),
         }
     }
 }
@@ -80,7 +86,7 @@ impl<S> Filesystem for Fs<S> {
                     es.push((path.to_owned(), *index));
                 }
                 self.open_dirs.insert(ino, es);
-                reply.opened(ino, flags);
+                reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
             }
             None => {
                 reply.error(EINVAL);
@@ -128,34 +134,64 @@ impl<S> Filesystem for Fs<S> {
         }
     }
 
-    fn open(&mut self, _req: &Request, _ino: u64, _flags: u32, reply: ReplyOpen) {}
-
-    fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {}
+    fn open(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
+        let rw = (O_WRONLY | O_RDWR) as u32;
+        if (flags & rw) > 0 {
+            // If write access is requested, the function should return EACCES
+            debug!("open RW - ino: {}", ino);
+            reply.error(EACCES);
+        } else {
+            debug!("open RO - ino: {}", ino);
+            match self.catalog.get_inode(&ino) {
+                Some(_) => {
+                    self.open_files.insert(ino, OpenFileContext);
+                    reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
+                }
+                None => {
+                    reply.error(EINVAL);
+                }
+            }
+        }
+    }
 
     fn read(&mut self,
             _req: &Request,
-            _ino: u64,
-            _fh: u64,
-            _offset: u64,
-            _size: u32,
+            ino: u64,
+            fh: u64,
+            offset: u64,
+            size: u32,
             reply: ReplyData) {
+        debug!("read - ino: {}, fh: {}, offset: {}, size: {}", ino, fh, offset, size);
+        match self.open_files.get(&fh) {
+            Some(_ctx) => {
+                reply.data(&"MP!\n".as_bytes()[offset as usize..]);
+            }
+            None => {
+                reply.error(EINVAL);
+            }
+        }
     }
 
     fn release(&mut self,
                _req: &Request,
-               _ino: u64,
-               _fh: u64,
+               ino: u64,
+               fh: u64,
                _flags: u32,
                _lock_owner: u64,
                _flush: bool,
                reply: ReplyEmpty) {
+        debug!("release - ino: {}", ino);
+        self.open_files.remove(&fh);
+        reply.ok();
     }
 
-    fn statfs(&mut self, _req: &Request, _ino: u64, reply: ReplyStatfs) {}
+    /*
+    fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {}
 
     fn access(&mut self, _req: &Request, _ino: u64, _mask: u32, reply: ReplyEmpty) {}
 
-    /*
+    fn statfs(&mut self, _req: &Request, _ino: u64, reply: ReplyStatfs) {}
+
     fn getxattr(&mut self,
                 _req: &Request,
                 _ino: u64,
@@ -286,3 +322,4 @@ impl<S> Filesystem for Fs<S> {
     fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {}
      */
 }
+
