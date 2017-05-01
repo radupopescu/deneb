@@ -1,8 +1,11 @@
 extern crate clap;
+#[macro_use]
+extern crate error_chain;
 extern crate deneb;
 #[macro_use]
 extern crate log;
 extern crate notify;
+extern crate rust_sodium;
 
 use log::LogLevelFilter;
 
@@ -63,19 +66,19 @@ mod watch {
                 .author("Radu Popescu <mail@radupopescu.net>")
                 .about("Flew into the light of Deneb")
                 .arg(Arg::with_name("sync_dir")
-                    .short("s")
-                    .long("sync_dir")
-                    .takes_value(true)
-                    .value_name("SYNC_DIR")
-                    .required(true)
-                    .help("Synced directory"))
+                         .short("s")
+                         .long("sync_dir")
+                         .takes_value(true)
+                         .value_name("SYNC_DIR")
+                         .required(true)
+                         .help("Synced directory"))
                 .arg(Arg::with_name("work_dir")
-                    .short("w")
-                    .long("work_dir")
-                    .takes_value(true)
-                    .value_name("WORK_DIR")
-                    .required(true)
-                    .help("Work (scratch) directory"))
+                         .short("w")
+                         .long("work_dir")
+                         .takes_value(true)
+                         .value_name("WORK_DIR")
+                         .required(true)
+                         .help("Work (scratch) directory"))
                 .get_matches();
 
             let sync_dir = PathBuf::from(matches.value_of("sync_dir")
@@ -86,26 +89,32 @@ mod watch {
                 .ok_or_else(|| ErrorKind::CommandLineParameter("work_dir missing".to_owned()))?);
 
             Ok(Params {
-                sync_dir: sync_dir,
-                work_dir: work_dir,
-            })
+                   sync_dir: sync_dir,
+                   work_dir: work_dir,
+               })
         }
     }
 }
 
 fn run() -> Result<()> {
-    logging::init(LogLevelFilter::Trace).chain_err(|| "Could not initialize log4rs")?;
+    // Initialize the rust_sodium library (needed to make all its functions thread-safe)
+    ensure!(rust_sodium::init(),
+            "Could not initialize rust_sodium library. Exiting");
+
+    logging::init(LogLevelFilter::Trace)
+        .chain_err(|| "Could not initialize log4rs")?;
     info!("Deneb - dir watcher!");
 
     let watch::Params { sync_dir, work_dir } =
-        watch::Params::read().chain_err(|| "Could not read command-line parameters")?;
+        watch::Params::read()
+            .chain_err(|| "Could not read command-line parameters")?;
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
     // Create an object store
     let mut store: HashMapStore = HashMapStore::new();
 
-    let catalog : Catalog = Catalog::with_dir(sync_dir.as_path(), &mut store)?;
+    let catalog: Catalog = Catalog::with_dir(sync_dir.as_path(), &mut store)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
 
