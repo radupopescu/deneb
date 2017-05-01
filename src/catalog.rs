@@ -117,11 +117,11 @@ impl Catalog {
     }
 
     pub fn show_stats(&self) {
-        debug!("Catalog stats: number of inodes: {}", self.inodes.len());
-        debug!("Directory entries:");
+        info!("Catalog stats: number of inodes: {}", self.inodes.len());
+        info!("Directory entries:");
         for (k1, v1) in self.dir_entries.iter() {
             for (k2, v2) in v1.iter() {
-                debug!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
+                info!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
             }
         }
     }
@@ -236,17 +236,5 @@ mod tests {
     fn mode_to_permissions_test() {
         let stats = lstat("/etc/hosts").unwrap();
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
-    }
-
-    #[test]
-    fn try_to_read() {
-        let f = File::open("/etc/hosts").unwrap();
-        let mut reader = BufReader::new(f);
-        let mut buffer = Vec::new();
-
-        // read a line into buffer
-        reader.read_to_end(&mut buffer).unwrap();
-
-        println!("{}", String::from_utf8(buffer).unwrap());
     }
 }
