@@ -6,14 +6,10 @@ use time::OutOfRangeError;
 use std::io;
 use std::time;
 
-use merkle;
-
 error_chain! {
     types {}
 
-    links {
-        Merkle(merkle::errors::Error, merkle::errors::ErrorKind);
-    }
+    links {}
 
     foreign_links {
         IoError(io::Error) #[doc="io error"];

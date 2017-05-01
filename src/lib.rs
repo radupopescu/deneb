@@ -8,7 +8,6 @@ extern crate fuse;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
-extern crate merkle;
 extern crate nix;
 extern crate time;
 
