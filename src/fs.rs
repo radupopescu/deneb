@@ -168,24 +168,21 @@ impl<S> Filesystem for Fs<S>
                fh,
                offset,
                size);
-        match self.open_files.get(&fh) {
-            Some(_ctx) => {
-                if let Some(inode) = self.catalog.get_inode(&fh) {
-                    let digests = &inode.digests;
-                    if !digests.is_empty() {
-                        if let Some(blob) = self.store.get(&digests[0]) {
-                            let begin = offset as usize;
-                            let end = begin + size as usize;
-                            reply.data(&blob[begin..end]);
-                        } else {
-                            reply.error(EINVAL);
-                        }
-                    } else {
-                        reply.error(EINVAL);
-                    }
+        let blob = self.open_files.get(&fh)
+            .and_then(|_ctx| self.catalog.get_inode(&fh))
+            .and_then(|inode| {
+                let digests = &inode.digests;
+                if !digests.is_empty() {
+                    self.store.get(&digests[0])
                 } else {
-                    reply.error(EINVAL);
+                    None
                 }
+            });
+        match blob {
+            Some(blob) => {
+                let begin = offset as usize;
+                let end = begin + size as usize;
+                reply.data(&blob[begin..end]);
             }
             None => {
                 reply.error(EINVAL);
