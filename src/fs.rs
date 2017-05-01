@@ -174,7 +174,9 @@ impl<S> Filesystem for Fs<S>
                     let digests = &inode.digests;
                     if !digests.is_empty() {
                         if let Some(blob) = self.store.get(&digests[0]) {
-                            reply.data(&blob[offset as usize..]);
+                            let begin = offset as usize;
+                            let end = begin + size as usize;
+                            reply.data(&blob[begin..end]);
                         } else {
                             reply.error(EINVAL);
                         }
