@@ -16,6 +16,10 @@ impl HashMapStore {
     pub fn new() -> HashMapStore {
         Self::default()
     }
+
+    pub fn show_stats(&self) {
+        info!("HashMapStore: number of objects: {}", self.objects.len());
+    }
 }
 
 impl Store for HashMapStore {

@@ -29,6 +29,7 @@ fn run() -> Result<()> {
     let catalog : Catalog= Catalog::with_dir(sync_dir.as_path(), &mut store)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
+    store.show_stats();
 
     // Create the file system data structure
     let file_system = Fs::new(catalog, store);
