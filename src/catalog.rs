@@ -103,8 +103,10 @@ impl Catalog {
             dir_entries: HashMap::new(),
             index_generator: IndexGenerator::default(),
         };
-        catalog.add_root(dir)?;
-        catalog.visit_dirs(store, dir, 1, 1)?;
+        catalog.add_root(dir)
+            .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
+        catalog.visit_dirs(store, dir, 1, 1)
+            .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
         Ok(catalog)
     }
 
@@ -127,7 +129,8 @@ impl Catalog {
     }
 
     fn add_root(&mut self, root: &Path) -> Result<()> {
-        let inode = INode::new(1, root, &[])?;
+        let inode = INode::new(1, root, &[])
+            .chain_err(|| "Could not construct root inode")?;
         self.inodes.insert(1, inode);
         Ok(())
     }
@@ -175,18 +178,17 @@ impl Catalog {
             if path.is_file() {
                 let mut abs_path = dir.to_path_buf();
                 abs_path.push(fname);
-                if let Ok(f) = File::open(abs_path) {
-                    let mut buffer = Vec::new();
-                    if let Ok(_) = BufReader::new(f).read_to_end(&mut buffer) {
-                        let digest = hash(buffer.as_ref());
-                        store.put(digest, buffer.as_ref());
-                        digests.push(digest);
-                    }
-                }
+                let f = File::open(abs_path)?;
+                let mut buffer = Vec::new();
+                let _ = BufReader::new(f).read_to_end(&mut buffer)?;
+                let digest = hash(buffer.as_ref());
+                store.put(digest, buffer.as_ref());
+                digests.push(digest);
             }
 
             let index = self.add_inode(fpath, &digests)?;
             self.add_dir_entry(dir_index, fname, index);
+
             if path.is_dir() {
                 self.visit_dirs(store, &path, index, dir_index)?;
             }

@@ -4,6 +4,7 @@ use nix;
 use time::OutOfRangeError;
 
 use std::io;
+use std::path::PathBuf;
 use std::time;
 
 error_chain! {
@@ -24,6 +25,10 @@ error_chain! {
         CommandLineParameter(p: String) {
             description("Command-line parameter error")
             display("Command-line parameter error: '{}'", p)
+        }
+        DirVisitError(p: PathBuf) {
+            description("Recursive directory visit error")
+            display("Recursive directory visit error: {:?}", p)
         }
     }
 }
