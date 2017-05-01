@@ -1,9 +1,0 @@
-[package]
-name = "merkle"
-version = "0.1.0"
-authors = ["Radu Popescu <mail@radupopescu.net>"]
-
-[dependencies]
-error-chain = "^0.10.0"
-log = "^0.3.7"
-rust-crypto = "^0.2.0"
