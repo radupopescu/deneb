@@ -9,6 +9,7 @@ use log::LogLevelFilter;
 use deneb::catalog::Catalog;
 use deneb::errors::*;
 use deneb::logging;
+use deneb::store::HashMapStore;
 
 mod watch {
     use std::path::{Path, PathBuf};
@@ -101,7 +102,10 @@ fn run() -> Result<()> {
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
-    let catalog : Catalog = Catalog::with_dir(sync_dir.as_path())?;
+    // Create an object store
+    let mut store: HashMapStore = HashMapStore::new();
+
+    let catalog : Catalog = Catalog::with_dir(sync_dir.as_path(), &mut store)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
 

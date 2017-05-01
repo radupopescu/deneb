@@ -1,6 +1,9 @@
 use fuse::{FileAttr, FileType};
 use nix::libc::mode_t;
 use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, lstat};
+use rust_sodium::crypto::hash::sha512::Digest;
+use rust_sodium::crypto::hash::hash;
+use time::Timespec;
 
 use std::cmp::{min, max};
 use std::collections::HashMap;
@@ -8,18 +11,20 @@ use std::fmt;
 use std::fs::read_dir;
 use std::i32::MAX;
 use std::path::{Path, PathBuf};
-use time::Timespec;
+
+use std::fs::File;
+use std::io::{Read, BufReader};
 
 use errors::*;
-use hash::ContentHash;
+use store::Store;
 
 pub struct INode {
     pub attributes: FileAttr,
-    content_hash: Vec<ContentHash>,
+    content_hash: Vec<Digest>,
 }
 
 impl INode {
-    fn new(index: u64, path: &Path, hashes: &[ContentHash]) -> Result<INode> {
+    fn new(index: u64, path: &Path, hashes: &[Digest]) -> Result<INode> {
         let stats = lstat(path)?;
         let mut attributes = FileAttr {
             ino: index,
@@ -92,14 +97,14 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    pub fn with_dir(dir: &Path) -> Result<Catalog> {
+    pub fn with_dir<S: Store>(dir: &Path, store: &mut S) -> Result<Catalog> {
         let mut catalog = Catalog {
             inodes: HashMap::new(),
             dir_entries: HashMap::new(),
             index_generator: IndexGenerator::default(),
         };
         catalog.add_root(dir)?;
-        catalog.visit_dirs(dir, 1, 1)?;
+        catalog.visit_dirs(store, dir, 1, 1)?;
         Ok(catalog)
     }
 
@@ -122,12 +127,12 @@ impl Catalog {
     }
 
     fn add_root(&mut self, root: &Path) -> Result<()> {
-        let inode = INode::new(1, root, &[ContentHash::new()])?;
+        let inode = INode::new(1, root, &[])?;
         self.inodes.insert(1, inode);
         Ok(())
     }
 
-    fn add_inode(&mut self, entry: &Path, content_hashes: &[ContentHash]) -> Result<u64> {
+    fn add_inode(&mut self, entry: &Path, content_hashes: &[Digest]) -> Result<u64> {
         let index = self.index_generator.get_next();
         let inode = INode::new(index, entry, content_hashes)?;
         self.inodes.insert(index, inode);
@@ -147,7 +152,14 @@ impl Catalog {
         }
     }
 
-    fn visit_dirs(&mut self, dir: &Path, dir_index: u64, parent_index: u64) -> Result<()> {
+    fn visit_dirs<S>(&mut self,
+                     store: &mut S,
+                     dir: &Path,
+                     dir_index: u64,
+                     parent_index: u64)
+                     -> Result<()>
+        where S: Store
+    {
         self.add_dir_entry(dir_index, Path::new("."), dir_index);
         self.add_dir_entry(dir_index, Path::new(".."), parent_index);
 
@@ -157,10 +169,26 @@ impl Catalog {
             let fname = Path::new(fpath
                                       .file_name()
                                       .ok_or_else(|| "Could not get file name from path")?);
-            let index = self.add_inode(fpath, &[ContentHash::new()])?;
+
+            // TODO: This has to be rewritten with buffered reads + chunking
+            let mut digests = Vec::new();
+            if path.is_file() {
+                let mut abs_path = dir.to_path_buf();
+                abs_path.push(fname);
+                if let Ok(f) = File::open(abs_path) {
+                    let mut buffer = Vec::new();
+                    if let Ok(_) = BufReader::new(f).read_to_end(&mut buffer) {
+                        let digest = hash(buffer.as_ref());
+                        store.put(digest, buffer.as_ref());
+                        digests.push(digest);
+                    }
+                }
+            }
+
+            let index = self.add_inode(fpath, &digests)?;
             self.add_dir_entry(dir_index, fname, index);
             if path.is_dir() {
-                self.visit_dirs(&path, index, dir_index)?;
+                self.visit_dirs(store, &path, index, dir_index)?;
             }
         }
         Ok(())
@@ -208,5 +236,17 @@ mod tests {
     fn mode_to_permissions_test() {
         let stats = lstat("/etc/hosts").unwrap();
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
+    }
+
+    #[test]
+    fn try_to_read() {
+        let f = File::open("/etc/hosts").unwrap();
+        let mut reader = BufReader::new(f);
+        let mut buffer = Vec::new();
+
+        // read a line into buffer
+        reader.read_to_end(&mut buffer).unwrap();
+
+        println!("{}", String::from_utf8(buffer).unwrap());
     }
 }
