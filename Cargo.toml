@@ -3,6 +3,10 @@ name = "deneb"
 version = "0.1.0"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
 
+[[bin]]
+name = "deneb"
+doc = false
+
 [dependencies]
 clap = "^2.21.0"
 chrono = "^0.3.0"

@@ -9,7 +9,7 @@ extern crate rust_sodium;
 
 use log::LogLevelFilter;
 
-use deneb::catalog::Catalog;
+use deneb::catalog::HashMapCatalog;
 use deneb::errors::*;
 use deneb::logging;
 use deneb::store::HashMapStore;
@@ -114,7 +114,7 @@ fn run() -> Result<()> {
     // Create an object store
     let mut store: HashMapStore = HashMapStore::new();
 
-    let catalog: Catalog = Catalog::with_dir(sync_dir.as_path(), &mut store)?;
+    let catalog: HashMapCatalog = HashMapCatalog::with_dir(sync_dir.as_path(), &mut store)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
 

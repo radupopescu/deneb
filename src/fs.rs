@@ -14,18 +14,17 @@ use store::Store;
 
 struct OpenFileContext;
 
-pub struct Fs<S> {
-    catalog: Catalog,
+pub struct Fs<C, S> {
+    catalog: C,
     store: S,
 
     open_dirs: HashMap<u64, Vec<(PathBuf, u64)>>,
     open_files: HashMap<u64, OpenFileContext>,
 }
 
-impl<S> Fs<S>
-    where S: Store
+impl<C, S> Fs<C, S>
 {
-    pub fn new(catalog: Catalog, store: S) -> Fs<S> {
+    pub fn new(catalog: C, store: S) -> Fs<C, S> {
         Fs {
             catalog: catalog,
             store: store,
@@ -35,8 +34,8 @@ impl<S> Fs<S>
     }
 }
 
-impl<S> Filesystem for Fs<S>
-    where S: Store
+impl<C, S> Filesystem for Fs<C, S>
+    where C: Catalog, S: Store
 {
     // Filesystem lifetime callbacks
 

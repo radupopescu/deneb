@@ -6,7 +6,7 @@ extern crate fuse;
 extern crate log;
 extern crate rust_sodium;
 
-use deneb::catalog::Catalog;
+use deneb::catalog::HashMapCatalog;
 use deneb::errors::*;
 use deneb::fs::Fs;
 use deneb::logging;
@@ -34,7 +34,7 @@ fn run() -> Result<()> {
     let mut store: HashMapStore = HashMapStore::new();
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
-    let catalog: Catalog = Catalog::with_dir(params.sync_dir.as_path(), &mut store)?;
+    let catalog: HashMapCatalog = HashMapCatalog::with_dir(params.sync_dir.as_path(), &mut store)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
     store.show_stats();

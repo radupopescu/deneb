@@ -23,6 +23,14 @@ pub struct INode {
     pub digests: Vec<Digest>,
 }
 
+/// Describes the interface of metadata catalogs
+///
+pub trait Catalog {
+    fn get_inode(&self, index: &u64) -> Option<&INode>;
+
+    fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>>;
+}
+
 impl INode {
     fn new(index: u64, path: &Path, hashes: &[Digest]) -> Result<INode> {
         let stats = lstat(path)?;
@@ -90,15 +98,15 @@ impl IndexGenerator {
     }
 }
 
-pub struct Catalog {
+pub struct HashMapCatalog {
     inodes: HashMap<u64, INode>,
     dir_entries: HashMap<u64, HashMap<PathBuf, u64>>,
     index_generator: IndexGenerator,
 }
 
-impl Catalog {
-    pub fn with_dir<S: Store>(dir: &Path, store: &mut S) -> Result<Catalog> {
-        let mut catalog = Catalog {
+impl HashMapCatalog {
+    pub fn with_dir<S: Store>(dir: &Path, store: &mut S) -> Result<HashMapCatalog> {
+        let mut catalog = HashMapCatalog {
             inodes: HashMap::new(),
             dir_entries: HashMap::new(),
             index_generator: IndexGenerator::default(),
@@ -108,14 +116,6 @@ impl Catalog {
         catalog.visit_dirs(store, dir, 1, 1)
             .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
         Ok(catalog)
-    }
-
-    pub fn get_inode(&self, index: &u64) -> Option<&INode> {
-        self.inodes.get(index)
-    }
-
-    pub fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
-        self.dir_entries.get(parent)
     }
 
     pub fn show_stats(&self) {
@@ -194,6 +194,16 @@ impl Catalog {
             }
         }
         Ok(())
+    }
+}
+
+impl Catalog for HashMapCatalog {
+    fn get_inode(&self, index: &u64) -> Option<&INode> {
+        self.inodes.get(index)
+    }
+
+    fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
+        self.dir_entries.get(parent)
     }
 }
 
