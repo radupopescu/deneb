@@ -31,10 +31,10 @@ fn run() -> Result<()> {
     info!("Mount point: {:?}", params.mount_point);
 
     // Create an object store
-    let mut store: HashMapStore = HashMapStore::new();
+    let mut store = HashMapStore::new();
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
-    let catalog: HashMapCatalog = HashMapCatalog::with_dir(params.sync_dir.as_path(), &mut store)?;
+    let catalog = HashMapCatalog::with_dir(params.sync_dir.as_path(), &mut store)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
     store.show_stats();
