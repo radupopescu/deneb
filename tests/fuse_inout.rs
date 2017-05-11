@@ -63,37 +63,40 @@ fn copy_dir_tree(source: &Path, dest: &Path) -> Result<()> {
 //
 // Generate an arbitrary directory tree and use it to populate a Deneb repository.
 // Copy all the files back out of the Deneb repository and compare with the originals.
+fn check_inout(dir: DirTree, prefix: &Path) {
+    // Initialize input data
+    assert!(dir.show().is_ok());
+    assert!(dir.create().is_ok());
+
+    // Create and mount the deneb repo
+    let mount_point = prefix.join("mount");
+    assert!(create_dir(mount_point.as_path()).is_ok());
+    let session = init_hashmap_repo(dir.root.as_path(), mount_point.as_path());
+    assert!(session.is_ok());
+
+    // Copy the contents of the Deneb repository to a new directory
+    let output_dir = prefix.join("output");
+    assert!(copy_dir_tree(mount_point.as_path(), output_dir.as_path()).is_ok());
+
+    // Compare the input directory tree with the one copied out of the Deneb repo
+    let mut output_root = dir.root.to_owned();
+    output_root.pop();
+    output_root.push("output");
+    let comp = dir.compare(output_root.as_path());
+    println!("Compare result: {:?}", comp);
+    assert!(comp.is_ok());
+}
 
 #[test]
-fn simple_hashmap_inout() {
+fn simple_fuse_hashmap_inout() {
     let tmp = TempDir::new("/tmp/deneb_test");
     assert!(tmp.is_ok());
     if let Ok(prefix) = tmp {
         let dt = make_test_dir_tree(prefix.path());
         assert!(dt.is_ok());
         if let Ok(dt) = dt {
-            // Initialize input data
-            assert!(dt.show().is_ok());
-            assert!(dt.create().is_ok());
-
-            // Create and mount the deneb repo
-            let mount_point = prefix.path().join("mount");
-            assert!(create_dir(mount_point.as_path()).is_ok());
-            let session = init_hashmap_repo(dt.root.as_path(), mount_point.as_path());
-            assert!(session.is_ok());
-
-            // Copy the contents of the Deneb repository to a new directory
-            let output_dir = prefix.path().join("output");
-            assert!(copy_dir_tree(mount_point.as_path(), output_dir.as_path()).is_ok());
-
-            // Compare the input directory tree with the one copied out of the Deneb repo
-            let mut output_root = dt.root.to_owned();
-            output_root.pop();
-            output_root.push("output");
-            let comp = dt.compare(output_root.as_path());
-            println!("Compare result: {:?}", comp);
-            assert!(comp.is_ok());
-       }
+            check_inout(dt, prefix.path());
+        }
 
         // Explicit cleanup
         assert!(prefix.close().is_ok());
