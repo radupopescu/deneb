@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 
-// use quickcheck::{Arbitrary, Gen};
+use quickcheck::{Arbitrary, Gen};
+use rand::{Rng,thread_rng};
 use rust_sodium::crypto::hash::hash;
+use uuid::Uuid;
 
 use std::fs::{File, create_dir_all, remove_dir_all};
 use std::io::{Read, BufReader};
@@ -14,6 +16,42 @@ use deneb::errors::*;
 pub enum DirEntry {
     File(String, Vec<u8>),
     Dir(String, Vec<DirEntry>),
+}
+
+impl DirEntry {
+    fn arbitrary_rec<G: Gen>(g: &mut G, current_depth: usize) -> DirEntry {
+        let max_size = g.size();
+        let name = Uuid::new_v4().simple().to_string();
+        match g.gen_range(0, 2) {
+            0 => {
+                let file_size = g.gen_range(0, max_size * 100);
+                let mut contents = vec![0 as u8; file_size];
+                thread_rng().fill_bytes(contents.as_mut());
+                DirEntry::File(name, contents)
+            }
+            1 => {
+                let mut children = Vec::new();
+                if current_depth < max_size {
+                    for _i in 0..g.gen_range(0, max_size) {
+                        children.push(DirEntry::arbitrary_rec(g, current_depth + 1));
+                    }
+                }
+                DirEntry::Dir(name, children)
+            }
+            _ => {
+                panic!("Not supposed to be here")
+            }
+        }
+    }
+}
+
+impl Arbitrary for DirEntry {
+    fn arbitrary<G: Gen>(g: &mut G) -> DirEntry {
+        DirEntry::arbitrary_rec(g, 0)
+    }
+
+    // fn shrink(&self) -> Box<Iterator<Item=DirTree>> {
+    // }
 }
 
 /// Represents a directory tree which serves as input for the Deneb repository tests.
@@ -112,15 +150,29 @@ fn compare_files(fn1: &Path, fn2: &Path) -> bool {
             let digest2 = hash(buffer2.as_ref());
             digest1 == digest2
         }
+        (Ok(_f1), Err(_e2)) => {
+            println!("Error opening new file {:?}", fn2);
+            false
+        }
+        (Err(_e1), Ok(_f2)) => {
+            println!("Error opening old file {:?}", fn1);
+            false
+        }
         _ => false
     }
 }
 
-// impl Arbitrary for DirTree {
-//     fn arbitrary<G: Gen>(g: &mut G) -> Self {
-//         DirTree::new()
-//     }
+impl Arbitrary for DirTree {
+    fn arbitrary<G: Gen>(g: &mut G) -> DirTree {
+        let max_size = g.size();
+        let num_items = g.gen_range(0, max_size);
+        let mut items = Vec::new();
+        for _i in 0..num_items {
+            items.push(<DirEntry as Arbitrary>::arbitrary(g));
+        }
+        DirTree::with_entries(PathBuf::from(""), items)
+    }
 
-//     fn shrink(&self) -> Box<Iterator<Item=DirTree>> {
-//     }
-// }
+    // fn shrink(&self) -> Box<Iterator<Item=DirTree>> {
+    // }
+}
