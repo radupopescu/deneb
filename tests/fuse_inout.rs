@@ -39,7 +39,14 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
             vec![DirEntry::Dir("dir3".to_owned(),
                                vec![DirEntry::File("c.txt".to_owned(),
                                                    "for?\n".as_bytes().to_vec())])])];
-    Ok(DirTree::with_entries(root, entries))
+
+    let dt = DirTree::with_entries(root, entries);
+
+    // Initialize input data
+    assert!(dt.show().is_ok());
+    assert!(dt.create().is_ok());
+
+    Ok(dt)
 }
 
 
@@ -61,13 +68,9 @@ fn copy_dir_tree(source: &Path, dest: &Path) -> Result<()> {
 
 // Simple integration test
 //
-// Generate an arbitrary directory tree and use it to populate a Deneb repository.
+// Use a previously generated DirTree to populate a Deneb repository.
 // Copy all the files back out of the Deneb repository and compare with the originals.
 fn check_inout(dir: DirTree, prefix: &Path) {
-    // Initialize input data
-    assert!(dir.show().is_ok());
-    assert!(dir.create().is_ok());
-
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");
     assert!(create_dir(mount_point.as_path()).is_ok());
