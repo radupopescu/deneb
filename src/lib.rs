@@ -1,7 +1,6 @@
 #![recursion_limit = "1024"]
 
 extern crate clap;
-extern crate chrono;
 #[macro_use]
 extern crate error_chain;
 extern crate fuse;
