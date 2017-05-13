@@ -30,16 +30,16 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
     let root = prefix.join("input");
     println!("Root: {:?}", root);
 
-    let entries = vec![DirEntry::File("a.txt".to_owned(), "hello\n".as_bytes().to_vec()),
+    let entries = vec![DirEntry::File("a.txt".to_owned(), b"hello\n".to_vec()),
                        DirEntry::Dir("dir1".to_owned(),
                                      vec![DirEntry::File("b.txt".to_owned(),
-                                                         "is it me\n".as_bytes().to_vec()),
+                                                         b"is it me\n".to_vec()),
                                           DirEntry::File("c.txt".to_owned(),
-                                                         "you're looking\n".as_bytes().to_vec())]),
+                                                         b"you're looking\n".to_vec())]),
                        DirEntry::Dir("dir2".to_owned(),
                                      vec![DirEntry::Dir("dir3".to_owned(),
                                                         vec![DirEntry::File("c.txt".to_owned(),
-                                                   "for?\n".as_bytes().to_vec())])])];
+                                                   b"for?\n".to_vec())])])];
 
     let dt = DirTree::with_entries(root, entries);
 
@@ -69,7 +69,7 @@ fn copy_dir_tree(source: &Path, dest: &Path) -> Result<()> {
 //
 // Use a previously generated DirTree to populate a Deneb repository.
 // Copy all the files back out of the Deneb repository and compare with the originals.
-fn check_inout(dir: DirTree, prefix: &Path) -> Result<()> {
+fn check_inout(dir: &DirTree, prefix: &Path) -> Result<()> {
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");
     create_dir(mount_point.as_path())?;
@@ -91,7 +91,7 @@ fn single_fuse_hashmap_inout() {
         let dt = make_test_dir_tree(prefix.path());
         assert!(dt.is_ok());
         if let Ok(dt) = dt {
-            assert!(check_inout(dt, prefix.path()).is_ok());
+            assert!(check_inout(&dt, prefix.path()).is_ok());
         }
 
         // Explicit cleanup
@@ -112,7 +112,7 @@ fn prop_inout_unchanged() {
             let _ = dt.show();
             let _ = dt.create();
 
-            let check_result = check_inout(dt, prefix.path());
+            let check_result = check_inout(&dt, prefix.path());
             if !check_result.is_ok() {
                 println!("Check failed: {:?}", check_result);
                 return false;

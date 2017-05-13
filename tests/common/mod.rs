@@ -56,7 +56,7 @@ impl Arbitrary for DirEntry {
 
 /// Represents a directory tree which serves as input for the Deneb repository tests.
 ///
-/// Implements the quickcheck::Arbitrary trait.
+/// Implements the `quickcheck::Arbitrary` trait.
 #[derive(Clone, Debug)]
 pub struct DirTree {
     pub root: PathBuf,
@@ -119,11 +119,11 @@ impl DirTree {
         self.visit_rec(&self.root, &self.entries, action)
     }
 
-    fn visit_rec<V>(&self, dir: &Path, entries: &Vec<DirEntry>, action: V) -> Result<()>
+    fn visit_rec<V>(&self, dir: &Path, entries: &[DirEntry], action: V) -> Result<()>
         where V: Fn(&Path, &DirEntry) -> Result<()> + Copy
     {
         for entry in entries.iter() {
-            action(dir, &entry)?;
+            action(dir, entry)?;
             if let DirEntry::Dir(ref name, ref children) = *entry {
                 self.visit_rec(&dir.join(name), children, action)?;
             }
