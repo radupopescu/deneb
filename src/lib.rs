@@ -8,6 +8,8 @@ extern crate fuse;
 extern crate log;
 extern crate log4rs;
 extern crate nix;
+#[cfg(feature = "watcher")]
+extern crate notify;
 extern crate rust_sodium;
 extern crate time;
 
