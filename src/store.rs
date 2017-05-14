@@ -1,6 +1,6 @@
-use rust_sodium::crypto::hash::sha512::Digest;
-
 use std::collections::HashMap;
+
+use cas::Digest;
 
 pub trait Store {
     fn get(&self, hash: &Digest) -> Option<&[u8]>;
@@ -42,8 +42,8 @@ mod tests {
         let mut store: HashMapStore = HashMapStore::new();
         let k1 = "some_key".as_ref();
         let v1: Vec<u8> = vec![1,2,3];
-        store.put(hash(k1), v1.as_slice());
-        if let Some(v2) = store.get(&hash(k1)) {
+        store.put(Digest::new(hash(k1)), v1.as_slice());
+        if let Some(v2) = store.get(&Digest::new(hash(k1))) {
             println!("v1 = {:?}, v2 = {:?}", v1, v2);
         } else {
             println!("store.get returned None");

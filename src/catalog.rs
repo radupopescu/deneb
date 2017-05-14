@@ -1,20 +1,16 @@
 use fuse::{FileAttr, FileType};
 use nix::libc::mode_t;
 use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, lstat};
-use rust_sodium::crypto::hash::sha512::Digest;
-use rust_sodium::crypto::hash::hash;
 use time::Timespec;
 
 use std::cmp::{min, max};
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::read_dir;
+use std::fs::{File, read_dir};
 use std::i32::MAX;
 use std::path::{Path, PathBuf};
 
-use std::fs::File;
-use std::io::{Read, BufReader};
-
+use cas::{Chunk, Digest, read_chunks};
 use errors::*;
 use store::Store;
 
@@ -32,7 +28,7 @@ pub trait Catalog {
 }
 
 impl INode {
-    fn new(index: u64, path: &Path, hashes: &[Digest]) -> Result<INode> {
+    fn new(index: u64, path: &Path, digests: &[Digest]) -> Result<INode> {
         let stats = lstat(path)?;
         let mut attributes = FileAttr {
             ino: index,
@@ -69,7 +65,7 @@ impl INode {
 
         Ok(INode {
                attributes: attributes,
-               digests: hashes.to_vec(),
+               digests: digests.to_vec(),
            })
     }
 }
@@ -175,20 +171,20 @@ impl HashMapCatalog {
                                       .file_name()
                                       .ok_or_else(|| "Could not get file name from path")?);
 
-            // TODO: This has to be rewritten with buffered reads + chunking
             let mut digests = Vec::new();
             if path.is_file() {
                 let mut abs_path = dir.to_path_buf();
                 abs_path.push(fname);
                 let f = File::open(abs_path)?;
-                let mut buffer = Vec::new();
-                let _ = BufReader::new(f).read_to_end(&mut buffer)?;
-                let digest = hash(buffer.as_ref());
-                store.put(digest, buffer.as_ref());
-                digests.push(digest);
+                let chunk_size = 10;
+                let chunks = read_chunks(&f, chunk_size)?;
+                for Chunk { ref digest, ref data } in chunks.into_iter() {
+                    store.put(digest.clone(), data.as_ref());
+                    digests.push(digest.clone());
+                }
             }
 
-            let index = self.add_inode(fpath, &digests)?;
+            let index = self.add_inode(fpath, digests.as_slice())?;
             self.add_dir_entry(dir_index, fname, index);
 
             if path.is_dir() {
