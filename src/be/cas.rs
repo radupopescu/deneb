@@ -1,5 +1,5 @@
 use rust_sodium::crypto::hash::sha512;
-use rust_sodium::crypto::hash::hash;
+use rust_sodium::crypto::hash::hash as sodium_hash;
 
 use std::fs::File;
 use std::io::{Read, BufReader};
@@ -10,7 +10,7 @@ use common::errors::*;
 pub struct Digest(sha512::Digest);
 
 impl Digest {
-    pub fn new(digest: sha512::Digest) -> Digest {
+    fn new(digest: sha512::Digest) -> Digest {
         Digest(digest)
     }
 }
@@ -20,11 +20,15 @@ pub struct Chunk {
     pub data: Vec<u8>,
 }
 
+pub fn hash(msg: &[u8]) -> Digest {
+    Digest::new(sodium_hash(msg))
+}
+
 pub fn read_chunks(file: &File, _chunk_size: u64) -> Result<Vec<Chunk>> {
     let mut chunks = Vec::new();
     let mut buffer = Vec::new();
     let _ = BufReader::new(file).read_to_end(&mut buffer)?;
     let digest = hash(buffer.as_ref());
-    chunks.push(Chunk { digest: Digest::new(digest), data: buffer } );
+    chunks.push(Chunk { digest: digest, data: buffer } );
     Ok(chunks)
 }
