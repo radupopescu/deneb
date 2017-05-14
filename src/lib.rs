@@ -8,6 +8,7 @@ extern crate fuse;
 extern crate log;
 extern crate log4rs;
 extern crate nix;
+extern crate notify;
 extern crate rust_sodium;
 extern crate time;
 
