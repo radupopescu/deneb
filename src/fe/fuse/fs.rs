@@ -1,5 +1,5 @@
-use fuse::{Filesystem, Request, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
-           ReplyOpen};
+use fuse::{FileAttr, Filesystem, FileType, Request, ReplyAttr, ReplyData, ReplyDirectory,
+           ReplyEmpty, ReplyEntry, ReplyOpen};
 use fuse::consts::FOPEN_KEEP_CACHE;
 use nix::libc::{O_WRONLY, O_RDWR};
 use nix::libc::{EINVAL, EACCES};
@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use be::catalog::Catalog;
+use be::inode::{FileAttributes, FileType as FT};
 use be::store::Store;
 
 struct OpenFileContext;
@@ -22,8 +23,7 @@ pub struct Fs<C, S> {
     open_files: HashMap<u64, OpenFileContext>,
 }
 
-impl<C, S> Fs<C, S>
-{
+impl<C, S> Fs<C, S> {
     pub fn new(catalog: C, store: S) -> Fs<C, S> {
         Fs {
             catalog: catalog,
@@ -35,7 +35,8 @@ impl<C, S> Fs<C, S>
 }
 
 impl<C, S> Filesystem for Fs<C, S>
-    where C: Catalog, S: Store
+    where C: Catalog,
+          S: Store
 {
     // Filesystem lifetime callbacks
 
@@ -51,7 +52,7 @@ impl<C, S> Filesystem for Fs<C, S>
         match self.catalog.get_inode(&ino) {
             Some(inode) => {
                 let ttl = Timespec::new(1, 0);
-                reply.attr(&ttl, &inode.attributes);
+                reply.attr(&ttl, &convert_fuse_fattr(&inode.attributes));
             }
             None => {
                 reply.error(EINVAL);
@@ -69,7 +70,7 @@ impl<C, S> Filesystem for Fs<C, S>
         match attrs {
             Some(attrs) => {
                 let ttl = Timespec::new(1, 0);
-                reply.entry(&ttl, &attrs, 0);
+                reply.entry(&ttl, &convert_fuse_fattr(&attrs), 0);
             }
             None => {
                 reply.error(EINVAL);
@@ -120,7 +121,10 @@ impl<C, S> Filesystem for Fs<C, S>
                 while index < entries.len() {
                     let (ref name, idx) = entries[index];
                     if let Some(inode) = self.catalog.get_inode(&idx) {
-                        if !reply.add(idx, index as u64 + 1, inode.attributes.kind, name) {
+                        if !reply.add(idx,
+                                      index as u64 + 1,
+                                      convert_fuse_file_type(inode.attributes.kind),
+                                      name) {
                             index += 1;
                         } else {
                             break;
@@ -167,16 +171,17 @@ impl<C, S> Filesystem for Fs<C, S>
                fh,
                offset,
                size);
-        let blob = self.open_files.get(&fh)
+        let blob = self.open_files
+            .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(&fh))
             .and_then(|inode| {
-                let digests = &inode.digests;
-                if !digests.is_empty() {
-                    self.store.get(&digests[0])
-                } else {
-                    None
-                }
-            });
+                          let digests = &inode.digests;
+                          if !digests.is_empty() {
+                              self.store.get(&digests[0])
+                          } else {
+                              None
+                          }
+                      });
         match blob {
             Some(blob) => {
                 let begin = offset as usize;
@@ -338,4 +343,34 @@ impl<C, S> Filesystem for Fs<C, S>
     // Other callbacks
     fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {}
      */
+}
+
+fn convert_fuse_file_type(ftype: FT) -> FileType {
+    match ftype {
+        FT::NamedPipe => FileType::NamedPipe,
+        FT::CharDevice => FileType::CharDevice,
+        FT::BlockDevice => FileType::BlockDevice,
+        FT::Directory => FileType::Directory,
+        FT::RegularFile => FileType::RegularFile,
+        FT::Symlink => FileType::Symlink,
+    }
+}
+
+fn convert_fuse_fattr(fattr: &FileAttributes) -> FileAttr {
+    FileAttr {
+        ino: fattr.ino,
+        size: fattr.size,
+        blocks: fattr.blocks,
+        atime: fattr.atime,
+        mtime: fattr.mtime,
+        ctime: fattr.ctime,
+        crtime: fattr.crtime,
+        kind: convert_fuse_file_type(fattr.kind),
+        perm: fattr.perm,
+        nlink: fattr.nlink,
+        uid: fattr.uid,
+        gid: fattr.gid,
+        rdev: fattr.rdev,
+        flags: fattr.flags,
+    }
 }

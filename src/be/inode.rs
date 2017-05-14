@@ -1,4 +1,3 @@
-use fuse::{FileAttr, FileType};
 use nix::libc::mode_t;
 use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, lstat};
 use time::Timespec;
@@ -11,15 +10,43 @@ use std::path::Path;
 use common::errors::*;
 use be::cas::Digest;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum FileType {
+    NamedPipe,
+    CharDevice,
+    BlockDevice,
+    Directory,
+    RegularFile,
+    Symlink,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FileAttributes {
+    pub ino: u64,
+    pub size: u64,
+    pub blocks: u64,
+    pub atime: Timespec,
+    pub mtime: Timespec,
+    pub ctime: Timespec,
+    pub crtime: Timespec,
+    pub kind: FileType,
+    pub perm: u16,
+    pub nlink: u32,
+    pub uid: u32,
+    pub gid: u32,
+    pub rdev: u32,
+    pub flags: u32,
+}
+
 pub struct INode {
-    pub attributes: FileAttr,
+    pub attributes: FileAttributes,
     pub digests: Vec<Digest>,
 }
 
 impl INode {
     pub fn new(index: u64, path: &Path, digests: &[Digest]) -> Result<INode> {
         let stats = lstat(path)?;
-        let mut attributes = FileAttr {
+        let mut attributes = FileAttributes {
             ino: index,
             size: max::<i64>(stats.st_size, 0) as u64,
             blocks: max::<i64>(stats.st_blocks, 0) as u64,
