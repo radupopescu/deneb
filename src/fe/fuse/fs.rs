@@ -1,19 +1,23 @@
 use fuse::{FileAttr, Filesystem, FileType, Request, ReplyAttr, ReplyData, ReplyDirectory,
            ReplyEmpty, ReplyEntry, ReplyOpen};
 use fuse::consts::FOPEN_KEEP_CACHE;
+use fuse::{BackgroundSession, mount, spawn_mount};
 use nix::libc::{O_WRONLY, O_RDWR};
 use nix::libc::{EINVAL, EACCES};
 use time::Timespec;
 
-use std::ffi::OsStr;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 
 use be::catalog::Catalog;
 use be::inode::{FileAttributes, FileType as FT};
 use be::store::Store;
+use common::errors::*;
 
 struct OpenFileContext;
+
+pub struct Session<'a>(BackgroundSession<'a>);
 
 pub struct Fs<C, S> {
     catalog: C,
@@ -23,7 +27,10 @@ pub struct Fs<C, S> {
     open_files: HashMap<u64, OpenFileContext>,
 }
 
-impl<C, S> Fs<C, S> {
+impl<'a, C, S> Fs<C, S>
+    where C: 'a + Catalog + Send,
+          S: 'a + Store + Send
+{
     pub fn new(catalog: C, store: S) -> Fs<C, S> {
         Fs {
             catalog: catalog,
@@ -31,6 +38,19 @@ impl<C, S> Fs<C, S> {
             open_dirs: HashMap::new(),
             open_files: HashMap::new(),
         }
+    }
+
+    pub fn mount<P: AsRef<Path>>(self, mount_point: &P, options: &[&OsStr]) -> Result<()> {
+        mount(self, mount_point, options).map_err(|e| e.into())
+    }
+
+    pub unsafe fn spawn_mount<P: AsRef<Path>>(self,
+                                              mount_point: &P,
+                                              options: &[&OsStr])
+                                              -> Result<Session<'a>> {
+        spawn_mount(self, mount_point, options)
+            .map(|s| Session(s))
+            .map_err(|e| e.into())
     }
 }
 

@@ -1,8 +1,9 @@
+#![cfg(feature = "fuse")]
+
 extern crate copy_dir;
 extern crate deneb;
 #[macro_use]
 extern crate error_chain;
-extern crate fuse;
 extern crate quickcheck;
 extern crate rand;
 extern crate rust_sodium;
@@ -10,7 +11,6 @@ extern crate tempdir;
 extern crate uuid;
 
 use quickcheck::{QuickCheck, StdGen};
-use fuse::BackgroundSession;
 use tempdir::TempDir;
 
 use std::path::Path;
@@ -23,7 +23,7 @@ use common::*;
 use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
 use deneb::be::store::HashMapStore;
 use deneb::common::errors::*;
-use deneb::fe::fuse::Fs;
+use deneb::fe::fuse::{Fs, Session};
 use deneb::fe::fuse::DEFAULT_CHUNK_SIZE;
 
 // Function to generate an input dir tree
@@ -31,16 +31,15 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
     let root = prefix.join("input");
     println!("Root: {:?}", root);
 
-    let entries = vec![DirEntry::File("a.txt".to_owned(), b"hello\n".to_vec()),
-                       DirEntry::Dir("dir1".to_owned(),
-                                     vec![DirEntry::File("b.txt".to_owned(),
-                                                         b"is it me\n".to_vec()),
-                                          DirEntry::File("c.txt".to_owned(),
-                                                         b"you're looking\n".to_vec())]),
-                       DirEntry::Dir("dir2".to_owned(),
-                                     vec![DirEntry::Dir("dir3".to_owned(),
-                                                        vec![DirEntry::File("c.txt".to_owned(),
-                                                   b"for?\n".to_vec())])])];
+    let entries =
+        vec![DirEntry::File("a.txt".to_owned(), b"hello\n".to_vec()),
+             DirEntry::Dir("dir1".to_owned(),
+                           vec![DirEntry::File("b.txt".to_owned(), b"is it me\n".to_vec()),
+                                DirEntry::File("c.txt".to_owned(), b"you're looking\n".to_vec())]),
+             DirEntry::Dir("dir2".to_owned(),
+                           vec![DirEntry::Dir("dir3".to_owned(),
+                                              vec![DirEntry::File("c.txt".to_owned(),
+                                                                  b"for?\n".to_vec())])])];
 
     let dt = DirTree::with_entries(root, entries);
 
@@ -53,12 +52,12 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
 
 
 // Initialize a Deneb repo with the input directory
-fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path) -> Result<BackgroundSession<'a>> {
+fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path) -> Result<Session<'a>> {
     let mut store = HashMapStore::new();
     let mut catalog = HashMapCatalog::new();
     populate_with_dir(&mut catalog, &mut store, input, DEFAULT_CHUNK_SIZE)?;
     let file_system = Fs::new(catalog, store);
-    unsafe { fuse::spawn_mount(file_system, &mount_point.to_owned(), &[]).map_err(|e| e.into()) }
+    unsafe { file_system.spawn_mount(&mount_point.to_owned(), &[]) }
 }
 
 // Copy the contents of the Deneb repo out to a new location

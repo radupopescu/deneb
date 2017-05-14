@@ -1,7 +1,6 @@
 extern crate deneb;
 #[macro_use]
 extern crate error_chain;
-extern crate fuse;
 #[macro_use]
 extern crate log;
 extern crate rust_sodium;
@@ -42,7 +41,7 @@ fn run() -> Result<()> {
 
     // Create the file system data structure
     let file_system = Fs::new(catalog, store);
-    fuse::mount(file_system, &params.mount_point, &[])?;
+    file_system.mount(&params.mount_point, &[])?;
 
     Ok(())
 }
