@@ -5,11 +5,14 @@ use std::path::PathBuf;
 
 use errors::*;
 
+const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
+
 pub struct AppParameters {
     pub sync_dir: PathBuf,
     pub work_dir: PathBuf,
     pub mount_point: PathBuf,
     pub log_level: LogLevelFilter,
+    pub chunk_size: u64,
 }
 
 impl AppParameters {
@@ -47,6 +50,13 @@ impl AppParameters {
                 .required(false)
                 .default_value("info")
                 .help("Log level for the console logger"))
+            .arg(Arg::with_name("chunk_size")
+                 .long("chunk_size")
+                 .takes_value(true)
+                 .value_name("CHUNK_SIZE")
+                 .required(false)
+                 .default_value("DEFAULT")//DEFAULT_CHUNK_SIZE) // default 4MB chunks
+                 .help("Chunk size used for storing files"))
             .get_matches();
 
         let sync_dir = PathBuf::from(matches.value_of("sync_dir")
@@ -70,12 +80,28 @@ impl AppParameters {
             },
             None => { LogLevelFilter::Info }
         };
+        let chunk_size: u64 = match matches.value_of("chunk_size") {
+            Some("DEFAULT") | None => {
+                DEFAULT_CHUNK_SIZE
+            }
+            Some(chunk_size) => {
+                match u64::from_str_radix(chunk_size, 10) {
+                    Ok(size) => {
+                        size
+                    }
+                    _ => {
+                        DEFAULT_CHUNK_SIZE
+                    }
+                }
+            }
+        };
 
         Ok(AppParameters {
             sync_dir: sync_dir,
             work_dir: work_dir,
             mount_point: mount_point,
             log_level: log_level,
+            chunk_size: chunk_size,
         })
     }
 }

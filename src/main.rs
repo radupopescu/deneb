@@ -29,6 +29,7 @@ fn run() -> Result<()> {
     info!("Sync dir: {:?}", params.sync_dir);
     info!("Work dir: {:?}", params.work_dir);
     info!("Mount point: {:?}", params.mount_point);
+    info!("Chunk size: {:?}", params.chunk_size);
 
     // Create an object store
     let mut store = HashMapStore::new();

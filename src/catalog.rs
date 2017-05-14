@@ -111,9 +111,11 @@ impl HashMapCatalog {
             dir_entries: HashMap::new(),
             index_generator: IndexGenerator::default(),
         };
-        catalog.add_root(dir)
+        catalog
+            .add_root(dir)
             .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
-        catalog.visit_dirs(store, dir, 1, 1)
+        catalog
+            .visit_dirs(store, dir, 1, 1)
             .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
         Ok(catalog)
     }
@@ -121,7 +123,7 @@ impl HashMapCatalog {
     pub fn show_stats(&self) {
         info!("Catalog stats: number of inodes: {}", self.inodes.len());
         info!("Directory entries:");
-        for (k1, v1) in self.dir_entries.iter() {
+        for (k1, v1) in &self.dir_entries {
             for (k2, v2) in v1.iter() {
                 info!("  parent: {}, path: {:?}, inode: {}", k1, k2, v2);
             }
