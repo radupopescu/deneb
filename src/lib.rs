@@ -3,6 +3,7 @@
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
+#[cfg(feature = "fuse")]
 extern crate fuse;
 #[macro_use]
 extern crate log;
