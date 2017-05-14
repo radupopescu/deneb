@@ -20,10 +20,11 @@ mod common;
 
 use common::*;
 
-use deneb::catalog::HashMapCatalog;
-use deneb::errors::*;
-use deneb::fs::Fs;
-use deneb::store::HashMapStore;
+use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
+use deneb::be::store::HashMapStore;
+use deneb::common::errors::*;
+use deneb::fe::fuse::fs::Fs;
+use deneb::fe::fuse::params::DEFAULT_CHUNK_SIZE;
 
 // Function to generate an input dir tree
 fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
@@ -54,7 +55,8 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
 // Initialize a Deneb repo with the input directory
 fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path) -> Result<BackgroundSession<'a>> {
     let mut store = HashMapStore::new();
-    let catalog = HashMapCatalog::with_dir(input, &mut store)?;
+    let mut catalog = HashMapCatalog::new();
+    populate_with_dir(&mut catalog, &mut store, input, DEFAULT_CHUNK_SIZE)?;
     let file_system = Fs::new(catalog, store);
     unsafe { fuse::spawn_mount(file_system, &mount_point.to_owned(), &[]).map_err(|e| e.into()) }
 }

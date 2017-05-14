@@ -9,8 +9,8 @@ use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use catalog::Catalog;
-use store::Store;
+use be::catalog::Catalog;
+use be::store::Store;
 
 struct OpenFileContext;
 
@@ -64,7 +64,7 @@ impl<C, S> Filesystem for Fs<C, S>
         let attrs = self.catalog
             .get_dir_entries(&parent)
             .and_then(|entries| entries.get(&PathBuf::from(name)))
-            .and_then(|index| self.catalog.get_inode(&index))
+            .and_then(|index| self.catalog.get_inode(index))
             .map(|inode| inode.attributes);
         match attrs {
             Some(attrs) => {
@@ -121,7 +121,7 @@ impl<C, S> Filesystem for Fs<C, S>
                     let (ref name, idx) = entries[index];
                     if let Some(inode) = self.catalog.get_inode(&idx) {
                         if !reply.add(idx, index as u64 + 1, inode.attributes.kind, name) {
-                            index = index + 1;
+                            index += 1;
                         } else {
                             break;
                         }
