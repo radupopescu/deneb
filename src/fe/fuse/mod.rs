@@ -1,4 +1,7 @@
 //! Modules which make up the FUSE front-end
 
-pub mod fs;
-pub mod params;
+mod fs;
+mod params;
+
+pub use self::fs::*;
+pub use self::params::*;
