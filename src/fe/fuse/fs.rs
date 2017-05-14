@@ -49,7 +49,7 @@ impl<'a, C, S> Fs<C, S>
                                               options: &[&OsStr])
                                               -> Result<Session<'a>> {
         spawn_mount(self, mount_point, options)
-            .map(|s| Session(s))
+            .map(Session)
             .map_err(|e| e.into())
     }
 }
