@@ -10,6 +10,7 @@ watcher = ["notify"]
 
 [[bin]]
 name = "deneb"
+path = "src/main.rs"
 doc = false
 required-features = ["fuse_module"]
 
