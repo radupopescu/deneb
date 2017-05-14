@@ -145,7 +145,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
             for Chunk {
                     ref digest,
                     ref data,
-                } in chunks.into_iter() {
+                } in chunks {
                 store.put(digest.clone(), data.as_ref());
                 digests.push(digest.clone());
             }

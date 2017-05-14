@@ -10,8 +10,8 @@ pub struct DirectoryWatcher {
     watcher: RecommendedWatcher,
 }
 
-impl DirectoryWatcher {
-    pub fn new() -> DirectoryWatcher {
+impl Default for DirectoryWatcher {
+    fn default() -> DirectoryWatcher {
         // Create a channel to receive the events.
         let (tx, rx) = channel();
 
@@ -19,6 +19,12 @@ impl DirectoryWatcher {
             receiver: rx,
             watcher: raw_watcher(tx).unwrap(),
         }
+    }
+}
+
+impl DirectoryWatcher {
+    pub fn new() -> DirectoryWatcher {
+        Self::default()
     }
 
     pub fn watch_path(&mut self, path: &Path) -> ::std::result::Result<(), ::notify::Error> {
