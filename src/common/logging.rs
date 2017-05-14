@@ -2,7 +2,7 @@ use log::LogLevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 
-use errors::*;
+use common::errors::*;
 
 pub fn init(log_level: LogLevelFilter) -> Result<()> {
     let stdout = ConsoleAppender::builder().build();

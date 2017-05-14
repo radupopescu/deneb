@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use std::fs::{File, read_dir};
 use std::path::{Path, PathBuf};
 
-use cas::{Chunk, Digest, read_chunks};
-use errors::*;
-use inode::INode;
-use store::Store;
+use common::errors::*;
+use be::cas::{Chunk, Digest, read_chunks};
+use be::inode::INode;
+use be::store::Store;
 
 /// Describes the interface of metadata catalogs
 ///

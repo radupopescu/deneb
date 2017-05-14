@@ -11,11 +11,6 @@ extern crate nix;
 extern crate rust_sodium;
 extern crate time;
 
-mod cas;
-pub mod catalog;
-pub mod errors;
-pub mod inode;
-pub mod fs;
-pub mod logging;
-pub mod params;
-pub mod store;
+pub mod be;
+pub mod fe;
+pub mod common;

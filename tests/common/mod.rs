@@ -10,7 +10,7 @@ use std::io::{Read, BufReader};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use deneb::errors::*;
+use deneb::common::errors::*;
 
 #[derive(Clone, Debug)]
 pub enum DirEntry {

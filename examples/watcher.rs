@@ -9,15 +9,15 @@ extern crate rust_sodium;
 
 use log::LogLevelFilter;
 
-use deneb::catalog::{HashMapCatalog, populate_with_dir};
-use deneb::errors::*;
-use deneb::logging;
-use deneb::store::HashMapStore;
+use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
+use deneb::be::store::HashMapStore;
+use deneb::common::errors::*;
+use deneb::common::logging;
 
 mod watch {
     use std::path::{Path, PathBuf};
     use std::sync::mpsc::{Receiver, channel};
-    use deneb::errors::*;
+    use deneb::common::errors::*;
 
     use clap::{App, Arg};
     use notify::{Watcher, RecommendedWatcher, RecursiveMode, RawEvent, raw_watcher};

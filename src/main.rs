@@ -6,12 +6,12 @@ extern crate fuse;
 extern crate log;
 extern crate rust_sodium;
 
-use deneb::catalog::{HashMapCatalog, populate_with_dir};
-use deneb::errors::*;
-use deneb::fs::Fs;
-use deneb::logging;
-use deneb::params::AppParameters;
-use deneb::store::HashMapStore;
+use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
+use deneb::be::store::HashMapStore;
+use deneb::common::errors::*;
+use deneb::common::logging;
+use deneb::fe::fuse::fs::Fs;
+use deneb::fe::fuse::params::AppParameters;
 
 fn run() -> Result<()> {
     // Initialize the rust_sodium library (needed to make all its functions thread-safe)

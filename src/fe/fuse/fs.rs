@@ -9,8 +9,8 @@ use std::ffi::OsStr;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use catalog::Catalog;
-use store::Store;
+use be::catalog::Catalog;
+use be::store::Store;
 
 struct OpenFileContext;
 

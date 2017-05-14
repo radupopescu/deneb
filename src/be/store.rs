@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cas::Digest;
+use be::cas::Digest;
 
 pub trait Store {
     fn get(&self, hash: &Digest) -> Option<&[u8]>;

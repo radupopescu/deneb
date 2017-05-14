@@ -4,7 +4,7 @@ use rust_sodium::crypto::hash::hash;
 use std::fs::File;
 use std::io::{Read, BufReader};
 
-use errors::*;
+use common::errors::*;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(sha512::Digest);

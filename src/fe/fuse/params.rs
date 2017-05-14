@@ -3,7 +3,7 @@ use log::LogLevelFilter;
 
 use std::path::PathBuf;
 
-use errors::*;
+use common::errors::*;
 
 pub const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
 

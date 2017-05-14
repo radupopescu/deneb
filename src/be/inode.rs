@@ -8,8 +8,8 @@ use std::fmt;
 use std::i32::MAX;
 use std::path::Path;
 
-use cas::Digest;
-use errors::*;
+use common::errors::*;
+use be::cas::Digest;
 
 pub struct INode {
     pub attributes: FileAttr,
