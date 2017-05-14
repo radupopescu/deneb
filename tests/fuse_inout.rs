@@ -23,8 +23,8 @@ use common::*;
 use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
 use deneb::be::store::HashMapStore;
 use deneb::common::errors::*;
-use deneb::fe::fuse::fs::Fs;
-use deneb::fe::fuse::params::DEFAULT_CHUNK_SIZE;
+use deneb::fe::fuse::Fs;
+use deneb::fe::fuse::DEFAULT_CHUNK_SIZE;
 
 // Function to generate an input dir tree
 fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
