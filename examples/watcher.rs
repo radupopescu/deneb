@@ -9,7 +9,7 @@ extern crate rust_sodium;
 
 use log::LogLevelFilter;
 
-use deneb::catalog::HashMapCatalog;
+use deneb::catalog::{HashMapCatalog, populate_with_dir};
 use deneb::errors::*;
 use deneb::logging;
 use deneb::store::HashMapStore;
@@ -54,9 +54,12 @@ mod watch {
         }
     }
 
+    const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
+
     pub struct Params {
         pub sync_dir: PathBuf,
         pub work_dir: PathBuf,
+        pub chunk_size: u64,
     }
 
     impl Params {
@@ -79,6 +82,13 @@ mod watch {
                          .value_name("WORK_DIR")
                          .required(true)
                          .help("Work (scratch) directory"))
+                .arg(Arg::with_name("chunk_size")
+                 .long("chunk_size")
+                 .takes_value(true)
+                 .value_name("CHUNK_SIZE")
+                 .required(false)
+                 .default_value("DEFAULT")//DEFAULT_CHUNK_SIZE) // default 4MB chunks
+                 .help("Chunk size used for storing files"))
                 .get_matches();
 
             let sync_dir = PathBuf::from(matches.value_of("sync_dir")
@@ -87,10 +97,21 @@ mod watch {
             let work_dir = PathBuf::from(matches.value_of("work_dir")
                 .map(|d| d.to_string())
                 .ok_or_else(|| ErrorKind::CommandLineParameter("work_dir missing".to_owned()))?);
+            let chunk_size = match matches.value_of("chunk_size") {
+                Some("DEFAULT") | None => DEFAULT_CHUNK_SIZE,
+                Some(chunk_size) => {
+                    match u64::from_str_radix(chunk_size, 10) {
+                        Ok(size) => size,
+                        _ => DEFAULT_CHUNK_SIZE,
+                    }
+                }
+            };
+
 
             Ok(Params {
-                   sync_dir: sync_dir,
-                   work_dir: work_dir,
+                sync_dir: sync_dir,
+                work_dir: work_dir,
+                chunk_size: chunk_size,
                })
         }
     }
@@ -105,16 +126,17 @@ fn run() -> Result<()> {
         .chain_err(|| "Could not initialize log4rs")?;
     info!("Deneb - dir watcher!");
 
-    let watch::Params { sync_dir, work_dir } =
+    let watch::Params { sync_dir, work_dir, chunk_size } =
         watch::Params::read()
             .chain_err(|| "Could not read command-line parameters")?;
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 
     // Create an object store
-    let mut store: HashMapStore = HashMapStore::new();
+    let mut store = HashMapStore::new();
+    let mut catalog = HashMapCatalog::new();
 
-    let catalog: HashMapCatalog = HashMapCatalog::with_dir(sync_dir.as_path(), &mut store)?;
+    populate_with_dir(&mut catalog, &mut store, sync_dir.as_path(), chunk_size)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
 

@@ -1,99 +1,42 @@
-use fuse::{FileAttr, FileType};
-use nix::libc::mode_t;
-use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, lstat};
-use time::Timespec;
-
-use std::cmp::{min, max};
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::fmt;
 use std::fs::{File, read_dir};
-use std::i32::MAX;
 use std::path::{Path, PathBuf};
 
 use cas::{Chunk, Digest, read_chunks};
 use errors::*;
+use inode::INode;
 use store::Store;
-
-pub struct INode {
-    pub attributes: FileAttr,
-    pub digests: Vec<Digest>,
-}
 
 /// Describes the interface of metadata catalogs
 ///
 pub trait Catalog {
+    fn get_next_index(&self) -> u64;
     fn get_inode(&self, index: &u64) -> Option<&INode>;
-
     fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>>;
-}
-
-impl INode {
-    fn new(index: u64, path: &Path, digests: &[Digest]) -> Result<INode> {
-        let stats = lstat(path)?;
-        let mut attributes = FileAttr {
-            ino: index,
-            size: max::<i64>(stats.st_size, 0) as u64,
-            blocks: max::<i64>(stats.st_blocks, 0) as u64,
-            atime: Timespec {
-                sec: stats.st_atime,
-                nsec: min::<i64>(stats.st_atime_nsec, MAX as i64) as i32,
-            },
-            mtime: Timespec {
-                sec: stats.st_mtime,
-                nsec: min::<i64>(stats.st_mtime_nsec, MAX as i64) as i32,
-            },
-            ctime: Timespec {
-                sec: stats.st_ctime,
-                nsec: min::<i64>(stats.st_ctime_nsec, MAX as i64) as i32,
-            },
-            crtime: Timespec { sec: 0, nsec: 0 },
-            kind: mode_to_file_type(stats.st_mode),
-            perm: mode_to_permissions(stats.st_mode),
-            nlink: 0,
-            uid: stats.st_uid,
-            gid: stats.st_gid,
-            rdev: 0,
-            flags: 0,
-        };
-        #[cfg(target_os="macos")]
-        {
-            attributes.crtime = Timespec {
-                sec: stats.st_birthtime,
-                nsec: min::<i64>(stats.st_birthtime_nsec, MAX as i64) as i32,
-            };
-        }
-
-        Ok(INode {
-               attributes: attributes,
-               digests: digests.to_vec(),
-           })
-    }
-}
-
-impl fmt::Display for INode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "Attributes: {:?}, digests: {:?}",
-               self.attributes,
-               self.digests)
-    }
+    fn add_inode(&mut self, entry: &Path, index: u64, digests: &[Digest]) -> Result<()>;
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()>;
 }
 
 struct IndexGenerator {
-    current_index: u64,
+    current_index: Cell<u64>,
 }
+
 impl Default for IndexGenerator {
     fn default() -> IndexGenerator {
-        IndexGenerator { current_index: 1 }
-    }
-}
-impl IndexGenerator {
-    fn get_next(&mut self) -> u64 {
-        self.current_index += 1;
-        self.current_index
+        IndexGenerator { current_index: Cell::new(1) }
     }
 }
 
+impl IndexGenerator {
+    fn get_next(&self) -> u64 {
+        let idx = self.current_index.get() + 1;
+        self.current_index.replace(idx);
+        idx
+    }
+}
+
+#[derive(Default)]
 pub struct HashMapCatalog {
     inodes: HashMap<u64, INode>,
     dir_entries: HashMap<u64, HashMap<PathBuf, u64>>,
@@ -101,19 +44,8 @@ pub struct HashMapCatalog {
 }
 
 impl HashMapCatalog {
-    pub fn with_dir<S: Store>(dir: &Path, store: &mut S) -> Result<HashMapCatalog> {
-        let mut catalog = HashMapCatalog {
-            inodes: HashMap::new(),
-            dir_entries: HashMap::new(),
-            index_generator: IndexGenerator::default(),
-        };
-        catalog
-            .add_root(dir)
-            .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
-        catalog
-            .visit_dirs(store, dir, 1, 1)
-            .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
-        Ok(catalog)
+    pub fn new() -> HashMapCatalog {
+        Self::default()
     }
 
     pub fn show_stats(&self) {
@@ -125,77 +57,13 @@ impl HashMapCatalog {
             }
         }
     }
-
-    fn add_root(&mut self, root: &Path) -> Result<()> {
-        let inode = INode::new(1, root, &[])
-            .chain_err(|| "Could not construct root inode")?;
-        self.inodes.insert(1, inode);
-        Ok(())
-    }
-
-    fn add_inode(&mut self, entry: &Path, digests: &[Digest]) -> Result<u64> {
-        let index = self.index_generator.get_next();
-        let inode = INode::new(index, entry, digests)?;
-        self.inodes.insert(index, inode);
-        Ok(index)
-    }
-
-    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) {
-        let dir = self.dir_entries.entry(parent);
-        let mut dir_entry = dir.or_insert_with(|| {
-                                                   let mut dir_entry = HashMap::new();
-                                                   dir_entry.insert(name.to_owned(), index);
-                                                   dir_entry
-                                               });
-        dir_entry.entry(name.to_owned()).or_insert_with(|| index);
-        if let Some(inode) = self.inodes.get_mut(&index) {
-            inode.attributes.nlink += 1;
-        }
-    }
-
-    fn visit_dirs<S>(&mut self,
-                     store: &mut S,
-                     dir: &Path,
-                     dir_index: u64,
-                     parent_index: u64)
-                     -> Result<()>
-        where S: Store
-    {
-        self.add_dir_entry(dir_index, Path::new("."), dir_index);
-        self.add_dir_entry(dir_index, Path::new(".."), parent_index);
-
-        for entry in read_dir(dir)? {
-            let path = (entry?).path();
-            let fpath = &path.as_path();
-            let fname = Path::new(fpath
-                                      .file_name()
-                                      .ok_or_else(|| "Could not get file name from path")?);
-
-            let mut digests = Vec::new();
-            if path.is_file() {
-                let mut abs_path = dir.to_path_buf();
-                abs_path.push(fname);
-                let f = File::open(abs_path)?;
-                let chunk_size = 10;
-                let chunks = read_chunks(&f, chunk_size)?;
-                for Chunk { ref digest, ref data } in chunks.into_iter() {
-                    store.put(digest.clone(), data.as_ref());
-                    digests.push(digest.clone());
-                }
-            }
-
-            let index = self.add_inode(fpath, digests.as_slice())?;
-            self.add_dir_entry(dir_index, fname, index);
-
-            if path.is_dir() {
-                self.visit_dirs(store, &path, index, dir_index)?;
-            }
-        }
-        Ok(())
-    }
 }
 
 impl Catalog for HashMapCatalog {
+    fn get_next_index(&self) -> u64 {
+        self.index_generator.get_next()
+    }
+
     fn get_inode(&self, index: &u64) -> Option<&INode> {
         self.inodes.get(index)
     }
@@ -203,48 +71,93 @@ impl Catalog for HashMapCatalog {
     fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
         self.dir_entries.get(parent)
     }
-}
 
-fn mode_to_file_type(mode: mode_t) -> FileType {
-    let ft = mode & S_IFMT.bits();
-    if ft == S_IFDIR.bits() {
-        FileType::Directory
-    } else if ft == S_IFCHR.bits() {
-        FileType::CharDevice
-    } else if ft == S_IFBLK.bits() {
-        FileType::BlockDevice
-    } else if ft == S_IFREG.bits() {
-        FileType::RegularFile
-    } else if ft == S_IFLNK.bits() {
-        FileType::Symlink
-    } else if ft == S_IFIFO.bits() {
-        FileType::NamedPipe
-    } else {
-        // S_IFSOCK???
-        panic!("Unknown file mode: {}. Could not identify file type.", mode);
+    fn add_inode(&mut self, entry: &Path, index: u64, digests: &[Digest]) -> Result<()> {
+        let inode = INode::new(index, entry, digests)
+            .chain_err(|| format!("Could not construct inode {} for path: {:?}", index, entry))?;
+        self.inodes.insert(index, inode);
+        Ok(())
+    }
+
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+        let dir = self.dir_entries.entry(parent);
+        let mut dir_entry = dir.or_insert_with(|| {
+                                                   let mut dir_entry = HashMap::new();
+                                                   dir_entry.insert(name.to_owned(), index);
+                                                   dir_entry
+                                               });
+        dir_entry.entry(name.to_owned()).or_insert_with(|| index);
+
+        let inode = self.inodes
+            .get_mut(&index)
+            .ok_or_else(|| format!("Could not read inode: {}", index))?;
+
+        inode.attributes.nlink += 1;
+
+        Ok(())
     }
 }
 
-fn mode_to_permissions(mode: mode_t) -> u16 {
-    mode & !S_IFMT.bits()
+pub fn populate_with_dir<C, S>(catalog: &mut C,
+                               store: &mut S,
+                               dir: &Path,
+                               chunk_size: u64)
+                               -> Result<()>
+    where C: Catalog,
+          S: Store
+{
+    catalog
+        .add_inode(dir, 1, &[])
+        .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
+
+    visit_dirs(catalog, store, dir, chunk_size, 1, 1)
+        .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
+
+    Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn visit_dirs<C, S>(catalog: &mut C,
+                    store: &mut S,
+                    dir: &Path,
+                    chunk_size: u64,
+                    dir_index: u64,
+                    parent_index: u64)
+                    -> Result<()>
+    where C: Catalog,
+          S: Store
+{
+    catalog.add_dir_entry(dir_index, Path::new("."), dir_index)?;
+    catalog.add_dir_entry(dir_index, Path::new(".."), parent_index)?;
 
-    #[test]
-    fn mode_to_file_type_test() {
-        let stats = lstat("/usr").unwrap();
-        assert_eq!(mode_to_file_type(stats.st_mode), FileType::Directory);
+    for entry in read_dir(dir)? {
+        let path = (entry?).path();
+        let fpath = &path.as_path();
+        let fname = Path::new(fpath
+                                  .file_name()
+                                  .ok_or_else(|| "Could not get file name from path")?);
 
-        let stats = lstat("/etc/hosts").unwrap();
-        assert_eq!(mode_to_file_type(stats.st_mode), FileType::RegularFile);
+        let mut digests = Vec::new();
+        if path.is_file() {
+            let mut abs_path = dir.to_path_buf();
+            abs_path.push(fname);
+            let f = File::open(abs_path)?;
+            let chunks = read_chunks(&f, chunk_size)?;
+            for Chunk {
+                    ref digest,
+                    ref data,
+                } in chunks.into_iter() {
+                store.put(digest.clone(), data.as_ref());
+                digests.push(digest.clone());
+            }
+        }
+
+        let index = catalog.get_next_index();
+        catalog.add_inode(fpath, index, digests.as_slice())?;
+        catalog.add_dir_entry(dir_index, fname, index)?;
+
+        if path.is_dir() {
+            visit_dirs(catalog, store, &path, chunk_size, index, dir_index)?;
+        }
     }
-
-    #[test]
-    fn mode_to_permissions_test() {
-        let stats = lstat("/etc/hosts").unwrap();
-        assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
-    }
+    Ok(())
 }

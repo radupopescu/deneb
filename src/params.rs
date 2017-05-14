@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use errors::*;
 
-const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
+pub const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
 
 pub struct AppParameters {
     pub sync_dir: PathBuf,
@@ -80,7 +80,7 @@ impl AppParameters {
             },
             None => { LogLevelFilter::Info }
         };
-        let chunk_size: u64 = match matches.value_of("chunk_size") {
+        let chunk_size = match matches.value_of("chunk_size") {
             Some("DEFAULT") | None => {
                 DEFAULT_CHUNK_SIZE
             }

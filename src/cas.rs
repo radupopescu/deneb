@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{Read, BufReader};
 
 use errors::*;
-use store::Store;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(sha512::Digest);
@@ -21,7 +20,7 @@ pub struct Chunk {
     pub data: Vec<u8>,
 }
 
-pub fn read_chunks(file: &File, chunk_size: u64) -> Result<Vec<Chunk>> {
+pub fn read_chunks(file: &File, _chunk_size: u64) -> Result<Vec<Chunk>> {
     let mut chunks = Vec::new();
     let mut buffer = Vec::new();
     let _ = BufReader::new(file).read_to_end(&mut buffer)?;

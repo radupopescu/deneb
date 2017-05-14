@@ -14,6 +14,7 @@ extern crate time;
 mod cas;
 pub mod catalog;
 pub mod errors;
+pub mod inode;
 pub mod fs;
 pub mod logging;
 pub mod params;
