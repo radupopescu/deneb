@@ -12,7 +12,13 @@ extern crate log4rs;
 extern crate nix;
 #[cfg(feature = "watcher")]
 extern crate notify;
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+extern crate rand;
 extern crate rust_sodium;
+#[cfg(test)]
+extern crate tempdir;
 extern crate time;
 
 pub mod be;
