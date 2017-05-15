@@ -9,9 +9,14 @@ use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
 use deneb::be::store::HashMapStore;
 use deneb::common::errors::*;
 use deneb::common::logging;
+use deneb::common::util::{block_signals, set_sigint_handler};
 use deneb::fe::fuse::{AppParameters, Fs};
 
 fn run() -> Result<()> {
+    // Block the signals in SigSet on the current and all future threads. Should be run before spawning
+    // any new threads.
+    block_signals()?;
+
     // Initialize the rust_sodium library (needed to make all its functions thread-safe)
     ensure!(rust_sodium::init(),
             "Could not initialize rust_sodium library. Exiting");
@@ -41,7 +46,12 @@ fn run() -> Result<()> {
 
     // Create the file system data structure
     let file_system = Fs::new(catalog, store);
-    file_system.mount(&params.mount_point, &[])?;
+    let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
+
+    // Install a handler for Ctrl-C and wait
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _th = set_sigint_handler(tx)?;
+    let _ = rx.recv();
 
     Ok(())
 }
