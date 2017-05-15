@@ -17,12 +17,9 @@ pub fn set_sigint_handler(tx: Sender<()>) -> Result<JoinHandle<()>> {
         let mut sigs = SigSet::empty();
         sigs.add(Signal::SIGINT);
         if let Ok(sig) = sigs.wait() {
-            match sig {
-                Signal::SIGINT => {
-                    debug!("Ctrl-C received. Exiting.");
-                    let _ = tx.send(());
-                }
-                _ => {}
+            if let Signal::SIGINT = sig {
+                debug!("Ctrl-C received. Exiting.");
+                let _ = tx.send(());
             }
         }
     }))
