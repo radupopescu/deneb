@@ -20,19 +20,39 @@ pub struct Chunk {
     pub data: Vec<u8>,
 }
 
+impl Chunk {
+    fn from_buf(buffer: &[u8]) -> Chunk {
+        let digest = hash(buffer);
+        Chunk { digest: digest, data: buffer.to_vec() }
+    }
+}
+
 pub fn hash(msg: &[u8]) -> Digest {
     Digest::new(sodium_hash(msg))
 }
 
 pub fn read_chunks(file: &File, chunk_size: u64) -> Result<Vec<Chunk>> {
     let mut chunks = Vec::new();
-    let mut buffer = Vec::new();
-    let _ = BufReader::new(file).read_to_end(&mut buffer)?;
-    let digest = hash(buffer.as_ref());
-    chunks.push(Chunk {
-                    digest: digest,
-                    data: buffer,
-                });
+    let mut buffer = vec![0 as u8; chunk_size as usize];
+    let mut offset = 0;
+    let mut reader = BufReader::new(file);
+    loop {
+        let n = reader.read(&mut buffer[offset..])?;
+        if n > 0 {
+            offset += n;
+            if offset as u64 == chunk_size {
+                chunks.push(Chunk::from_buf(&buffer[0..offset]));
+                offset = 0;
+            }
+        } else {
+            break;
+        }
+    }
+
+    if offset > 0 {
+        chunks.push(Chunk::from_buf(&buffer[0..offset]));
+    }
+
     Ok(chunks)
 }
 
@@ -46,7 +66,7 @@ mod tests {
 
     use super::*;
 
-    fn helper(chunk_size: u64, file_size: usize) -> Result<bool> {
+    fn helper(file_size: usize, chunk_size: u64) -> Result<bool> {
         let tmp_dir = TempDir::new("/tmp/deneb_chunk_test")?;
         let file_name = tmp_dir.path().join("input_file.txt");
         let mut file = File::create(&file_name)?;
@@ -55,12 +75,22 @@ mod tests {
         file.write_all(&contents)?;
         let file2 = File::open(&file_name)?;
         let chunks = read_chunks(&file2, chunk_size)?;
-        Ok(chunks.len() >= ((file_size as u64) / chunk_size) as usize)
+
+        let mut combined_chunks = Vec::new();
+        for chunk in &chunks {
+            combined_chunks.append(&mut chunk.data.clone());
+        }
+
+        let enough_chunks = chunks.len() >= ((file_size as u64) / chunk_size) as usize;
+        let correct_size = file_size == combined_chunks.len();
+        let correct_data = contents == combined_chunks;
+
+        Ok(enough_chunks && correct_size && correct_data)
     }
 
     #[test]
     fn small_file_gives_single_chunk() {
-        let res = helper(10, 5);
+        let res = helper(5, 10);
         assert!(res.is_ok());
         if let Ok(res) = res {
             assert!(res);
@@ -69,22 +99,22 @@ mod tests {
 
     #[test]
     fn prop_large_files_are_chunked() {
-        fn large_files_are_chunked(pair: (u64, usize)) -> TestResult {
-            let (mut chunk_size, file_size) = pair;
+        fn large_files_are_chunked(pair: (usize, u64)) -> TestResult {
+            let (file_size, chunk_size) = pair;
             if chunk_size == 0 {
                 TestResult::discard()
             } else {
-                let res = if let Ok(res) = helper(chunk_size, file_size) {
-                    res
-                } else {
-                    false
-                };
-                TestResult::from_bool(res)
+                TestResult::from_bool(
+                    if let Ok(res) = helper(file_size, chunk_size) {
+                        res
+                    } else {
+                        false
+                    })
             }
         }
         QuickCheck::new()
-            .tests(10)
+            .tests(50)
             .gen(StdGen::new(thread_rng(), 100))
-            .quickcheck(large_files_are_chunked as fn((u64, usize)) -> TestResult);
+            .quickcheck(large_files_are_chunked as fn((usize, u64)) -> TestResult);
     }
 }
