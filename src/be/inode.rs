@@ -38,13 +38,19 @@ pub struct FileAttributes {
     pub flags: u32,
 }
 
+#[derive(Debug)]
+pub struct Chunk {
+    pub digest: Digest,
+    pub size: usize,
+}
+
 pub struct INode {
     pub attributes: FileAttributes,
-    pub digests: Vec<Digest>,
+    pub chunks: Vec<Chunk>,
 }
 
 impl INode {
-    pub fn new(index: u64, path: &Path, digests: &[Digest]) -> Result<INode> {
+    pub fn new(index: u64, path: &Path, chunks: Vec<Chunk>) -> Result<INode> {
         let stats = lstat(path)?;
         let mut attributes = FileAttributes {
             ino: index,
@@ -81,7 +87,7 @@ impl INode {
 
         Ok(INode {
                attributes: attributes,
-               digests: digests.to_vec(),
+               chunks: chunks,
            })
     }
 }
@@ -91,7 +97,7 @@ impl fmt::Display for INode {
         write!(f,
                "Attributes: {:?}, digests: {:?}",
                self.attributes,
-               self.digests)
+               self.chunks)
     }
 }
 

@@ -1,7 +1,7 @@
 use rust_sodium::crypto::hash::sha512;
 use rust_sodium::crypto::hash::hash as sodium_hash;
 
-use std::io::{BufRead};
+use std::io::BufRead;
 
 use common::errors::*;
 
@@ -14,23 +14,16 @@ impl Digest {
     }
 }
 
-pub struct Chunk {
-    pub digest: Digest,
-    pub data: Vec<u8>,
-}
-
-impl Chunk {
-    fn from_buf(buffer: &[u8]) -> Chunk {
-        let digest = hash(buffer);
-        Chunk { digest: digest, data: buffer.to_vec() }
-    }
+fn hash_buf(buffer: &[u8]) -> (Digest, Vec<u8>) {
+    let digest = hash(buffer);
+    (digest, buffer.to_vec())
 }
 
 pub fn hash(msg: &[u8]) -> Digest {
     Digest::new(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: BufRead>(mut reader: R, chunk_size: u64) -> Result<Vec<Chunk>> {
+pub fn read_chunks<R: BufRead>(mut reader: R, chunk_size: u64) -> Result<Vec<(Digest,Vec<u8>)>> {
     let mut chunks = Vec::new();
     let mut buffer = vec![0 as u8; chunk_size as usize];
     let mut offset = 0;
@@ -40,7 +33,7 @@ pub fn read_chunks<R: BufRead>(mut reader: R, chunk_size: u64) -> Result<Vec<Chu
                 if n > 0 {
                     offset += n;
                     if offset as u64 == chunk_size {
-                        chunks.push(Chunk::from_buf(&buffer[0..offset]));
+                        chunks.push(hash_buf(&buffer[0..offset]));
                         offset = 0;
                     }
                 } else if n == 0 {
@@ -59,7 +52,7 @@ pub fn read_chunks<R: BufRead>(mut reader: R, chunk_size: u64) -> Result<Vec<Chu
     }
 
     if offset > 0 {
-        chunks.push(Chunk::from_buf(&buffer[0..offset]));
+        chunks.push(hash_buf(&buffer[0..offset]));
     }
 
     Ok(chunks)
@@ -78,8 +71,8 @@ mod tests {
         let chunks = read_chunks(contents.as_slice(), chunk_size)?;
 
         let mut combined_chunks = Vec::new();
-        for chunk in &chunks {
-            combined_chunks.append(&mut chunk.data.clone());
+        for &(_, ref data) in &chunks {
+            combined_chunks.append(&mut data.clone());
         }
 
         let enough_chunks = chunks.len() >= ((file_size as u64) / chunk_size) as usize;

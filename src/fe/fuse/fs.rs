@@ -195,9 +195,9 @@ impl<C, S> Filesystem for Fs<C, S>
             .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(&fh))
             .and_then(|inode| {
-                          let digests = &inode.digests;
-                          if !digests.is_empty() {
-                              self.store.get(&digests[0])
+                          let chunks = &inode.chunks;
+                          if !chunks.is_empty() {
+                              self.store.get(&chunks[0].digest)
                           } else {
                               None
                           }
