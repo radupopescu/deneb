@@ -1,8 +1,7 @@
 use rust_sodium::crypto::hash::sha512;
 use rust_sodium::crypto::hash::hash as sodium_hash;
 
-use std::fs::File;
-use std::io::{Read, BufReader};
+use std::io::{BufRead};
 
 use common::errors::*;
 
@@ -31,11 +30,10 @@ pub fn hash(msg: &[u8]) -> Digest {
     Digest::new(sodium_hash(msg))
 }
 
-pub fn read_chunks(file: &File, chunk_size: u64) -> Result<Vec<Chunk>> {
+pub fn read_chunks<R: BufRead>(mut reader: R, chunk_size: u64) -> Result<Vec<Chunk>> {
     let mut chunks = Vec::new();
     let mut buffer = vec![0 as u8; chunk_size as usize];
     let mut offset = 0;
-    let mut reader = BufReader::new(file);
     loop {
         match reader.read(&mut buffer[offset..]) {
             Ok(n) => {
@@ -71,21 +69,13 @@ pub fn read_chunks(file: &File, chunk_size: u64) -> Result<Vec<Chunk>> {
 mod tests {
     use quickcheck::{QuickCheck, StdGen, TestResult};
     use rand::{Rng, thread_rng};
-    use tempdir::TempDir;
-
-    use std::io::Write;
 
     use super::*;
 
     fn helper(file_size: usize, chunk_size: u64) -> Result<bool> {
-        let tmp_dir = TempDir::new("/tmp/deneb_chunk_test")?;
-        let file_name = tmp_dir.path().join("input_file.txt");
-        let mut file = File::create(&file_name)?;
         let mut contents = vec![0 as u8; file_size];
         thread_rng().fill_bytes(contents.as_mut());
-        file.write_all(&contents)?;
-        let file2 = File::open(&file_name)?;
-        let chunks = read_chunks(&file2, chunk_size)?;
+        let chunks = read_chunks(contents.as_slice(), chunk_size)?;
 
         let mut combined_chunks = Vec::new();
         for chunk in &chunks {
@@ -124,7 +114,7 @@ mod tests {
             }
         }
         QuickCheck::new()
-            .tests(50)
+            .tests(100)
             .gen(StdGen::new(thread_rng(), 100))
             .quickcheck(large_files_are_chunked as fn((usize, u64)) -> TestResult);
     }

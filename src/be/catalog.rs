@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs::{File, read_dir};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use common::errors::*;
@@ -141,7 +142,8 @@ fn visit_dirs<C, S>(catalog: &mut C,
             let mut abs_path = dir.to_path_buf();
             abs_path.push(fname);
             let f = File::open(abs_path)?;
-            let chunks = read_chunks(&f, chunk_size)?;
+            let mut reader = BufReader::new(f);
+            let chunks = read_chunks(&mut reader, chunk_size)?;
             for Chunk {
                     ref digest,
                     ref data,
