@@ -1,4 +1,5 @@
 use nix::sys::signal::{SigmaskHow, Signal, SigSet, pthread_sigmask};
+use time::precise_time_ns;
 
 use std::sync::mpsc::Sender;
 use std::thread::{JoinHandle, spawn};
@@ -23,4 +24,12 @@ pub fn set_sigint_handler(tx: Sender<()>) -> Result<JoinHandle<()>> {
             }
         }
     }))
+}
+
+pub fn tick() -> i64 {
+    precise_time_ns() as i64
+}
+
+pub fn tock(t0: &i64) -> i64 {
+    precise_time_ns() as i64 - t0
 }
