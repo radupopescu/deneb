@@ -37,15 +37,26 @@ pub fn read_chunks(file: &File, chunk_size: u64) -> Result<Vec<Chunk>> {
     let mut offset = 0;
     let mut reader = BufReader::new(file);
     loop {
-        let n = reader.read(&mut buffer[offset..])?;
-        if n > 0 {
-            offset += n;
-            if offset as u64 == chunk_size {
-                chunks.push(Chunk::from_buf(&buffer[0..offset]));
-                offset = 0;
+        match reader.read(&mut buffer[offset..]) {
+            Ok(n) => {
+                if n > 0 {
+                    offset += n;
+                    if offset as u64 == chunk_size {
+                        chunks.push(Chunk::from_buf(&buffer[0..offset]));
+                        offset = 0;
+                    }
+                } else if n == 0 {
+                    break;
+                }
             }
-        } else {
-            break;
+            Err(e) => {
+                if e.kind() == ::std::io::ErrorKind::Interrupted {
+                    // Retry if interrupted
+                    continue;
+                } else {
+                    bail!(ErrorKind::IoError(e));
+                }
+            }
         }
     }
 
