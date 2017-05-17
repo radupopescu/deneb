@@ -52,10 +52,10 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
 
 
 // Initialize a Deneb repo with the input directory
-fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path) -> Result<Session<'a>> {
+fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path, chunk_size: u64) -> Result<Session<'a>> {
     let mut store = HashMapStore::new();
     let mut catalog = HashMapCatalog::new();
-    populate_with_dir(&mut catalog, &mut store, input, DEFAULT_CHUNK_SIZE)?;
+    populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
     let file_system = Fs::new(catalog, store);
     unsafe { file_system.spawn_mount(&mount_point.to_owned(), &[]) }
 }
@@ -70,11 +70,11 @@ fn copy_dir_tree(source: &Path, dest: &Path) -> Result<()> {
 //
 // Use a previously generated DirTree to populate a Deneb repository.
 // Copy all the files back out of the Deneb repository and compare with the originals.
-fn check_inout(dir: &DirTree, prefix: &Path) -> Result<()> {
+fn check_inout(dir: &DirTree, prefix: &Path, chunk_size: u64) -> Result<()> {
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");
     create_dir(mount_point.as_path())?;
-    let _session = init_hashmap_repo(dir.root.as_path(), mount_point.as_path())?;
+    let _session = init_hashmap_repo(dir.root.as_path(), mount_point.as_path(), chunk_size)?;
 
     // Copy the contents of the Deneb repository to a new directory
     let output_dir = prefix.join("output");
@@ -84,20 +84,29 @@ fn check_inout(dir: &DirTree, prefix: &Path) -> Result<()> {
     dir.compare(output_dir.as_path())
 }
 
-#[test]
-fn single_fuse_hashmap_inout() {
+fn single_fuse_test(chunk_size: u64) {
     let tmp = TempDir::new("/tmp/deneb_test");
     assert!(tmp.is_ok());
     if let Ok(prefix) = tmp {
         let dt = make_test_dir_tree(prefix.path());
         assert!(dt.is_ok());
         if let Ok(dt) = dt {
-            assert!(check_inout(&dt, prefix.path()).is_ok());
+            assert!(check_inout(&dt, prefix.path(), chunk_size).is_ok());
         }
 
         // Explicit cleanup
         assert!(prefix.close().is_ok());
     }
+}
+
+#[test]
+fn single_chunk_per_file() {
+    single_fuse_test(DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
+}
+
+#[test]
+fn multiple_chunks_per_file() {
+    single_fuse_test(4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
 #[test]
@@ -113,7 +122,7 @@ fn prop_inout_unchanged() {
             let _ = dt.show();
             let _ = dt.create();
 
-            let check_result = check_inout(&dt, prefix.path());
+            let check_result = check_inout(&dt, prefix.path(), DEFAULT_CHUNK_SIZE);
             if !check_result.is_ok() {
                 println!("Check failed: {:?}", check_result);
                 return false;
