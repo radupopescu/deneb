@@ -23,16 +23,16 @@ pub fn hash(msg: &[u8]) -> Digest {
     Digest::new(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: BufRead>(mut reader: R, chunk_size: u64) -> Result<Vec<(Digest,Vec<u8>)>> {
+pub fn read_chunks<R: BufRead>(mut reader: R, buffer: &mut [u8]) -> Result<Vec<(Digest,Vec<u8>)>> {
+    let chunk_size = buffer.len();
     let mut chunks = Vec::new();
-    let mut buffer = vec![0 as u8; chunk_size as usize];
     let mut offset = 0;
     loop {
         match reader.read(&mut buffer[offset..]) {
             Ok(n) => {
                 if n > 0 {
                     offset += n;
-                    if offset as u64 == chunk_size {
+                    if offset == chunk_size {
                         chunks.push(hash_buf(&buffer[0..offset]));
                         offset = 0;
                     }
@@ -68,7 +68,8 @@ mod tests {
     fn helper(file_size: usize, chunk_size: u64) -> Result<bool> {
         let mut contents = vec![0 as u8; file_size];
         thread_rng().fill_bytes(contents.as_mut());
-        let chunks = read_chunks(contents.as_slice(), chunk_size)?;
+        let mut buffer = vec![0 as u8; chunk_size as usize];
+        let chunks = read_chunks(contents.as_slice(), buffer.as_mut_slice())?;
 
         let mut combined_chunks = Vec::new();
         for &(_, ref data) in &chunks {

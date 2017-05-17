@@ -111,7 +111,8 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
         .add_inode(dir, 1, vec![])
         .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
 
-    visit_dirs(catalog, store, dir, chunk_size, 1, 1)
+    let mut buffer = vec![0 as u8; chunk_size as usize];
+    visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)
         .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
 
     Ok(())
@@ -119,8 +120,8 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
 
 fn visit_dirs<C, S>(catalog: &mut C,
                     store: &mut S,
+                    buffer: &mut [u8],
                     dir: &Path,
-                    chunk_size: u64,
                     dir_index: u64,
                     parent_index: u64)
                     -> Result<()>
@@ -145,7 +146,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
             abs_path.push(fname);
             let f = File::open(abs_path)?;
             let mut reader = BufReader::new(f);
-            for (ref digest, ref data) in read_chunks(&mut reader, chunk_size)? {
+            for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
                 store.put(digest.clone(), data.as_ref());
                 chunks.push(Chunk {
                                 digest: digest.clone(),
@@ -159,7 +160,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {
-            visit_dirs(catalog, store, &path, chunk_size, index, dir_index)?;
+            visit_dirs(catalog, store, buffer, &path, index, dir_index)?;
         }
     }
     Ok(())
