@@ -44,6 +44,13 @@ pub struct Chunk {
     pub size: usize,
 }
 
+/// Data structure returned by the `lookup_chunks` function
+///
+/// The digest identifying a chunk and the indices which define an exclusive
+/// range of that should be read from the chunk data.
+#[derive(Debug, PartialEq)]
+pub struct ChunkPart<'a> (&'a Digest, usize, usize);
+
 pub struct INode {
     pub attributes: FileAttributes,
     pub chunks: Vec<Chunk>,
@@ -125,8 +132,52 @@ fn mode_to_permissions(mode: mode_t) -> u16 {
     mode & !S_IFMT.bits()
 }
 
+/// Lookup the index in a list of chunks corresponding to an offset
+///
+/// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
+/// and the offset inside the chunk which correspond to the give offset
+fn chunk_idx_for_offset(offset: usize, chunks: &[Chunk]) -> (usize, usize) {
+    let mut acc = 0;
+    let mut idx = 0;
+    let mut offset_in_chunk = 0;
+    for (i, c) in chunks.iter().enumerate() {
+        acc += c.size;
+        idx = i;
+        if acc > offset {
+            offset_in_chunk = offset + c.size - acc;
+            break;
+        }
+    }
+    (idx, offset_in_chunk)
+}
+
+/// Lookup a subset of consecutive chunks corresponding to a memory slice
+///
+/// Given a list of `Chunk`, representing consecutive chunks of a file and a segment identified by
+/// `offset` - the offset from the beginning of the file - and `size` - the size of the segment,
+/// this function returns a vector of `ChunkPart`
+pub fn lookup_chunks(offset: usize, size: usize, chunks: &[Chunk]) -> Vec<ChunkPart> {
+    let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
+    let mut output = Vec::new();
+    let mut bytes_left = size;
+    for c in chunks[first_chunk..].iter() {
+        let read_bytes = min(bytes_left, c.size - offset_in_chunk);
+        output.push(ChunkPart(&c.digest, offset_in_chunk, offset_in_chunk + read_bytes));
+        offset_in_chunk = 0;
+        bytes_left -= read_bytes;
+        if bytes_left == 0 {
+            break;
+        }
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
+    // use quickcheck::{QuickCheck, StdGen, TestResult};
+    // use rand::{Rng, thread_rng};
+    use be::cas::read_chunks;
+
     use super::*;
 
     #[test]
@@ -142,5 +193,45 @@ mod tests {
     fn mode_to_permissions_test() {
         let stats = lstat("/etc/hosts").unwrap();
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
+    }
+
+    #[test]
+    fn read_segment_from_chunks() {
+        let input_size = 20;
+        let chunk_size = 5;
+
+        let input = (0..)
+            .map(|e| (e as u64 % 256) as u8)
+            .take(input_size)
+            .collect::<Vec<u8>>();
+
+        let mut buffer = vec![0 as u8; chunk_size];
+        let raw_chunks = read_chunks(input.as_slice(), &mut buffer);
+        assert!(raw_chunks.is_ok());
+        let mut chunks = Vec::new();
+        let mut blobs = Vec::new();
+        if let Ok(cs) = raw_chunks {
+            for (digest, data) in cs {
+                chunks.push(Chunk {
+                                digest: digest,
+                                size: data.len(),
+                            });
+                blobs.push(data);
+            }
+        }
+
+        assert_eq!((0, 3), chunk_idx_for_offset(3, &chunks));
+        assert_eq!((1, 2), chunk_idx_for_offset(7, &chunks));
+        assert_eq!((2, 2), chunk_idx_for_offset(12, &chunks));
+        assert_eq!((3, 0), chunk_idx_for_offset(15, &chunks));
+
+        // Read 7 bytes starting at offset 6
+        let offset = 6;
+        let size = 7;
+        let output = lookup_chunks(offset, size, &chunks);
+
+        assert_eq!(2, output.len());
+        assert_eq!(ChunkPart(&chunks[1].digest, 1, 5), output[0]);
+        assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[1]);
     }
 }
