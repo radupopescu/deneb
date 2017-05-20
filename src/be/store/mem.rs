@@ -2,27 +2,23 @@ use std::collections::HashMap;
 
 use be::cas::Digest;
 
-pub trait Store {
-    fn get(&self, hash: &Digest) -> Option<&[u8]>;
-
-    fn put(&mut self, hash: Digest, contents: &[u8]);
-}
+use super::Store;
 
 #[derive(Default)]
-pub struct HashMapStore {
+pub struct MemStore {
     objects: HashMap<Digest, Vec<u8>>,
 }
-impl HashMapStore {
-    pub fn new() -> HashMapStore {
+impl MemStore {
+    pub fn new() -> MemStore {
         Self::default()
     }
 
     pub fn show_stats(&self) {
-        info!("HashMapStore: number of objects: {}", self.objects.len());
+        info!("MemStore: number of objects: {}", self.objects.len());
     }
 }
 
-impl Store for HashMapStore {
+impl Store for MemStore {
     fn get(&self, hash: &Digest) -> Option<&[u8]> {
         self.objects.get(hash).map(|v| v.as_slice())
     }
@@ -38,8 +34,8 @@ mod tests {
     use be::cas::hash;
 
     #[test]
-    fn create_put_get() {
-        let mut store: HashMapStore = HashMapStore::new();
+    fn memstore_create_put_get() {
+        let mut store: MemStore = MemStore::new();
         let k1 = "some_key".as_ref();
         let v1: Vec<u8> = vec![1,2,3];
         store.put(hash(k1), v1.as_slice());
