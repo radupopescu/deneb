@@ -1,11 +1,12 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs::{File, read_dir};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use common::errors::*;
-use be::cas::{Chunk, Digest, read_chunks};
-use be::inode::INode;
+use be::cas::read_chunks;
+use be::inode::{Chunk, INode};
 use be::store::Store;
 
 /// Describes the interface of metadata catalogs
@@ -14,7 +15,7 @@ pub trait Catalog {
     fn get_next_index(&self) -> u64;
     fn get_inode(&self, index: &u64) -> Option<&INode>;
     fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>>;
-    fn add_inode(&mut self, entry: &Path, index: u64, digests: &[Digest]) -> Result<()>;
+    fn add_inode(&mut self, entry: &Path, index: u64, digests: Vec<Chunk>) -> Result<()>;
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()>;
 }
 
@@ -72,8 +73,8 @@ impl Catalog for HashMapCatalog {
         self.dir_entries.get(parent)
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, digests: &[Digest]) -> Result<()> {
-        let inode = INode::new(index, entry, digests)
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
+        let inode = INode::new(index, entry, chunks)
             .chain_err(|| format!("Could not construct inode {} for path: {:?}", index, entry))?;
         self.inodes.insert(index, inode);
         Ok(())
@@ -107,10 +108,11 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
           S: Store
 {
     catalog
-        .add_inode(dir, 1, &[])
+        .add_inode(dir, 1, vec![])
         .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
 
-    visit_dirs(catalog, store, dir, chunk_size, 1, 1)
+    let mut buffer = vec![0 as u8; chunk_size as usize];
+    visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)
         .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
 
     Ok(())
@@ -118,16 +120,18 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
 
 fn visit_dirs<C, S>(catalog: &mut C,
                     store: &mut S,
+                    buffer: &mut [u8],
                     dir: &Path,
-                    chunk_size: u64,
                     dir_index: u64,
                     parent_index: u64)
                     -> Result<()>
     where C: Catalog,
           S: Store
 {
-    catalog.add_dir_entry(dir_index, Path::new("."), dir_index)?;
-    catalog.add_dir_entry(dir_index, Path::new(".."), parent_index)?;
+    catalog
+        .add_dir_entry(dir_index, Path::new("."), dir_index)?;
+    catalog
+        .add_dir_entry(dir_index, Path::new(".."), parent_index)?;
 
     for entry in read_dir(dir)? {
         let path = (entry?).path();
@@ -136,27 +140,27 @@ fn visit_dirs<C, S>(catalog: &mut C,
                                   .file_name()
                                   .ok_or_else(|| "Could not get file name from path")?);
 
-        let mut digests = Vec::new();
+        let mut chunks = Vec::new();
         if path.is_file() {
             let mut abs_path = dir.to_path_buf();
             abs_path.push(fname);
             let f = File::open(abs_path)?;
-            let chunks = read_chunks(&f, chunk_size)?;
-            for Chunk {
-                    ref digest,
-                    ref data,
-                } in chunks.into_iter() {
+            let mut reader = BufReader::new(f);
+            for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
                 store.put(digest.clone(), data.as_ref());
-                digests.push(digest.clone());
+                chunks.push(Chunk {
+                                digest: digest.clone(),
+                                size: data.len(),
+                            });
             }
         }
 
         let index = catalog.get_next_index();
-        catalog.add_inode(fpath, index, digests.as_slice())?;
+        catalog.add_inode(fpath, index, chunks)?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {
-            visit_dirs(catalog, store, &path, chunk_size, index, dir_index)?;
+            visit_dirs(catalog, store, buffer, &path, index, dir_index)?;
         }
     }
     Ok(())
