@@ -85,7 +85,7 @@ fn check_inout(dir: &DirTree, prefix: &Path, chunk_size: u64) -> Result<()> {
 }
 
 fn single_fuse_test(chunk_size: u64) {
-    let tmp = TempDir::new("/tmp/deneb_test");
+    let tmp = TempDir::new("/tmp/deneb_test_fuse_inout");
     assert!(tmp.is_ok());
     if let Ok(prefix) = tmp {
         let dt = make_test_dir_tree(prefix.path());
