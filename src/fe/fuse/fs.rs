@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use be::catalog::Catalog;
-use be::inode::{FileAttributes, FileType as FT};
+use be::inode::{ChunkPart, FileAttributes, FileType as FT, lookup_chunks};
 use be::store::Store;
 use common::errors::*;
 
@@ -195,18 +195,16 @@ impl<C, S> Filesystem for Fs<C, S>
             .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(&fh))
             .and_then(|inode| {
-                          let chunks = &inode.chunks;
+                          let chunks = lookup_chunks(offset as usize, size as usize, &inode.chunks);
                           if !chunks.is_empty() {
-                              self.store.get(&chunks[0].digest)
+                              Some(chunks_to_buffer(chunks.as_slice(), &self.store))
                           } else {
                               None
                           }
                       });
         match blob {
             Some(blob) => {
-                let begin = offset as usize;
-                let end = begin + size as usize;
-                reply.data(&blob[begin..end]);
+                reply.data(blob.as_slice());
             }
             None => {
                 reply.error(EINVAL);
@@ -363,6 +361,17 @@ impl<C, S> Filesystem for Fs<C, S>
     // Other callbacks
     fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {}
      */
+}
+
+/// Fill a buffer using the list of `ChunkPart`
+fn chunks_to_buffer<'a, 'b, S: Store>(chunks: &'a [ChunkPart], store: &'b S) -> Vec<u8> {
+    let mut buffer = Vec::new();
+    for &ChunkPart(digest, begin, end) in chunks {
+        if let Some(blob) = store.get(digest) {
+            buffer.extend_from_slice(&blob[begin..end]);
+        }
+    }
+    buffer
 }
 
 fn convert_fuse_file_type(ftype: FT) -> FileType {
