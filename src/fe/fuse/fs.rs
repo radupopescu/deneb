@@ -195,13 +195,14 @@ impl<C, S> Filesystem for Fs<C, S>
             .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(&fh))
             .and_then(|inode| {
-                          let chunks = lookup_chunks(offset as usize, size as usize, &inode.chunks);
-                          if !chunks.is_empty() {
-                              Some(chunks_to_buffer(chunks.as_slice(), &self.store))
-                          } else {
-                              None
-                          }
-                      });
+                let chunks = lookup_chunks(offset as usize, size as usize, &inode.chunks);
+                if !chunks.is_empty() {
+                    if let Ok(blob) = chunks_to_buffer(chunks.as_slice(), &self.store) {
+                        return Some(blob);
+                    }
+                }
+                None
+            });
         match blob {
             Some(blob) => {
                 reply.data(blob.as_slice());
@@ -364,14 +365,14 @@ impl<C, S> Filesystem for Fs<C, S>
 }
 
 /// Fill a buffer using the list of `ChunkPart`
-fn chunks_to_buffer<'a, 'b, S: Store>(chunks: &'a [ChunkPart], store: &'b S) -> Vec<u8> {
+fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> Result<Vec<u8>> {
     let mut buffer = Vec::new();
     for &ChunkPart(digest, begin, end) in chunks {
-        if let Ok(Some(blob)) = store.get(digest) {
+        if let Some(blob) = store.get(digest)? {
             buffer.extend_from_slice(&blob[begin..end]);
         }
     }
-    buffer
+    Ok(buffer)
 }
 
 fn convert_fuse_file_type(ftype: FT) -> FileType {
