@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use be::cas::Digest;
+use common::errors::*;
 
 use super::Store;
 
@@ -19,12 +20,15 @@ impl MemStore {
 }
 
 impl Store for MemStore {
-    fn get(&self, hash: &Digest) -> Option<&[u8]> {
-        self.objects.get(hash).map(|v| v.as_slice())
+    fn get(&self, digest: &Digest) -> Result<Option<Vec<u8>>> {
+        Ok(self.objects.get(digest).cloned())
     }
 
-    fn put(&mut self, hash: Digest, contents: &[u8]) {
-        self.objects.entry(hash).or_insert_with(|| contents.to_vec());
+    fn put(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
+        self.objects
+            .entry(digest)
+            .or_insert_with(|| contents.to_vec());
+        Ok(())
     }
 }
 
@@ -37,12 +41,18 @@ mod tests {
     fn memstore_create_put_get() {
         let mut store: MemStore = MemStore::new();
         let k1 = "some_key".as_ref();
-        let v1: Vec<u8> = vec![1,2,3];
-        store.put(hash(k1), v1.as_slice());
-        if let Some(v2) = store.get(&hash(k1)) {
-            println!("v1 = {:?}, v2 = {:?}", v1, v2);
-        } else {
-            println!("store.get returned None");
+        let v1: Vec<u8> = vec![1, 2, 3];
+        let ret = store.put(hash(k1), v1.as_slice());
+        assert!(ret.is_ok());
+        if ret.is_ok() {
+            let v2 = store.get(&hash(k1));
+            assert!(v2.is_ok());
+            if let Ok(v2) = v2 {
+                assert!(v2.is_some());
+                if let Some(v2) = v2 {
+                    assert_eq!(v1, v2);
+                }
+            }
         }
     }
 }

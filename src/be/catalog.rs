@@ -147,7 +147,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
             let f = File::open(abs_path)?;
             let mut reader = BufReader::new(f);
             for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
-                store.put(digest.clone(), data.as_ref());
+                store.put(digest.clone(), data.as_ref())?;
                 chunks.push(Chunk {
                                 digest: digest.clone(),
                                 size: data.len(),

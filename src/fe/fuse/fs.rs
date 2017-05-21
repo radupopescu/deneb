@@ -367,7 +367,7 @@ impl<C, S> Filesystem for Fs<C, S>
 fn chunks_to_buffer<'a, 'b, S: Store>(chunks: &'a [ChunkPart], store: &'b S) -> Vec<u8> {
     let mut buffer = Vec::new();
     for &ChunkPart(digest, begin, end) in chunks {
-        if let Some(blob) = store.get(digest) {
+        if let Ok(Some(blob)) = store.get(digest) {
             buffer.extend_from_slice(&blob[begin..end]);
         }
     }
