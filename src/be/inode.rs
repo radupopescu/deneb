@@ -59,7 +59,9 @@ pub struct INode {
 impl INode {
     pub fn new(index: u64, path: &Path, chunks: Vec<Chunk>) -> Result<INode> {
         let stats = lstat(path)?;
-        let mut attributes = FileAttributes {
+        // Note: we prefix `attributes` with an underscore to avoid triggering an
+        //       "unused_mut" warning on Linux.
+        let mut _attributes = FileAttributes {
             ino: index,
             size: max::<i64>(stats.st_size, 0) as u64,
             blocks: max::<i64>(stats.st_blocks, 0) as u64,
@@ -86,14 +88,14 @@ impl INode {
         };
         #[cfg(target_os="macos")]
         {
-            attributes.crtime = Timespec {
+            _attributes.crtime = Timespec {
                 sec: stats.st_birthtime,
                 nsec: min::<i64>(stats.st_birthtime_nsec, MAX as i64) as i32,
             };
         }
 
         Ok(INode {
-               attributes: attributes,
+               attributes: _attributes,
                chunks: chunks,
            })
     }
@@ -150,7 +152,7 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
 }
 
 fn mode_to_permissions(mode: mode_t) -> u16 {
-    mode & !S_IFMT.bits()
+    (mode & !S_IFMT.bits()) as u16
 }
 
 /// Lookup the index in a list of chunks corresponding to an offset
