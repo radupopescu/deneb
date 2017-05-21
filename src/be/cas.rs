@@ -1,4 +1,5 @@
-use rust_sodium::crypto::hash::sha512;
+use data_encoding::HEXLOWER;
+use rust_sodium::crypto::hash::sha512::Digest as SodiumDigest;
 use rust_sodium::crypto::hash::hash as sodium_hash;
 
 use std::io::BufRead;
@@ -6,11 +7,16 @@ use std::io::BufRead;
 use common::errors::*;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Digest(sha512::Digest);
+pub struct Digest(SodiumDigest);
 
 impl Digest {
-    fn new(digest: sha512::Digest) -> Digest {
+    fn new(digest: SodiumDigest) -> Digest {
         Digest(digest)
+    }
+
+    pub fn to_string(&self) -> String {
+        let &Digest(SodiumDigest(digest)) = self;
+        HEXLOWER.encode(&digest)
     }
 }
 
@@ -64,6 +70,13 @@ mod tests {
     use rand::{Rng, thread_rng};
 
     use super::*;
+
+    #[test]
+    fn digest_to_string() {
+        let digest = hash("some_key".as_ref());
+        let serialized = digest.to_string();
+        assert_eq!(serialized, "41bcc5cb17c49e80e1f20fde666dedad51bc35f146051da2689419948c07a4974e65be08e41fc194126a3e162aee9165271a32119e0cd369e587cf519a68e293");
+    }
 
     fn helper(file_size: usize, chunk_size: u64) -> Result<bool> {
         let mut contents = vec![0 as u8; file_size];
