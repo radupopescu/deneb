@@ -10,3 +10,5 @@ pub trait Store {
 mod mem;
 pub use self::mem::MemStore;
 
+mod disk;
+pub use self::disk::DiskStore;
