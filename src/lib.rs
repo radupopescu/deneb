@@ -1,7 +1,7 @@
-
 #![recursion_limit = "1024"]
 
 extern crate clap;
+extern crate data_encoding;
 #[macro_use]
 extern crate error_chain;
 #[cfg(feature = "fuse")]
