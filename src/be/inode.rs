@@ -4,7 +4,8 @@ use time::Timespec;
 
 use std::cmp::{min, max};
 use std::fmt;
-use std::i32::MAX;
+use std::i32;
+use std::u16;
 use std::path::Path;
 
 use common::errors::*;
@@ -67,15 +68,15 @@ impl INode {
             blocks: max::<i64>(stats.st_blocks, 0) as u64,
             atime: Timespec {
                 sec: stats.st_atime,
-                nsec: min::<i64>(stats.st_atime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_atime_nsec, i32::MAX as i64) as i32,
             },
             mtime: Timespec {
                 sec: stats.st_mtime,
-                nsec: min::<i64>(stats.st_mtime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_mtime_nsec, i32::MAX as i64) as i32,
             },
             ctime: Timespec {
                 sec: stats.st_ctime,
-                nsec: min::<i64>(stats.st_ctime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_ctime_nsec, i32::MAX as i64) as i32,
             },
             crtime: Timespec { sec: 0, nsec: 0 },
             kind: mode_to_file_type(stats.st_mode),
@@ -90,7 +91,7 @@ impl INode {
         {
             _attributes.crtime = Timespec {
                 sec: stats.st_birthtime,
-                nsec: min::<i64>(stats.st_birthtime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_birthtime_nsec, i32::MAX as i64) as i32,
             };
         }
 
@@ -152,6 +153,8 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
 }
 
 fn mode_to_permissions(mode: mode_t) -> u16 {
+    #[cfg(target_os="linux")]
+    debug_assert!(mode <= u16::MAX as u32);
     (mode & !S_IFMT.bits()) as u16
 }
 
