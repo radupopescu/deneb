@@ -1,11 +1,13 @@
 use nix::sys::stat::stat;
 
 use std::char::from_digit;
-use std::fs::{File, create_dir_all};
+use std::fs::{File, create_dir_all, remove_file, rename};
 use std::io::{Read, Write};
+
 use std::path::{Path, PathBuf};
 
 use be::cas::Digest;
+use be::store::util::create_temp_file;
 use common::errors::*;
 
 use super::Store;
@@ -44,9 +46,9 @@ impl DiskStore {
         }
 
         Ok(DiskStore {
-            _root_dir: root_dir,
-            object_dir: object_dir,
-        })
+               _root_dir: root_dir,
+               object_dir: object_dir,
+           })
     }
 }
 
@@ -68,13 +70,17 @@ impl Store for DiskStore {
     }
 
     fn put(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
-        let mut prefix = digest.to_string();
+        let hex_digest = digest.to_string();
+        let mut prefix = hex_digest.clone();
         let file_name = prefix.split_off(PREFIX_SIZE);
         let full_path = self.object_dir.join(prefix).join(file_name);
-        if let Ok(mut f) = File::create(&full_path) {
-            if let Ok(()) = f.write_all(contents) {
-                debug!("File written: {:?}", full_path);
-            }
+        let (mut f, temp_path) = create_temp_file(self.object_dir
+                                                  .join(&hex_digest).as_path())?;
+        if let Ok(()) = f.write_all(contents) {
+            rename(temp_path, &full_path)?;
+            debug!("File written: {:?}", full_path);
+        } else {
+            remove_file(temp_path)?;
         }
         Ok(())
     }
@@ -96,7 +102,7 @@ mod tests {
             assert!(store.is_ok());
             if let Ok(mut store) = store {
                 let k1 = "some_key".as_ref();
-                let v1: Vec<u8> = vec![1,2,3];
+                let v1: Vec<u8> = vec![0 as u8; 1000];
                 let ret = store.put(hash(k1), v1.as_slice());
                 assert!(ret.is_ok());
                 if ret.is_ok() {
