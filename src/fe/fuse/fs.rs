@@ -45,9 +45,9 @@ impl<'a, C, S> Fs<C, S>
     }
 
     pub unsafe fn spawn_mount<P: AsRef<Path>>(self,
-                                              mount_point: &P,
-                                              options: &[&OsStr])
-                                              -> Result<Session<'a>> {
+                                       mount_point: &P,
+                                       options: &[&OsStr])
+                                       -> Result<Session<'a>> {
         spawn_mount(self, mount_point, options)
             .map(Session)
             .map_err(|e| e.into())

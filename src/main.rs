@@ -6,7 +6,7 @@ extern crate log;
 extern crate rust_sodium;
 
 use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
-use deneb::be::store::MemStore;
+use deneb::be::store::DiskStore;
 use deneb::common::errors::*;
 use deneb::common::logging;
 use deneb::common::util::{block_signals, set_sigint_handler};
@@ -35,14 +35,13 @@ fn run() -> Result<()> {
     info!("Chunk size: {:?}", params.chunk_size);
 
     // Create an object store
-    let mut store = MemStore::new();
+    let mut store = DiskStore::at_dir(params.work_dir.as_path())?;
     let mut catalog = HashMapCatalog::new();
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
     populate_with_dir(&mut catalog, &mut store, params.sync_dir.as_path(), params.chunk_size)?;
     info!("Catalog populated with initial contents.");
     catalog.show_stats();
-    store.show_stats();
 
     // Create the file system data structure
     let file_system = Fs::new(catalog, store);
