@@ -20,7 +20,8 @@ mod common;
 
 use common::*;
 
-use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
+use deneb::be::catalog::MemCatalog;
+use deneb::be::populate_with_dir;
 use deneb::be::store::MemStore;
 use deneb::common::errors::*;
 use deneb::fe::fuse::{Fs, Session};
@@ -54,7 +55,7 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
 // Initialize a Deneb repo with the input directory
 fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path, chunk_size: u64) -> Result<Session<'a>> {
     let mut store = MemStore::new();
-    let mut catalog = HashMapCatalog::new();
+    let mut catalog = MemCatalog::new();
     populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
     let file_system = Fs::new(catalog, store);
     unsafe { file_system.spawn_mount(&mount_point.to_owned(), &[]) }

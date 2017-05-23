@@ -5,7 +5,8 @@ extern crate error_chain;
 extern crate log;
 extern crate rust_sodium;
 
-use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
+use deneb::be::catalog::MemCatalog;
+use deneb::be::populate_with_dir;
 use deneb::be::store::DiskStore;
 use deneb::common::errors::*;
 use deneb::common::logging;
@@ -36,7 +37,7 @@ fn run() -> Result<()> {
 
     // Create an object store
     let mut store = DiskStore::at_dir(params.work_dir.as_path())?;
-    let mut catalog = HashMapCatalog::new();
+    let mut catalog = MemCatalog::new();
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
     populate_with_dir(&mut catalog, &mut store, params.sync_dir.as_path(), params.chunk_size)?;
