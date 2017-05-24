@@ -6,6 +6,7 @@ extern crate data_encoding;
 extern crate error_chain;
 #[cfg(feature = "fuse")]
 extern crate fuse;
+extern crate lmdb_rs;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
