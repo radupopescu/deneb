@@ -45,9 +45,9 @@ impl<'a, C, S> Fs<C, S>
     }
 
     pub unsafe fn spawn_mount<P: AsRef<Path>>(self,
-                                       mount_point: &P,
-                                       options: &[&OsStr])
-                                       -> Result<Session<'a>> {
+                                              mount_point: &P,
+                                              options: &[&OsStr])
+                                              -> Result<Session<'a>> {
         spawn_mount(self, mount_point, options)
             .map(Session)
             .map_err(|e| e.into())
@@ -103,10 +103,10 @@ impl<C, S> Filesystem for Fs<C, S>
         match self.catalog.get_dir_entries(&ino) {
             Some(entries) => {
                 // TODO: This copying is quite wasteful. Maybe improve with Rc<...>?
-                let mut es = Vec::new();
-                for (path, index) in entries.iter() {
-                    es.push((path.to_owned(), *index));
-                }
+                let es = entries
+                    .iter()
+                    .map(|(path, index)| (path.to_owned(), *index))
+                    .collect::<Vec<(PathBuf, u64)>>();
                 self.open_dirs.insert(ino, es);
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
             }
