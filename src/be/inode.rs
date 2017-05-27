@@ -3,7 +3,6 @@ use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIF
 use time::Timespec;
 
 use std::cmp::{min, max};
-use std::fmt;
 use std::i32;
 use std::u16;
 use std::path::Path;
@@ -104,15 +103,6 @@ impl INode {
                attributes: _attributes,
                chunks: chunks,
            })
-    }
-}
-
-impl fmt::Display for INode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "Attributes: {:?}, digests: {:?}",
-               self.attributes,
-               self.chunks)
     }
 }
 

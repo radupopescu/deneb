@@ -56,7 +56,7 @@ impl Catalog for MemCatalog {
     }
 
     fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
-        let inode = INode::new(index, entry.as_ref(), chunks)
+        let inode = INode::new(index, entry, chunks)
             .chain_err(|| {
                            format!("Could not construct inode {} for path: {:?}",
                                    index,
@@ -67,13 +67,14 @@ impl Catalog for MemCatalog {
     }
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
-        let dir = self.dir_entries.entry(parent);
-        let mut dir_entry = dir.or_insert_with(|| {
-                                                   let mut dir_entry = HashMap::new();
-                                                   dir_entry.insert(name.to_owned(), index);
-                                                   dir_entry
-                                               });
-        dir_entry.entry(name.to_owned()).or_insert_with(|| index);
+        let mut dir_entry = self.dir_entries
+            .entry(parent)
+            .or_insert_with(|| {
+                let mut dir_entry = HashMap::new();
+                dir_entry.insert(name.to_owned(), index);
+                dir_entry
+            });
+        dir_entry.entry(name.to_owned()).or_insert(index);
 
         let inode = self.inodes
             .get_mut(&index)

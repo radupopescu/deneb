@@ -2,6 +2,8 @@ use bincode::{serialize, deserialize, Infinite};
 use lmdb_rs::{EnvBuilder, Environment, DbHandle};
 use lmdb_rs::core::{EnvCreateNoSubDir, DbCreate};
 
+use std::collections::HashMap;
+
 use super::*;
 
 const MAX_CATALOG_SIZE: u64 = 100 * 1024 * 1024; // 100MB
@@ -10,18 +12,20 @@ const MAX_CATALOG_DBS: usize = 3;
 
 const CATALOG_VERSION: u64 = 1;
 
+// Note: Could be enhanced with an in-memory LRU cache
+/// A filesystem metadata catalog backed by an LMDB database
 pub struct LmdbCatalog {
     env: Environment,
     inodes: DbHandle,
     dir_entries: DbHandle,
-    meta: DbHandle,
+    _meta: DbHandle,
     version: u64,
     index_generator: IndexGenerator,
 }
 
 impl LmdbCatalog {
     pub fn create<P: AsRef<Path>>(path: P) -> Result<LmdbCatalog> {
-        let env = open_environment(path)?;
+        let env = open_environment(path.as_ref())?;
 
         {
             // Create databases
@@ -39,11 +43,13 @@ impl LmdbCatalog {
                 writer.commit()?;
             }
 
+            info!("Created LMDB catalog {:?}.", path.as_ref());
+
             Ok(LmdbCatalog {
                    env: env,
                    inodes: inodes,
                    dir_entries: dir_entries,
-                   meta: meta,
+                   _meta: meta,
                    version: CATALOG_VERSION,
                    index_generator: IndexGenerator::default(),
                })
@@ -51,7 +57,7 @@ impl LmdbCatalog {
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<LmdbCatalog> {
-        let env = open_environment(path)?;
+        let env = open_environment(path.as_ref())?;
 
         {
             // Create databases
@@ -69,11 +75,13 @@ impl LmdbCatalog {
                 bail!(ErrorKind::LmdbCatalogError("Invalid catalog version".to_owned()));
             }
 
+            info!("Opened LMDB catalog {:?}.", path.as_ref());
+
             Ok(LmdbCatalog {
                    env: env,
                    inodes: inodes,
                    dir_entries: dir_entries,
-                   meta: meta,
+                   _meta: meta,
                    version: ver,
                    index_generator: IndexGenerator::default(),
                })
@@ -85,7 +93,8 @@ impl LmdbCatalog {
             info!("Environment information:");
             info!("  Map size: {}", env_info.me_mapsize);
             info!("  Last used page: {}", env_info.me_last_pgno);
-            info!("  Last committed transaction id: {}", env_info.me_last_txnid);
+            info!("  Last committed transaction id: {}",
+                  env_info.me_last_txnid);
             info!("  Maximum number of readers: {}", env_info.me_maxreaders);
             info!("  Current number of readers: {}", env_info.me_numreaders);
         }
@@ -98,6 +107,7 @@ impl LmdbCatalog {
             info!("  Number of overflow pages: {}", stats.ms_overflow_pages);
             info!("  Number of entries: {}", stats.ms_entries);
         }
+        info!("Catalog version: {}", self.version);
     }
 }
 
@@ -110,26 +120,102 @@ impl Catalog for LmdbCatalog {
         if let Ok(reader) = self.env.get_reader() {
             let db = reader.bind(&self.inodes);
             if let Ok(buffer) = db.get::<&[u8]>(&index) {
-                return deserialize::<INode>(buffer).ok()
+                return deserialize::<INode>(buffer).ok();
             }
         }
         None
     }
 
-    fn get_dir_entry_index(&self, _parent: u64, _name: &Path) -> Option<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Option<u64> {
+        if let Ok(reader) = self.env.get_reader() {
+            let db = reader.bind(&self.dir_entries);
+            if let Ok(buffer) = db.get::<&[u8]>(&parent) {
+                if let Ok(entries) = deserialize::<HashMap<PathBuf, u64>>(buffer) {
+                    return entries.get(name).map(|e| *e);
+                }
+            }
+        }
         None
     }
 
-    fn get_dir_entries(&self, _parent: u64) -> Option<Vec<(PathBuf, u64)>> {
+    fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>> {
+        if let Ok(reader) = self.env.get_reader() {
+            let db = reader.bind(&self.dir_entries);
+            if let Ok(buffer) = db.get::<&[u8]>(&parent) {
+                if let Ok(entries) = deserialize::<HashMap<PathBuf, u64>>(buffer) {
+                    return Some(entries
+                                    .iter()
+                                    .map(|(name, index)| (name.to_owned(), *index))
+                                    .collect::<Vec<(PathBuf, u64)>>());
+                }
+            }
+        }
         None
     }
 
-    fn add_inode(&mut self, _entry: &Path, _index: u64, _digests: Vec<Chunk>) -> Result<()> {
-        bail!("Not implemented");
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
+        let inode = INode::new(index, entry, chunks)
+            .chain_err(|| format!("Could not construct inode {} for path: {:?}", index, entry))?;
+
+        let buffer = serialize(&inode, Infinite)
+            .chain_err(|| format!("Could not serialize inode {}", index))?;
+
+        let writer = self.env.new_transaction()?;
+        {
+            let db = writer.bind(&self.inodes);
+            db.set(&index, &buffer)
+                .chain_err(|| format!("Could not write inode {} to database", index))?;
+        }
+        writer.commit()?;
+
+        Ok(())
     }
 
-    fn add_dir_entry(&mut self, _parent: u64, _name: &Path, _index: u64) -> Result<()> {
-        bail!("Not implemented");
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+        let writer = self.env.new_transaction()?;
+        {
+            // Retrieve and update dir entries for parent
+            let dir_entry_db = writer.bind(&self.dir_entries);
+            let mut entries = HashMap::new();
+            if let Ok(buffer) = dir_entry_db.get::<&[u8]>(&parent) {
+                // Dir entries exist for parent
+                entries =
+                    deserialize::<HashMap<PathBuf, u64>>(buffer)
+                        .chain_err(|| format!("Could no retrieve dir entries for {}", parent))?;
+                entries.insert(name.to_owned(), index);
+            } else {
+                // No dir entries exist for parent
+                entries.insert(name.to_owned(), index);
+            }
+
+            // Write updated dir entries to database
+            let buffer =
+                serialize(&entries, Infinite)
+                    .chain_err(|| format!("Could not serialize dir entries for {}", parent))?;
+            dir_entry_db
+                .set(&parent, &buffer)
+                .chain_err(|| format!("Could not write dir entries for {} to database", parent))?;
+
+            // Retrieve inode of index
+            let inode_db = writer.bind(&self.inodes);
+            let buffer = inode_db
+                .get::<&[u8]>(&index)
+                .chain_err(|| format!("Could not retrieve inode {}", index))?;
+            let mut inode = deserialize::<INode>(buffer)
+                .chain_err(|| format!("Could not deserialize inode {}", index))?;
+
+            // Update number of hardlink in inode
+            inode.attributes.nlink += 1;
+
+            // Write inode back to database
+            let buffer = serialize(&inode, Infinite)
+                .chain_err(|| format!("Could not serialize inode of {}", index))?;
+            inode_db
+                .set(&index, &buffer)
+                .chain_err(|| format!("Could not write inode of {} to database", index))?;
+        }
+        writer.commit()?;
+        Ok(())
     }
 }
 

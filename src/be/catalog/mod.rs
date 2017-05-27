@@ -22,7 +22,7 @@ pub trait Catalog {
 
     fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>>;
 
-    fn add_inode(&mut self, entry: &Path, index: u64, digests: Vec<Chunk>) -> Result<()>;
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()>;
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()>;
 }

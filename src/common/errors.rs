@@ -1,3 +1,4 @@
+use bincode::Error as BCError;
 use log;
 use log4rs;
 use lmdb_rs;
@@ -14,6 +15,7 @@ error_chain! {
     links {}
 
     foreign_links {
+        BincodeError(BCError) #[doc="bincode error"];
         IoError(io::Error) #[doc="io error"];
         LogError(log::SetLoggerError) #[doc="log error"];
         Log4rsConfigError(log4rs::config::Errors) #[doc="log4rs config error"];
