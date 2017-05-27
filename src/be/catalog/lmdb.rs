@@ -106,25 +106,29 @@ impl Catalog for LmdbCatalog {
         self.index_generator.get_next()
     }
 
-    fn get_inode(&self, index: &u64) -> Option<&INode> {
+    fn get_inode(&self, index: u64) -> Option<INode> {
         if let Ok(reader) = self.env.get_reader() {
             let db = reader.bind(&self.inodes);
-            if let Ok(buffer) = db.get::<&[u8]>(index) {
+            if let Ok(buffer) = db.get::<&[u8]>(&index) {
                 return deserialize::<INode>(buffer).ok()
             }
         }
         None
     }
 
-    fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
+    fn get_dir_entry_index(&self, _parent: u64, _name: &Path) -> Option<u64> {
         None
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, digests: Vec<Chunk>) -> Result<()> {
+    fn get_dir_entries(&self, _parent: u64) -> Option<Vec<(PathBuf, u64)>> {
+        None
+    }
+
+    fn add_inode(&mut self, _entry: &Path, _index: u64, _digests: Vec<Chunk>) -> Result<()> {
         bail!("Not implemented");
     }
 
-    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+    fn add_dir_entry(&mut self, _parent: u64, _name: &Path, _index: u64) -> Result<()> {
         bail!("Not implemented");
     }
 }

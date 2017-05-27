@@ -33,17 +33,35 @@ impl Catalog for MemCatalog {
         self.index_generator.get_next()
     }
 
-    fn get_inode(&self, index: &u64) -> Option<&INode> {
-        self.inodes.get(index)
+    fn get_inode(&self, index: u64) -> Option<INode> {
+        self.inodes.get(&index).cloned()
     }
 
-    fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
-        self.dir_entries.get(parent)
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Option<u64> {
+        self.dir_entries
+            .get(&parent)
+            .and_then(|entries| entries.get(name))
+            .map(|e| *e)
+    }
+
+    fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>> {
+        self.dir_entries
+            .get(&parent)
+            .map(|entries| {
+                     entries
+                         .iter()
+                         .map(|(name, index)| (name.to_owned(), *index))
+                         .collect::<Vec<(PathBuf, u64)>>()
+                 })
     }
 
     fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
-        let inode = INode::new(index, entry, chunks)
-            .chain_err(|| format!("Could not construct inode {} for path: {:?}", index, entry))?;
+        let inode = INode::new(index, entry.as_ref(), chunks)
+            .chain_err(|| {
+                           format!("Could not construct inode {} for path: {:?}",
+                                   index,
+                                   entry)
+                       })?;
         self.inodes.insert(index, inode);
         Ok(())
     }
@@ -66,4 +84,3 @@ impl Catalog for MemCatalog {
         Ok(())
     }
 }
-

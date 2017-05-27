@@ -43,7 +43,7 @@ pub struct FileAttributes {
     pub flags: u32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Chunk {
     pub digest: Digest,
     pub size: usize,
@@ -56,7 +56,7 @@ pub struct Chunk {
 #[derive(Debug, PartialEq)]
 pub struct ChunkPart<'a> (pub &'a Digest, pub usize, pub usize);
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct INode {
     pub attributes: FileAttributes,
     pub chunks: Vec<Chunk>,
