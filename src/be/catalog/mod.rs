@@ -35,3 +35,6 @@ impl IndexGenerator {
 
 mod mem;
 pub use self::mem::MemCatalog;
+
+mod lmdb;
+pub use self::lmdb::LmdbCatalog;
