@@ -11,7 +11,7 @@ use std::path::Path;
 use common::errors::*;
 use be::cas::Digest;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum FileType {
     NamedPipe,
     CharDevice,
@@ -21,14 +21,18 @@ pub enum FileType {
     Symlink,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct FileAttributes {
     pub ino: u64,
     pub size: u64,
     pub blocks: u64,
+    #[serde(with = "TimespecDef")]
     pub atime: Timespec,
+    #[serde(with = "TimespecDef")]
     pub mtime: Timespec,
+    #[serde(with = "TimespecDef")]
     pub ctime: Timespec,
+    #[serde(with = "TimespecDef")]
     pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
@@ -39,7 +43,7 @@ pub struct FileAttributes {
     pub flags: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Chunk {
     pub digest: Digest,
     pub size: usize,
@@ -52,6 +56,7 @@ pub struct Chunk {
 #[derive(Debug, PartialEq)]
 pub struct ChunkPart<'a> (pub &'a Digest, pub usize, pub usize);
 
+#[derive(Deserialize, Serialize)]
 pub struct INode {
     pub attributes: FileAttributes,
     pub chunks: Vec<Chunk>,
@@ -175,6 +180,13 @@ fn chunk_idx_for_offset(offset: usize, chunks: &[Chunk]) -> (usize, usize) {
         }
     }
     (idx, offset_in_chunk)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(remote = "Timespec")]
+struct TimespecDef {
+    pub sec: i64,
+    pub nsec: i32,
 }
 
 #[cfg(test)]

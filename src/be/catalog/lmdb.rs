@@ -1,3 +1,4 @@
+use bincode::{serialize, deserialize, Infinite};
 use lmdb_rs::{EnvBuilder, Environment, DbHandle};
 use lmdb_rs::core::{EnvCreateNoSubDir, DbCreate};
 
@@ -97,6 +98,34 @@ impl LmdbCatalog {
             info!("  Number of overflow pages: {}", stats.ms_overflow_pages);
             info!("  Number of entries: {}", stats.ms_entries);
         }
+    }
+}
+
+impl Catalog for LmdbCatalog {
+    fn get_next_index(&self) -> u64 {
+        self.index_generator.get_next()
+    }
+
+    fn get_inode(&self, index: &u64) -> Option<&INode> {
+        if let Ok(reader) = self.env.get_reader() {
+            let db = reader.bind(&self.inodes);
+            if let Ok(buffer) = db.get::<&[u8]>(index) {
+                return deserialize::<INode>(buffer).ok()
+            }
+        }
+        None
+    }
+
+    fn get_dir_entries(&self, parent: &u64) -> Option<&HashMap<PathBuf, u64>> {
+        None
+    }
+
+    fn add_inode(&mut self, entry: &Path, index: u64, digests: Vec<Chunk>) -> Result<()> {
+        bail!("Not implemented");
+    }
+
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+        bail!("Not implemented");
     }
 }
 

@@ -6,7 +6,7 @@ use std::io::BufRead;
 
 use common::errors::*;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Digest(SodiumDigest);
 
 impl Digest {
