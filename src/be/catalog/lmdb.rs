@@ -3,6 +3,7 @@ use lmdb_rs::{EnvBuilder, Environment, DbHandle};
 use lmdb_rs::core::{EnvCreateNoSubDir, DbCreate};
 
 use std::collections::HashMap;
+use std::cmp::max;
 
 use super::*;
 
@@ -75,6 +76,18 @@ impl LmdbCatalog {
                 bail!(ErrorKind::LmdbCatalogError("Invalid catalog version".to_owned()));
             }
 
+            // Retrieve the largest inode index in the catalog
+            let starting_index = {
+                let reader = env.get_reader()?;
+                let mut max_index = 1;
+                let db = reader.bind(&inodes);
+                for it in db.iter()? {
+                    let idx = it.get_key::<u64>();
+                    max_index = max(idx, max_index);
+                }
+                max_index
+            };
+
             info!("Opened LMDB catalog {:?}.", path.as_ref());
 
             Ok(LmdbCatalog {
@@ -83,7 +96,7 @@ impl LmdbCatalog {
                    dir_entries: dir_entries,
                    _meta: meta,
                    version: ver,
-                   index_generator: IndexGenerator::default(),
+                   index_generator: IndexGenerator::starting_at(starting_index)?,
                })
         }
     }

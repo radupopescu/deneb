@@ -38,6 +38,14 @@ impl Default for IndexGenerator {
 }
 
 impl IndexGenerator {
+    fn starting_at(i0: u64) -> Result<IndexGenerator> {
+        if i0 > 0 {
+            Ok(IndexGenerator { current_index: Cell::new(i0) })
+        } else {
+            bail!("Invalid starting index for IndexGenerator");
+        }
+    }
+
     fn get_next(&self) -> u64 {
         let idx = self.current_index.get() + 1;
         self.current_index.replace(idx);
