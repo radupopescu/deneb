@@ -249,23 +249,32 @@ fn try_create_db(env: &Environment, name: &str) -> Result<DbHandle> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::remove_dir_all;
+    use tempdir::TempDir;
 
     use super::*;
 
     #[test]
     fn lmdb_catalog_create_then_reopen() {
-        let _ = remove_dir_all("/tmp/test-lmdb-catalog");
-        let _ = remove_dir_all("/tmp/test-lmdb-catalog-lock");
-        {
-            let catalog = LmdbCatalog::create(Path::new("/tmp/test-lmdb-catalog"));
-            assert!(catalog.is_ok());
-            if let Ok(catalog) = catalog {
-                catalog.show_stats();
+        let tmp = TempDir::new("/tmp/deneb_lmdb_test");
+        assert!(tmp.is_ok());
+        if let Ok(prefix) = tmp {
+            let catalog_path = prefix.path().to_owned().join("test-lmdb-catalog");
+            {
+                let catalog = LmdbCatalog::create(&catalog_path);
+                assert!(catalog.is_ok());
+                if let Ok(mut catalog) = catalog {
+                    catalog.show_stats();
+                    assert!(catalog.add_inode(Path::new("/tmp/"), 2, vec![]).is_ok());
+                    assert!(catalog.add_inode(Path::new("/usr/"), 3, vec![]).is_ok());
+                }
             }
-        }
-        {
-            assert!(LmdbCatalog::open(Path::new("/tmp/test-lmdb-catalog")).is_ok());
+            {
+                let catalog = LmdbCatalog::open(&catalog_path);
+                assert!(catalog.is_ok());
+                if let Ok(catalog) = catalog {
+                    assert_eq!(catalog.index_generator.get_next(), 4);
+                }
+            }
         }
     }
 }
