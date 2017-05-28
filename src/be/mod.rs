@@ -2,11 +2,6 @@
 //!
 //! The back-end includes storage, data and metadata management etc.
 
-pub mod cas;
-pub mod catalog;
-pub mod inode;
-pub mod store;
-
 use std::fs::{File, read_dir};
 use std::io::BufReader;
 use std::path::Path;
@@ -16,6 +11,11 @@ use self::catalog::Catalog;
 use self::inode::Chunk;
 use self::store::Store;
 use common::errors::*;
+
+pub mod cas;
+pub mod catalog;
+pub mod inode;
+pub mod store;
 
 pub fn populate_with_dir<C, S>(catalog: &mut C,
                                store: &mut S,

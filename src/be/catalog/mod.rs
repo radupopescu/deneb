@@ -4,6 +4,12 @@ use std::path::{Path, PathBuf};
 use common::errors::*;
 use be::inode::{Chunk, INode};
 
+mod mem;
+pub use self::mem::MemCatalog;
+
+mod lmdb;
+pub use self::lmdb::LmdbCatalog;
+
 /// Describes the interface of metadata catalogs
 ///
 pub trait Catalog {
@@ -52,9 +58,3 @@ impl IndexGenerator {
         idx
     }
 }
-
-mod mem;
-pub use self::mem::MemCatalog;
-
-mod lmdb;
-pub use self::lmdb::LmdbCatalog;
