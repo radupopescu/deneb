@@ -30,8 +30,8 @@ pub struct DiskStore {
 }
 
 impl DiskStore {
-    pub fn at_dir(dir: &Path) -> Result<DiskStore> {
-        let root_dir = PathBuf::from(dir);
+    pub fn at_dir<P: AsRef<Path>>(dir: P) -> Result<DiskStore> {
+        let root_dir = PathBuf::from(dir.as_ref());
         let object_dir = root_dir.join(OBJECT_PATH);
 
         // Create object dir and its subdirectories (00, 01, 4e, 3f etc.)
