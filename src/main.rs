@@ -5,6 +5,8 @@ extern crate error_chain;
 extern crate log;
 extern crate rust_sodium;
 
+use std::fs::create_dir_all;
+
 use deneb::be::catalog::LmdbCatalog;
 use deneb::be::populate_with_dir;
 use deneb::be::store::DiskStore;
@@ -14,8 +16,8 @@ use deneb::common::util::{block_signals, set_sigint_handler};
 use deneb::fe::fuse::{AppParameters, Fs};
 
 fn run() -> Result<()> {
-    // Block the signals in SigSet on the current and all future threads. Should be run before spawning
-    // any new threads.
+    // Block the signals in SigSet on the current and all future threads. Should be run before
+    // spawning any new threads.
     block_signals()?;
 
     // Initialize the rust_sodium library (needed to make all its functions thread-safe)
@@ -30,19 +32,32 @@ fn run() -> Result<()> {
 
     info!("Welcome to Deneb!");
     info!("Log level: {}", params.log_level);
-    info!("Sync dir: {:?}", params.sync_dir);
     info!("Work dir: {:?}", params.work_dir);
     info!("Mount point: {:?}", params.mount_point);
     info!("Chunk size: {:?}", params.chunk_size);
+    info!("Sync dir: {:?}", params.sync_dir);
 
     // Create an object store
     let mut store = DiskStore::at_dir(params.work_dir.as_path())?;
-    let catalog_path = params.work_dir.as_path().to_owned().join("scratch/current_catalog");
-    let mut catalog = LmdbCatalog::create(catalog_path)?;
 
-    // Create the file metadata catalog and populate it with the contents of "sync_dir"
-    populate_with_dir(&mut catalog, &mut store, params.sync_dir.as_path(), params.chunk_size)?;
-    info!("Catalog populated with initial contents.");
+    let catalog_root = params.work_dir.as_path().to_owned().join("scratch");
+    create_dir_all(catalog_root.as_path())?;
+    let catalog_path = catalog_root.join("current_catalog");
+    info!("Catalog path: {:?}", catalog_path);
+    let catalog = match params.sync_dir {
+        Some(sync_dir) => {
+            let mut catalog = LmdbCatalog::create(catalog_path)?;
+            // Create the file metadata catalog and populate it with the contents of "sync_dir"
+            populate_with_dir(&mut catalog,
+                              &mut store,
+                              sync_dir.as_path(),
+                              params.chunk_size)?;
+            info!("Catalog populated with contents of {:?}",
+                  sync_dir.as_path());
+            catalog
+        }
+        None => LmdbCatalog::open(catalog_path)?,
+    };
     catalog.show_stats();
 
     // Create the file system data structure

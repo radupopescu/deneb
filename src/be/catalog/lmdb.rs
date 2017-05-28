@@ -27,7 +27,6 @@ pub struct LmdbCatalog {
 impl LmdbCatalog {
     pub fn create<P: AsRef<Path>>(path: P) -> Result<LmdbCatalog> {
         let env = open_environment(path.as_ref())?;
-
         {
             // Create databases
             let inodes = try_create_db(&env, "inodes")?;
