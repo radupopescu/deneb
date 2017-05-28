@@ -2,7 +2,7 @@ use bincode::{serialize, deserialize, Infinite};
 use lmdb_rs::{EnvBuilder, Environment, DbHandle};
 use lmdb_rs::core::{EnvCreateNoSubDir, DbCreate};
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::cmp::max;
 
 use super::*;
@@ -143,7 +143,7 @@ impl Catalog for LmdbCatalog {
         if let Ok(reader) = self.env.get_reader() {
             let db = reader.bind(&self.dir_entries);
             if let Ok(buffer) = db.get::<&[u8]>(&parent) {
-                if let Ok(entries) = deserialize::<HashMap<PathBuf, u64>>(buffer) {
+                if let Ok(entries) = deserialize::<BTreeMap<PathBuf, u64>>(buffer) {
                     return entries.get(name).map(|e| *e);
                 }
             }
@@ -155,7 +155,7 @@ impl Catalog for LmdbCatalog {
         if let Ok(reader) = self.env.get_reader() {
             let db = reader.bind(&self.dir_entries);
             if let Ok(buffer) = db.get::<&[u8]>(&parent) {
-                if let Ok(entries) = deserialize::<HashMap<PathBuf, u64>>(buffer) {
+                if let Ok(entries) = deserialize::<BTreeMap<PathBuf, u64>>(buffer) {
                     return Some(entries
                                     .iter()
                                     .map(|(name, index)| (name.to_owned(), *index))
@@ -189,11 +189,11 @@ impl Catalog for LmdbCatalog {
         {
             // Retrieve and update dir entries for parent
             let dir_entry_db = writer.bind(&self.dir_entries);
-            let mut entries = HashMap::new();
+            let mut entries = BTreeMap::new();
             if let Ok(buffer) = dir_entry_db.get::<&[u8]>(&parent) {
                 // Dir entries exist for parent
                 entries =
-                    deserialize::<HashMap<PathBuf, u64>>(buffer)
+                    deserialize::<BTreeMap<PathBuf, u64>>(buffer)
                         .chain_err(|| format!("Could no retrieve dir entries for {}", parent))?;
                 entries.insert(name.to_owned(), index);
             } else {
