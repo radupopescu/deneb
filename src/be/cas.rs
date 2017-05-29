@@ -1,12 +1,15 @@
 use data_encoding::HEXLOWER;
 use rust_sodium::crypto::hash::sha512::Digest as SodiumDigest;
 use rust_sodium::crypto::hash::hash as sodium_hash;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{Error, Visitor};
 
+use std::fmt;
 use std::io::BufRead;
 
 use common::errors::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);
 
 impl Digest {
@@ -26,6 +29,40 @@ impl Digest {
         } else {
             bail!("Could not decode string as HEXLOWER")
         }
+    }
+}
+
+
+impl Serialize for Digest {
+    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        let s = self.to_string();
+        serializer.serialize_str(s.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for Digest {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Digest, D::Error>
+        where D: Deserializer<'de>
+    {
+        struct DigestVisitor;
+
+        impl<'de> Visitor<'de> for DigestVisitor {
+            type Value = Digest;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("A string representing a HEXLOWER encoding of a SHA512 digest")
+            }
+
+            fn visit_str<E>(self, v: &str) -> ::std::result::Result<Self::Value, E>
+                where E: Error
+            {
+                Digest::from_str(v).map_err(Error::custom)
+            }
+        }
+
+        deserializer.deserialize_str(DigestVisitor)
     }
 }
 

@@ -39,43 +39,6 @@ impl Manifest {
     }
 }
 
-mod serde_digest {
-    use std::fmt;
-    use serde::{Deserializer, Serializer};
-    use serde::de::{Error, Visitor};
-
-    use be::cas::Digest;
-
-    pub fn serialize<S>(digest: &Digest, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
-    {
-        let s = digest.to_string();
-        serializer.serialize_str(s.as_str())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Digest, D::Error>
-        where D: Deserializer<'de>
-    {
-        struct DigestVisitor;
-
-        impl<'de> Visitor<'de> for DigestVisitor {
-            type Value = Digest;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("A string representing a HEXLOWER encoding of a SHA512 digest")
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-                where E: Error
-            {
-                Digest::from_str(v).map_err(Error::custom)
-            }
-        }
-
-        deserializer.deserialize_str(DigestVisitor)
-    }
-}
-
 mod serde_tm {
     use std::fmt;
     use serde::{Deserializer, Serializer};
