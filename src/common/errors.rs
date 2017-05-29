@@ -1,13 +1,15 @@
 use bincode::Error as BCError;
+use data_encoding::DecodeError;
 use log;
 use log4rs;
 use lmdb_rs;
 use nix;
-use time::OutOfRangeError;
+use time;
+use toml;
 
 use std::io;
 use std::path::{PathBuf,StripPrefixError};
-use std::time;
+use std::time::SystemTimeError;
 
 error_chain! {
     types {}
@@ -16,14 +18,18 @@ error_chain! {
 
     foreign_links {
         BincodeError(BCError) #[doc="bincode error"];
+        DataEncodingDecodeError(DecodeError) #[doc="data_encoding decode error"];
         IoError(io::Error) #[doc="io error"];
         LogError(log::SetLoggerError) #[doc="log error"];
         Log4rsConfigError(log4rs::config::Errors) #[doc="log4rs config error"];
         LmdbError(lmdb_rs::MdbError) #[doc="LMDB error"];
         NixError(nix::Error) #[doc="nix error"];
         PathStripPrefixError(StripPrefixError) #[doc="path prefix strip error"];
-        DurationOutOfRangeError(OutOfRangeError) #[doc="duration out-of-range error"];
-        SystemTimeError(time::SystemTimeError) #[doc="system time conversion error"];
+        DurationOutOfRangeError(time::OutOfRangeError) #[doc="duration out-of-range error"];
+        SystemTimeError(SystemTimeError) #[doc="system time conversion error"];
+        TimeParseError(time::ParseError) #[doc="time format parsing error"];
+        TomlDeError(toml::de::Error) #[doc="toml deserialization error"];
+        TomlSerError(toml::ser::Error) #[doc="toml serialization error"];
     }
 
     errors {

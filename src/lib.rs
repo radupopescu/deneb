@@ -25,6 +25,7 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate tempdir;
 extern crate time;
+extern crate toml;
 
 pub mod be;
 pub mod fe;
