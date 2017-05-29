@@ -15,6 +15,7 @@ use common::errors::*;
 pub mod cas;
 pub mod catalog;
 pub mod inode;
+pub mod manifest;
 pub mod store;
 
 pub fn populate_with_dir<C, S>(catalog: &mut C,
