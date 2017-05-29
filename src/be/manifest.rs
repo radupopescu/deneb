@@ -10,16 +10,17 @@ use common::errors::*;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
-    #[serde(with = "serde_digest")]
     root_hash: Digest,
+    previous_root_hash: Option<Digest>,
     #[serde(with = "serde_tm")]
     timestamp: Tm,
 }
 
 impl Manifest {
-    pub fn new(hash: Digest, timestamp: Tm) -> Manifest {
+    pub fn new(hash: Digest, previous_hash: Option<Digest>, timestamp: Tm) -> Manifest {
         Manifest {
             root_hash: hash,
+            previous_root_hash: previous_hash,
             timestamp: timestamp,
         }
     }
@@ -89,15 +90,15 @@ mod tests {
     fn manifest_serde() {
         let fake_stuff = vec![0 as u8; 100];
         let digest = hash(fake_stuff.as_slice());
-        let mut manifest = Manifest {
-            root_hash: digest,
-            timestamp: now_utc(),
-        };
+        let mut manifest = Manifest::new(digest, None, now_utc());
         // Set to zero the fields which are not serialized
-        manifest.timestamp.tm_yday = 0;
-        manifest.timestamp.tm_isdst = 0;
-        manifest.timestamp.tm_utcoff = 0;
-        manifest.timestamp.tm_nsec = 0;
+        {
+            let ts = &mut manifest.timestamp;
+            ts.tm_yday = 0;
+            ts.tm_isdst = 0;
+            ts.tm_utcoff = 0;
+            ts.tm_nsec = 0;
+        }
         println!("Manifest  (original): {:?}", manifest);
         let manifest_text = toml::to_string(&manifest);
         assert!(manifest_text.is_ok());
@@ -119,7 +120,7 @@ mod tests {
         if let Ok(prefix) = tmp {
             let fake_stuff = vec![0 as u8; 100];
             let digest = hash(fake_stuff.as_slice());
-            let mut manifest1 = Manifest::new(digest, now_utc());
+            let mut manifest1 = Manifest::new(digest, None, now_utc());
             {
                 let ts = &mut manifest1.timestamp;
                 ts.tm_yday = 0;
