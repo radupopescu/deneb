@@ -18,6 +18,15 @@ impl Digest {
         let &Digest(SodiumDigest(digest)) = self;
         HEXLOWER.encode(&digest)
     }
+
+    pub fn from_str(s: &str) -> Result<Digest> {
+        let decoded = HEXLOWER.decode(s.as_bytes())?;
+        if let Some(sd) = SodiumDigest::from_slice(decoded.as_slice()) {
+            Ok(Digest(sd))
+        } else {
+            bail!("Could not decode string as HEXLOWER")
+        }
+    }
 }
 
 fn hash_buf(buffer: &[u8]) -> (Digest, Vec<u8>) {
