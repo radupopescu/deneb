@@ -22,7 +22,7 @@ impl Digest {
         HEXLOWER.encode(&digest)
     }
 
-    pub fn from_str(s: &str) -> Result<Digest> {
+    pub fn from_string_slice(s: &str) -> Result<Digest> {
         let decoded = HEXLOWER.decode(s.as_bytes())?;
         if let Some(sd) = SodiumDigest::from_slice(decoded.as_slice()) {
             Ok(Digest(sd))
@@ -58,7 +58,7 @@ impl<'de> Deserialize<'de> for Digest {
             fn visit_str<E>(self, v: &str) -> ::std::result::Result<Self::Value, E>
                 where E: Error
             {
-                Digest::from_str(v).map_err(Error::custom)
+                Digest::from_string_slice(v).map_err(Error::custom)
             }
         }
 

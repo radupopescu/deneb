@@ -41,7 +41,7 @@ impl Catalog for MemCatalog {
         self.dir_entries
             .get(&parent)
             .and_then(|entries| entries.get(name))
-            .map(|e| *e)
+            .cloned()
     }
 
     fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>> {

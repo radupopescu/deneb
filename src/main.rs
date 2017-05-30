@@ -8,7 +8,7 @@ extern crate time;
 
 use time::now_utc;
 
-use std::fs::{File, create_dir_all, remove_file};
+use std::fs::{File, create_dir_all};
 use std::io::{Read, Write};
 
 use deneb::be::cas::hash;
