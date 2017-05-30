@@ -10,10 +10,10 @@ use common::errors::*;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
-    root_hash: Digest,
-    previous_root_hash: Option<Digest>,
+    pub root_hash: Digest,
+    pub previous_root_hash: Option<Digest>,
     #[serde(with = "serde_tm")]
-    timestamp: Tm,
+    pub timestamp: Tm,
 }
 
 impl Manifest {
