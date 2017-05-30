@@ -9,8 +9,9 @@ extern crate rust_sodium;
 
 use log::LogLevelFilter;
 
-use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
-use deneb::be::store::HashMapStore;
+use deneb::be::catalog::MemCatalog;
+use deneb::be::populate_with_dir;
+use deneb::be::store::MemStore;
 use deneb::common::errors::*;
 use deneb::common::logging;
 use deneb::fe::watch::DirectoryWatcher;
@@ -31,8 +32,8 @@ fn run() -> Result<()> {
     info!("Work dir: {:?}", work_dir);
 
     // Create an object store
-    let mut store = HashMapStore::new();
-    let mut catalog = HashMapCatalog::new();
+    let mut store = MemStore::new();
+    let mut catalog = MemCatalog::new();
 
     populate_with_dir(&mut catalog, &mut store, sync_dir.as_path(), chunk_size)?;
     info!("Catalog populated with initial contents.");

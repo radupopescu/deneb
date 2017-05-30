@@ -20,8 +20,9 @@ mod common;
 
 use common::*;
 
-use deneb::be::catalog::{HashMapCatalog, populate_with_dir};
-use deneb::be::store::HashMapStore;
+use deneb::be::catalog::{Catalog, LmdbCatalog, MemCatalog};
+use deneb::be::populate_with_dir;
+use deneb::be::store::{Store, DiskStore, MemStore};
 use deneb::common::errors::*;
 use deneb::fe::fuse::{Fs, Session};
 use deneb::fe::fuse::DEFAULT_CHUNK_SIZE;
@@ -52,9 +53,15 @@ fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
 
 
 // Initialize a Deneb repo with the input directory
-fn init_hashmap_repo<'a>(input: &Path, mount_point: &Path, chunk_size: u64) -> Result<Session<'a>> {
-    let mut store = HashMapStore::new();
-    let mut catalog = HashMapCatalog::new();
+fn init_repo<'a, C, S>(mut catalog: C,
+                       mut store: S,
+                       input: &Path,
+                       mount_point: &Path,
+                       chunk_size: u64)
+                       -> Result<Session<'a>>
+    where C: 'a + Catalog + Send,
+          S: 'a + Store + Send
+{
     populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
     let file_system = Fs::new(catalog, store);
     unsafe { file_system.spawn_mount(&mount_point.to_owned(), &[]) }
@@ -70,11 +77,23 @@ fn copy_dir_tree(source: &Path, dest: &Path) -> Result<()> {
 //
 // Use a previously generated DirTree to populate a Deneb repository.
 // Copy all the files back out of the Deneb repository and compare with the originals.
-fn check_inout(dir: &DirTree, prefix: &Path, chunk_size: u64) -> Result<()> {
+fn check_inout<C, S>(catalog: C,
+                     store: S,
+                     dir: &DirTree,
+                     prefix: &Path,
+                     chunk_size: u64)
+                     -> Result<()>
+    where C: Catalog + Send,
+          S: Store + Send
+{
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");
     create_dir(mount_point.as_path())?;
-    let _session = init_hashmap_repo(dir.root.as_path(), mount_point.as_path(), chunk_size)?;
+    let _session = init_repo(catalog,
+                             store,
+                             dir.root.as_path(),
+                             mount_point.as_path(),
+                             chunk_size)?;
 
     // Copy the contents of the Deneb repository to a new directory
     let output_dir = prefix.join("output");
@@ -84,14 +103,38 @@ fn check_inout(dir: &DirTree, prefix: &Path, chunk_size: u64) -> Result<()> {
     dir.compare(output_dir.as_path())
 }
 
-fn single_fuse_test(chunk_size: u64) {
-    let tmp = TempDir::new("/tmp/deneb_test");
+enum TestType {
+    InMemory,
+    OnDisk,
+}
+
+fn single_fuse_test(test_type: TestType, chunk_size: u64) {
+    let tmp = TempDir::new("/tmp/deneb_test_fuse_inout");
     assert!(tmp.is_ok());
     if let Ok(prefix) = tmp {
         let dt = make_test_dir_tree(prefix.path());
         assert!(dt.is_ok());
         if let Ok(dt) = dt {
-            assert!(check_inout(&dt, prefix.path(), chunk_size).is_ok());
+            match test_type {
+                TestType::InMemory => {
+                    let catalog = MemCatalog::new();
+                    let store = MemStore::new();
+                    assert!(check_inout(catalog, store, &dt, prefix.path(), chunk_size).is_ok());
+                }
+                TestType::OnDisk => {
+                    let catalog_path = prefix.path().join("current_catalog");
+                    let catalog = LmdbCatalog::create(catalog_path);
+                    assert!(catalog.is_ok());
+                    if let Ok(catalog) = catalog {
+                        let store_path = prefix.path().join("internal");
+                        let store = DiskStore::at_dir(store_path);
+                        assert!(store.is_ok());
+                        if let Ok(store) = store {
+                            assert!(check_inout(catalog, store, &dt, prefix.path(), chunk_size).is_ok());
+                        }
+                    }
+                }
+            }
         }
 
         // Explicit cleanup
@@ -100,13 +143,23 @@ fn single_fuse_test(chunk_size: u64) {
 }
 
 #[test]
-fn single_chunk_per_file() {
-    single_fuse_test(DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
+fn single_chunk_per_file_memory() {
+    single_fuse_test(TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
 }
 
 #[test]
-fn multiple_chunks_per_file() {
-    single_fuse_test(4); // test with 4B chunk size (multiple chunks per file are needed)
+fn single_chunk_per_file() {
+    single_fuse_test(TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
+}
+
+#[test]
+fn multiple_chunks_per_file_memory() {
+    single_fuse_test(TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
+}
+
+#[test]
+fn multiple_chunks_per_file_disk() {
+    single_fuse_test(TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
 #[test]
@@ -122,9 +175,59 @@ fn prop_inout_unchanged() {
             let _ = dt.show();
             let _ = dt.create();
 
-            let check_result = check_inout(&dt, prefix.path(), DEFAULT_CHUNK_SIZE);
+            let catalog = MemCatalog::new();
+            let store = MemStore::new();
+            let check_result = check_inout(catalog, store, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
             if !check_result.is_ok() {
                 println!("Check failed: {:?}", check_result);
+                return false;
+            }
+
+            // Explicit cleanup
+            if !prefix.close().is_ok() {
+                return false;
+            }
+        }
+        true
+    }
+    QuickCheck::new()
+        .tests(50)
+        .gen(StdGen::new(rand::thread_rng(), 5))
+        .quickcheck(inout_unchanged as fn(DirTree) -> bool);
+}
+
+#[ignore]
+#[test]
+fn prop_inout_unchanged_disk_slow() {
+    fn inout_unchanged(mut dt: DirTree) -> bool {
+        let tmp = TempDir::new("/tmp/deneb_test");
+        if !tmp.is_ok() {
+            return false;
+        }
+        if let Ok(prefix) = tmp {
+            dt.root = prefix.path().to_owned();
+
+            let _ = dt.show();
+            let _ = dt.create();
+
+            let catalog_path = prefix.path().join("current_catalog");
+            let catalog = LmdbCatalog::create(catalog_path);
+            if let Ok(catalog) = catalog {
+                let store_path = prefix.path().join("internal");
+                let store = DiskStore::at_dir(store_path);
+                assert!(store.is_ok());
+                if let Ok(store) = store {
+                    let check_result = check_inout(catalog, store, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
+                    if !check_result.is_ok() {
+                        println!("Check failed: {:?}", check_result);
+                        return false;
+                    }
+                } else {
+                    println!("Error creating disk store");
+                    return false;
+                }
+            } else {
+                println!("Error creating LMDB catalog");
                 return false;
             }
 

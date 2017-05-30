@@ -3,14 +3,14 @@ use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIF
 use time::Timespec;
 
 use std::cmp::{min, max};
-use std::fmt;
-use std::i32::MAX;
+use std::i32;
+use std::u16;
 use std::path::Path;
 
 use common::errors::*;
 use be::cas::Digest;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum FileType {
     NamedPipe,
     CharDevice,
@@ -20,14 +20,18 @@ pub enum FileType {
     Symlink,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct FileAttributes {
     pub ino: u64,
     pub size: u64,
     pub blocks: u64,
+    #[serde(with = "TimespecDef")]
     pub atime: Timespec,
+    #[serde(with = "TimespecDef")]
     pub mtime: Timespec,
+    #[serde(with = "TimespecDef")]
     pub ctime: Timespec,
+    #[serde(with = "TimespecDef")]
     pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
@@ -38,7 +42,7 @@ pub struct FileAttributes {
     pub flags: u32,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Chunk {
     pub digest: Digest,
     pub size: usize,
@@ -51,6 +55,7 @@ pub struct Chunk {
 #[derive(Debug, PartialEq)]
 pub struct ChunkPart<'a> (pub &'a Digest, pub usize, pub usize);
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct INode {
     pub attributes: FileAttributes,
     pub chunks: Vec<Chunk>,
@@ -59,21 +64,23 @@ pub struct INode {
 impl INode {
     pub fn new(index: u64, path: &Path, chunks: Vec<Chunk>) -> Result<INode> {
         let stats = lstat(path)?;
-        let mut attributes = FileAttributes {
+        // Note: we prefix `attributes` with an underscore to avoid triggering an
+        //       "unused_mut" warning on Linux.
+        let mut _attributes = FileAttributes {
             ino: index,
             size: max::<i64>(stats.st_size, 0) as u64,
             blocks: max::<i64>(stats.st_blocks, 0) as u64,
             atime: Timespec {
                 sec: stats.st_atime,
-                nsec: min::<i64>(stats.st_atime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_atime_nsec, i32::MAX as i64) as i32,
             },
             mtime: Timespec {
                 sec: stats.st_mtime,
-                nsec: min::<i64>(stats.st_mtime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_mtime_nsec, i32::MAX as i64) as i32,
             },
             ctime: Timespec {
                 sec: stats.st_ctime,
-                nsec: min::<i64>(stats.st_ctime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_ctime_nsec, i32::MAX as i64) as i32,
             },
             crtime: Timespec { sec: 0, nsec: 0 },
             kind: mode_to_file_type(stats.st_mode),
@@ -86,25 +93,16 @@ impl INode {
         };
         #[cfg(target_os="macos")]
         {
-            attributes.crtime = Timespec {
+            _attributes.crtime = Timespec {
                 sec: stats.st_birthtime,
-                nsec: min::<i64>(stats.st_birthtime_nsec, MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_birthtime_nsec, i32::MAX as i64) as i32,
             };
         }
 
         Ok(INode {
-               attributes: attributes,
+               attributes: _attributes,
                chunks: chunks,
            })
-    }
-}
-
-impl fmt::Display for INode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "Attributes: {:?}, digests: {:?}",
-               self.attributes,
-               self.chunks)
     }
 }
 
@@ -150,7 +148,9 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
 }
 
 fn mode_to_permissions(mode: mode_t) -> u16 {
-    mode & !S_IFMT.bits()
+    #[cfg(target_os="linux")]
+    debug_assert!(mode <= u16::MAX as u32);
+    (mode & !S_IFMT.bits()) as u16
 }
 
 /// Lookup the index in a list of chunks corresponding to an offset
@@ -170,6 +170,13 @@ fn chunk_idx_for_offset(offset: usize, chunks: &[Chunk]) -> (usize, usize) {
         }
     }
     (idx, offset_in_chunk)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(remote = "Timespec")]
+struct TimespecDef {
+    pub sec: i64,
+    pub nsec: i32,
 }
 
 #[cfg(test)]

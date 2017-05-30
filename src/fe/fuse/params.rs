@@ -8,11 +8,11 @@ use common::errors::*;
 pub const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
 
 pub struct AppParameters {
-    pub sync_dir: PathBuf,
     pub work_dir: PathBuf,
     pub mount_point: PathBuf,
     pub log_level: LogLevelFilter,
     pub chunk_size: u64,
+    pub sync_dir: Option<PathBuf>,
 }
 
 impl AppParameters {
@@ -26,7 +26,7 @@ impl AppParameters {
                 .long("sync_dir")
                 .takes_value(true)
                 .value_name("SYNC_DIR")
-                .required(true)
+                .required(false)
                 .help("Synced directory"))
             .arg(Arg::with_name("work_dir")
                 .short("w")
@@ -59,9 +59,7 @@ impl AppParameters {
                  .help("Chunk size used for storing files"))
             .get_matches();
 
-        let sync_dir = PathBuf::from(matches.value_of("sync_dir")
-            .map(|d| d.to_string())
-            .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
+        let sync_dir = matches.value_of("sync_dir").map(|dir| PathBuf::from(dir));
         let work_dir = PathBuf::from(matches.value_of("work_dir")
             .map(|d| d.to_string())
             .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
@@ -97,11 +95,11 @@ impl AppParameters {
         };
 
         Ok(AppParameters {
-            sync_dir: sync_dir,
             work_dir: work_dir,
             mount_point: mount_point,
             log_level: log_level,
             chunk_size: chunk_size,
+            sync_dir: sync_dir,
         })
     }
 }
