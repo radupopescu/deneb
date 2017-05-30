@@ -143,7 +143,7 @@ impl Catalog for LmdbCatalog {
             let db = reader.bind(&self.dir_entries);
             if let Ok(buffer) = db.get::<&[u8]>(&parent) {
                 if let Ok(entries) = deserialize::<BTreeMap<PathBuf, u64>>(buffer) {
-                    return entries.get(name).map(|e| *e);
+                    return entries.get(name).cloned();
                 }
             }
         }

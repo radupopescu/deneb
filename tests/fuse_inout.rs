@@ -108,14 +108,14 @@ enum TestType {
     OnDisk,
 }
 
-fn single_fuse_test(test_type: TestType, chunk_size: u64) {
+fn single_fuse_test(test_type: &TestType, chunk_size: u64) {
     let tmp = TempDir::new("/tmp/deneb_test_fuse_inout");
     assert!(tmp.is_ok());
     if let Ok(prefix) = tmp {
         let dt = make_test_dir_tree(prefix.path());
         assert!(dt.is_ok());
         if let Ok(dt) = dt {
-            match test_type {
+            match *test_type {
                 TestType::InMemory => {
                     let catalog = MemCatalog::new();
                     let store = MemStore::new();
@@ -144,22 +144,22 @@ fn single_fuse_test(test_type: TestType, chunk_size: u64) {
 
 #[test]
 fn single_chunk_per_file_memory() {
-    single_fuse_test(TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
+    single_fuse_test(&TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
 }
 
 #[test]
 fn single_chunk_per_file() {
-    single_fuse_test(TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
+    single_fuse_test(&TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
 }
 
 #[test]
 fn multiple_chunks_per_file_memory() {
-    single_fuse_test(TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
+    single_fuse_test(&TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
 #[test]
 fn multiple_chunks_per_file_disk() {
-    single_fuse_test(TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
+    single_fuse_test(&TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
 #[test]

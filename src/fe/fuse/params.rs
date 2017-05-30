@@ -59,7 +59,7 @@ impl AppParameters {
                  .help("Chunk size used for storing files"))
             .get_matches();
 
-        let sync_dir = matches.value_of("sync_dir").map(|dir| PathBuf::from(dir));
+        let sync_dir = matches.value_of("sync_dir").map(PathBuf::from);
         let work_dir = PathBuf::from(matches.value_of("work_dir")
             .map(|d| d.to_string())
             .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
