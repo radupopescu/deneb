@@ -9,7 +9,7 @@ extern crate time;
 use time::now_utc;
 
 use std::fs::{File, create_dir_all};
-use std::io::{Read, Write};
+use std::io::Read;
 
 use deneb::be::cas::hash;
 use deneb::be::catalog::LmdbCatalog;
@@ -19,6 +19,7 @@ use deneb::be::store::{DiskStore, Store};
 use deneb::common::errors::*;
 use deneb::common::logging;
 use deneb::common::util::{block_signals, set_sigint_handler};
+use deneb::common::util::file::atomic_write;
 use deneb::fe::fuse::{AppParameters, Fs};
 
 fn run() -> Result<()> {
@@ -87,8 +88,7 @@ fn run() -> Result<()> {
         let buffer = store.get(&root_hash)?.ok_or_else(|| {
             format!("Could not retrieve catalog for root hash {:?}", root_hash)
         })?;
-        let mut f = File::create(catalog_path.as_path())?;
-        f.write_all(buffer.as_slice())?;
+        atomic_write(catalog_path.as_path(), buffer.as_slice())?;
     }
 
     let catalog = LmdbCatalog::open(catalog_path)?;
