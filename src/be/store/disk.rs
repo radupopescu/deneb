@@ -1,13 +1,13 @@
 use nix::sys::stat::stat;
 
 use std::char::from_digit;
-use std::fs::{File, create_dir_all, remove_file, rename};
-use std::io::{Read, Write};
+use std::fs::{File, create_dir_all};
+use std::io::Read;
 
 use std::path::{Path, PathBuf};
 
 use be::cas::Digest;
-use be::store::util::create_temp_file;
+use common::util::file::atomic_write;
 use common::errors::*;
 
 use super::Store;
@@ -74,13 +74,8 @@ impl Store for DiskStore {
         let mut prefix = hex_digest.clone();
         let file_name = prefix.split_off(PREFIX_SIZE);
         let full_path = self.object_dir.join(prefix).join(file_name);
-        let (mut f, temp_path) = create_temp_file(self.object_dir
-                                                  .join(&hex_digest).as_path())?;
-        if let Ok(()) = f.write_all(contents) {
-            rename(temp_path, &full_path)?;
+        if let Ok(()) = atomic_write(full_path.as_path(), contents) {
             debug!("File written: {:?}", full_path);
-        } else {
-            remove_file(temp_path)?;
         }
         Ok(())
     }

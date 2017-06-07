@@ -22,8 +22,8 @@ impl Digest {
         HEXLOWER.encode(&digest)
     }
 
-    pub fn from_string_slice(s: &str) -> Result<Digest> {
-        let decoded = HEXLOWER.decode(s.as_bytes())?;
+    pub fn from_slice(s: &[u8]) -> Result<Digest> {
+        let decoded = HEXLOWER.decode(s)?;
         if let Some(sd) = SodiumDigest::from_slice(decoded.as_slice()) {
             Ok(Digest(sd))
         } else {
@@ -58,7 +58,7 @@ impl<'de> Deserialize<'de> for Digest {
             fn visit_str<E>(self, v: &str) -> ::std::result::Result<Self::Value, E>
                 where E: Error
             {
-                Digest::from_string_slice(v).map_err(Error::custom)
+                Digest::from_slice(v.as_bytes()).map_err(Error::custom)
             }
         }
 
@@ -118,10 +118,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn digest_to_string() {
+    fn digest_to_string_and_back() {
         let digest = hash("some_key".as_ref());
         let serialized = digest.to_string();
         assert_eq!(serialized, "41bcc5cb17c49e80e1f20fde666dedad51bc35f146051da2689419948c07a4974e65be08e41fc194126a3e162aee9165271a32119e0cd369e587cf519a68e293");
+
+        let deserialized = Digest::from_slice(serialized.as_bytes());
+        assert!(deserialized.is_ok());
+        if let Ok(deserialized) = deserialized {
+            assert_eq!(digest, deserialized);
+        }
     }
 
     fn helper(file_size: usize, chunk_size: u64) -> Result<bool> {
@@ -143,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn small_file_gives_single_chunk() {
+    fn digest_small_file_gives_single_chunk() {
         let res = helper(5, 10);
         assert!(res.is_ok());
         if let Ok(res) = res {
@@ -152,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn prop_large_files_are_chunked() {
+    fn digest_prop_large_files_are_chunked() {
         fn large_files_are_chunked(pair: (usize, u64)) -> TestResult {
             let (file_size, chunk_size) = pair;
             if chunk_size == 0 {

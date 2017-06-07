@@ -2,15 +2,17 @@ use time::Tm;
 use toml::{from_str, to_string};
 
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::Path;
 
 use be::cas::Digest;
 use common::errors::*;
+use common::util::file::atomic_write;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
     pub root_hash: Digest,
+    // Note: may need to be changed to previous_manifest (store old manifests as CA blobs)
     pub previous_root_hash: Option<Digest>,
     #[serde(with = "serde_tm")]
     pub timestamp: Tm,
@@ -26,9 +28,8 @@ impl Manifest {
     }
 
     pub fn save(&self, manifest_file: &Path) -> Result<()> {
-        let mut f = File::create(manifest_file)?;
         let m = to_string(self)?;
-        f.write_all(m.as_bytes())?;
+        atomic_write(manifest_file, m.as_bytes())?;
         Ok(())
     }
 

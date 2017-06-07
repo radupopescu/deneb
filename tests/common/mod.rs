@@ -7,10 +7,10 @@ use uuid::Uuid;
 
 use std::fs::{File, create_dir_all, remove_dir_all};
 use std::io::{Read, BufReader};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use deneb::common::errors::*;
+use deneb::common::util::file::atomic_write;
 
 #[derive(Clone, Debug)]
 pub enum DirEntry {
@@ -88,8 +88,7 @@ impl DirTree {
         self.visit(&|dir: &Path, entry: &DirEntry| {
                         if let DirEntry::File(ref name, ref contents) = *entry {
                             create_dir_all(dir)?;
-                            let mut f = File::create(dir.join(name))?;
-                            f.write_all(contents)?;
+                            atomic_write(dir.join(name).as_path(), contents)?;
                         }
                         Ok(())
                     })
