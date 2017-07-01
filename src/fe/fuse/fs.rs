@@ -70,11 +70,11 @@ impl<C, S> Filesystem for Fs<C, S>
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         debug!("getattr(ino={})", ino);
         match self.catalog.get_inode(ino) {
-            Some(inode) => {
+            Ok(inode) => {
                 let ttl = Timespec::new(1, 0);
                 reply.attr(&ttl, &convert_fuse_fattr(&inode.attributes));
             }
-            None => {
+            Err(_) => {
                 reply.error(EINVAL);
             }
         }
@@ -86,11 +86,11 @@ impl<C, S> Filesystem for Fs<C, S>
             .get_dir_entry_inode(parent, PathBuf::from(name).as_path())
             .map(|inode| inode.attributes);
         match attrs {
-            Some(attrs) => {
+            Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
                 reply.entry(&ttl, &convert_fuse_fattr(&attrs), 0);
             }
-            None => {
+            Err(_) => {
                 reply.error(EINVAL);
             }
         }
@@ -99,11 +99,11 @@ impl<C, S> Filesystem for Fs<C, S>
     fn opendir(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
         debug!("opendir - ino: {}", ino);
         match self.catalog.get_dir_entries(ino) {
-            Some(entries) => {
+            Ok(entries) => {
                 self.open_dirs.insert(ino, entries);
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
             }
-            None => {
+            Err(_) => {
                 reply.error(EINVAL);
             }
         }
@@ -133,7 +133,7 @@ impl<C, S> Filesystem for Fs<C, S>
             Some(entries) => {
                 while index < entries.len() {
                     let (ref name, idx) = entries[index];
-                    if let Some(inode) = self.catalog.get_inode(idx) {
+                    if let Ok(inode) = self.catalog.get_inode(idx) {
                         if !reply.add(idx,
                                       index as u64 + 1,
                                       convert_fuse_file_type(inode.attributes.kind),
@@ -161,11 +161,11 @@ impl<C, S> Filesystem for Fs<C, S>
         } else {
             debug!("open RO - ino: {}", ino);
             match self.catalog.get_inode(ino) {
-                Some(_) => {
+                Ok(_) => {
                     self.open_files.insert(ino, OpenFileContext);
                     reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
                 }
-                None => {
+                Err(_) => {
                     reply.error(EINVAL);
                 }
             }
@@ -186,15 +186,12 @@ impl<C, S> Filesystem for Fs<C, S>
                size);
         let blob = self.open_files
             .get(&fh)
-            .and_then(|_ctx| self.catalog.get_inode(fh))
+            .and_then(|_ctx| self.catalog.get_inode(fh).ok())
             .and_then(|inode| {
-                let chunks = lookup_chunks(offset as usize, size as usize, &inode.chunks);
-                if !chunks.is_empty() {
-                    if let Ok(blob) = chunks_to_buffer(chunks.as_slice(), &self.store) {
-                        return Some(blob);
-                    }
-                }
-                None
+                lookup_chunks(offset as usize, size as usize, inode.chunks.as_slice())
+                    .and_then(|chunks| {
+                        chunks_to_buffer(chunks.as_slice(), &self.store).ok()
+                    })
             });
         match blob {
             Some(blob) => {
@@ -361,9 +358,8 @@ impl<C, S> Filesystem for Fs<C, S>
 fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> Result<Vec<u8>> {
     let mut buffer = Vec::new();
     for &ChunkPart(digest, begin, end) in chunks {
-        if let Some(blob) = store.get(digest)? {
-            buffer.extend_from_slice(&blob[begin..end]);
-        }
+        let blob = store.get_chunk(digest)?;
+        buffer.extend_from_slice(&blob[begin..end]);
     }
     Ok(buffer)
 }

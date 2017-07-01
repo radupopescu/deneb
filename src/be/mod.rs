@@ -67,7 +67,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
             let f = File::open(abs_path)?;
             let mut reader = BufReader::new(f);
             for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
-                store.put(digest.clone(), data.as_ref())?;
+                store.put_chunk(digest.clone(), data.as_ref())?;
                 chunks.push(Chunk {
                                 digest: digest.clone(),
                                 size: data.len(),
@@ -75,7 +75,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
             }
         }
 
-        let index = catalog.get_next_index();
+        let index = catalog.get_next_index()?;
         catalog.add_inode(fpath, index, chunks)?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 

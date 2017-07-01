@@ -39,12 +39,12 @@ enum Request {
 }
 
 enum Reply {
-    NextIndex(u64),
-    INode(Option<INode>),
-    Index(Option<u64>),
-    DirEntries(Option<Vec<(PathBuf, u64)>>),
+    NextIndex(Result<u64>),
+    INode(Result<INode>),
+    Index(Result<u64>),
+    DirEntries(Result<Vec<(PathBuf, u64)>>),
 
-    Blob(Result<Option<Vec<u8>>>),
+    Blob(Result<Vec<u8>>),
 
     Result(Result<()>),
 }
@@ -57,61 +57,55 @@ pub struct Handle {
     channel: RequestChannel,
 }
 
-/*
-impl<C, S> Catalog for Engine<C, S>
-    where C: Catalog
-{
-}
-*/
 impl Handle {
     // Catalog operations
 
-    pub fn get_next_index(&self) -> u64 {
-        if let Ok(Reply::NextIndex(result)) = self.make_request(Request::GetNextIndex) {
+    pub fn get_next_index(&self) -> Result<u64> {
+        if let Reply::NextIndex(result) = self.make_request(Request::GetNextIndex)? {
             result
         } else {
-            panic!("Invalid reply received from engine.")
+            bail!("Invalid reply received from engine.")
         }
     }
 
-    pub fn get_inode(&self, index: u64) -> Option<INode> {
-        if let Ok(Reply::INode(result)) = self.make_request(Request::GetINode { index: index }) {
+    pub fn get_inode(&self, index: u64) -> Result<INode> {
+        if let Reply::INode(result) = self.make_request(Request::GetINode { index: index })? {
             result
         } else {
-            None
+            bail!("Invalid reply received from engine.")
         }
     }
 
-    pub fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Option<u64> {
-        if let Ok(Reply::Index(result)) =
+    pub fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
+        if let Reply::Index(result) =
             self.make_request(Request::GetDirEntryIndex {
                                   parent: parent,
                                   name: name.to_owned(),
-                              }) {
+                              })? {
             result
         } else {
-            None
+            bail!("Invalid reply received from engine.")
         }
     }
 
-    pub fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Option<INode> {
-        if let Ok(Reply::INode(result)) =
+    pub fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Result<INode> {
+        if let Reply::INode(result) =
             self.make_request(Request::GetDirEntryINode {
                                   parent: parent,
                                   name: name.to_owned(),
-                              }) {
+                              })? {
             result
         } else {
-            None
+            bail!("Invalid reply received from engine.")
         }
     }
 
-    pub fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>> {
-        if let Ok(Reply::DirEntries(result)) =
-            self.make_request(Request::GetDirEntries { parent: parent }) {
+    pub fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
+        if let Reply::DirEntries(result) =
+            self.make_request(Request::GetDirEntries { parent: parent })? {
             result
         } else {
-            None
+            bail!("Invalid reply received from engine.")
         }
     }
 
@@ -143,12 +137,12 @@ impl Handle {
 
     // Store operations
 
-    pub fn get_blob(&self, digest: &Digest) -> Result<Option<Vec<u8>>> {
-        if let Ok(Reply::Blob(result)) =
-            self.make_request(Request::GetBlob { digest: digest.clone() }) {
+    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
+        if let Reply::Blob(result) =
+            self.make_request(Request::GetBlob { digest: digest.clone() })? {
             result
         } else {
-            bail!("Invalid reply received from engine.")
+            bail!("Invalid reply received from engine")
         }
     }
 
@@ -242,10 +236,10 @@ fn handle_request<C, S>(request: Request, chan: ReplyChannel, catalog: &mut C, s
 
         // Store operations
         Request::GetBlob { digest } => {
-            let _ = chan.send(Reply::Blob(store.get(&digest)));
+            let _ = chan.send(Reply::Blob(store.get_chunk(&digest)));
         }
         Request::PutBlob { digest, contents } => {
-            let _ = chan.send(Reply::Result(store.put(digest, contents.as_slice())));
+            let _ = chan.send(Reply::Result(store.put_chunk(digest, contents.as_slice())));
         }
     }
 }
@@ -265,8 +259,8 @@ mod tests {
         let engine = Engine::new(catalog, store, 1000);
         let h = engine.handle();
 
-        assert!(h.get_inode(0).is_none());
+        assert!(h.get_inode(0).is_err());
         let digest = hash(&[]);
-        assert!(h.get_blob(&digest).is_ok());
+        assert!(h.get_blob(&digest).is_err());
     }
 }

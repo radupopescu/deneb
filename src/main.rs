@@ -72,7 +72,7 @@ fn run() -> Result<()> {
         let mut buffer = Vec::new();
         let _ = f.read_to_end(&mut buffer);
         let digest = hash(buffer.as_slice());
-        store.put(digest.clone(), buffer.as_slice())?;
+        store.put_chunk(digest.clone(), buffer.as_slice())?;
 
         // Create and save the repository manifest
         let manifest = Manifest::new(digest, None, now_utc());
@@ -85,9 +85,7 @@ fn run() -> Result<()> {
     // Get the catalog out of storage and open it
     {
         let root_hash = manifest.root_hash;
-        let buffer = store.get(&root_hash)?.ok_or_else(|| {
-            format!("Could not retrieve catalog for root hash {:?}", root_hash)
-        })?;
+        let buffer = store.get_chunk(&root_hash)?;
         atomic_write(catalog_path.as_path(), buffer.as_slice())?;
     }
 

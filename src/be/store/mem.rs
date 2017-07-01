@@ -20,11 +20,14 @@ impl MemStore {
 }
 
 impl Store for MemStore {
-    fn get(&self, digest: &Digest) -> Result<Option<Vec<u8>>> {
-        Ok(self.objects.get(digest).cloned())
+    fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
+        self.objects
+            .get(digest)
+            .cloned()
+            .ok_or_else(|| "Could not retrieve chunk from mem store.".into())
     }
 
-    fn put(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
+    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
         self.objects
             .entry(digest)
             .or_insert_with(|| contents.to_vec());
@@ -42,16 +45,13 @@ mod tests {
         let mut store: MemStore = MemStore::new();
         let k1 = "some_key".as_ref();
         let v1: Vec<u8> = vec![1, 2, 3];
-        let ret = store.put(hash(k1), v1.as_slice());
+        let ret = store.put_chunk(hash(k1), v1.as_slice());
         assert!(ret.is_ok());
         if ret.is_ok() {
-            let v2 = store.get(&hash(k1));
+            let v2 = store.get_chunk(&hash(k1));
             assert!(v2.is_ok());
             if let Ok(v2) = v2 {
-                assert!(v2.is_some());
-                if let Some(v2) = v2 {
-                    assert_eq!(v1, v2);
-                }
+                assert_eq!(v1, v2);
             }
         }
     }

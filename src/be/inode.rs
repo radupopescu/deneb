@@ -111,7 +111,7 @@ impl INode {
 /// Given a list of `Chunk`, representing consecutive chunks of a file and a segment identified by
 /// `offset` - the offset from the beginning of the file - and `size` - the size of the segment,
 /// this function returns a vector of `ChunkPart`
-pub fn lookup_chunks(offset: usize, size: usize, chunks: &[Chunk]) -> Vec<ChunkPart> {
+pub fn lookup_chunks(offset: usize, size: usize, chunks: &[Chunk]) -> Option<Vec<ChunkPart>> {
     let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
     let mut output = Vec::new();
     let mut bytes_left = size;
@@ -124,7 +124,11 @@ pub fn lookup_chunks(offset: usize, size: usize, chunks: &[Chunk]) -> Vec<ChunkP
             break;
         }
     }
-    output
+    if !output.is_empty() {
+        Some(output)
+    } else {
+        None
+    }
 }
 
 fn mode_to_file_type(mode: mode_t) -> FileType {
@@ -237,36 +241,36 @@ mod tests {
         // Read 7 bytes starting at offset 6
         let offset = 6;
         let size = 7;
-        let output = lookup_chunks(offset, size, &chunks);
-
-        assert_eq!(2, output.len());
-        assert_eq!(ChunkPart(&chunks[1].digest, 1, 5), output[0]);
-        assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[1]);
+        if let Some(output) = lookup_chunks(offset, size, &chunks) {
+            assert_eq!(2, output.len());
+            assert_eq!(ChunkPart(&chunks[1].digest, 1, 5), output[0]);
+            assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[1]);
+        }
 
         // Read 11 bytes starting at offset 2
         let offset = 2;
         let size = 11;
-        let output = lookup_chunks(offset, size, &chunks);
-
-        assert_eq!(3, output.len());
-        assert_eq!(ChunkPart(&chunks[0].digest, 2, 5), output[0]);
-        assert_eq!(ChunkPart(&chunks[1].digest, 0, 5), output[1]);
-        assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[2]);
+        if let Some(output) = lookup_chunks(offset, size, &chunks) {
+            assert_eq!(3, output.len());
+            assert_eq!(ChunkPart(&chunks[0].digest, 2, 5), output[0]);
+            assert_eq!(ChunkPart(&chunks[1].digest, 0, 5), output[1]);
+            assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[2]);
+        }
 
         // Read 3 bytes starting at offset 12
         let offset = 12;
         let size = 3;
-        let output = lookup_chunks(offset, size, &chunks);
-
-        assert_eq!(1, output.len());
-        assert_eq!(ChunkPart(&chunks[2].digest, 2, 5), output[0]);
+        if let Some(output) = lookup_chunks(offset, size, &chunks) {
+            assert_eq!(1, output.len());
+            assert_eq!(ChunkPart(&chunks[2].digest, 2, 5), output[0]);
+        }
 
         // Read 100 bytes starting at offset 18 (should read to the end)
         let offset = 18;
         let size = 100;
-        let output = lookup_chunks(offset, size, &chunks);
-
-        assert_eq!(1, output.len());
-        assert_eq!(ChunkPart(&chunks[3].digest, 3, 5), output[0]);
+        if let Some(output) = lookup_chunks(offset, size, &chunks) {
+            assert_eq!(1, output.len());
+            assert_eq!(ChunkPart(&chunks[3].digest, 3, 5), output[0]);
+        }
     }
 }

@@ -29,22 +29,34 @@ impl MemCatalog {
 }
 
 impl Catalog for MemCatalog {
-    fn get_next_index(&self) -> u64 {
-        self.index_generator.get_next()
+    fn get_next_index(&self) -> Result<u64> {
+        Ok(self.index_generator.get_next())
     }
 
-    fn get_inode(&self, index: u64) -> Option<INode> {
-        self.inodes.get(&index).cloned()
+    fn get_inode(&self, index: u64) -> Result<INode> {
+        self.inodes
+            .get(&index)
+            .cloned()
+            .ok_or_else(|| {
+                            format!("Could not get inode from mem catalog for index {}.", index)
+                                .into()
+                        })
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Option<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
         self.dir_entries
             .get(&parent)
             .and_then(|entries| entries.get(name))
             .cloned()
+            .ok_or_else(|| {
+                            format!("Could not get index from mem catalog for dir entry {:?} at {}",
+                                    name,
+                                    parent)
+                                    .into()
+                        })
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>> {
+    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
         self.dir_entries
             .get(&parent)
             .map(|entries| {
@@ -53,6 +65,11 @@ impl Catalog for MemCatalog {
                          .map(|(name, index)| (name.to_owned(), *index))
                          .collect::<Vec<(PathBuf, u64)>>()
                  })
+            .ok_or_else(|| {
+                            format!("Could not get dir entries from mem catalog for at {}",
+                                    parent)
+                                    .into()
+                        })
     }
 
     fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
@@ -70,10 +87,10 @@ impl Catalog for MemCatalog {
         let mut dir_entry = self.dir_entries
             .entry(parent)
             .or_insert_with(|| {
-                let mut dir_entry = HashMap::new();
-                dir_entry.insert(name.to_owned(), index);
-                dir_entry
-            });
+                                let mut dir_entry = HashMap::new();
+                                dir_entry.insert(name.to_owned(), index);
+                                dir_entry
+                            });
         dir_entry.entry(name.to_owned()).or_insert(index);
 
         let inode = self.inodes
