@@ -14,6 +14,7 @@ use common::errors::*;
 
 pub mod cas;
 pub mod catalog;
+pub mod engine;
 pub mod inode;
 pub mod manifest;
 pub mod store;
