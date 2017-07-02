@@ -13,10 +13,6 @@ use common::errors::*;
 use std::path::{Path, PathBuf};
 use std::thread::spawn as tspawn;
 
-// TODO:
-// + Rename blob -> chunk
-// + Consolidate return types for Handle methods (all should return a Result)
-
 enum Request {
     GetNextIndex,
     GetINode { index: u64 },
@@ -34,8 +30,8 @@ enum Request {
         index: u64,
     },
 
-    GetBlob { digest: Digest },
-    PutBlob { digest: Digest, contents: Vec<u8> },
+    GetChunk { digest: Digest },
+    PutChunk { digest: Digest, contents: Vec<u8> },
 }
 
 enum Reply {
@@ -44,7 +40,7 @@ enum Reply {
     Index(Result<u64>),
     DirEntries(Result<Vec<(PathBuf, u64)>>),
 
-    Blob(Result<Vec<u8>>),
+    Chunk(Result<Vec<u8>>),
 
     Result(Result<()>),
 }
@@ -137,18 +133,18 @@ impl Handle {
 
     // Store operations
 
-    pub fn get_blob(&self, digest: &Digest) -> Result<Vec<u8>> {
-        if let Reply::Blob(result) =
-            self.make_request(Request::GetBlob { digest: digest.clone() })? {
+    pub fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
+        if let Reply::Chunk(result) =
+            self.make_request(Request::GetChunk { digest: digest.clone() })? {
             result
         } else {
             bail!("Invalid reply received from engine")
         }
     }
 
-    pub fn put_blob(&self, digest: Digest, contents: &[u8]) -> Result<()> {
+    pub fn put_chunk(&self, digest: Digest, contents: &[u8]) -> Result<()> {
         if let Ok(Reply::Result(result)) =
-            self.make_request(Request::PutBlob {
+            self.make_request(Request::PutChunk {
                                   digest: digest.clone(),
                                   contents: contents.to_owned(),
                               }) {
@@ -235,10 +231,10 @@ fn handle_request<C, S>(request: Request, chan: ReplyChannel, catalog: &mut C, s
         }
 
         // Store operations
-        Request::GetBlob { digest } => {
-            let _ = chan.send(Reply::Blob(store.get_chunk(&digest)));
+        Request::GetChunk { digest } => {
+            let _ = chan.send(Reply::Chunk(store.get_chunk(&digest)));
         }
-        Request::PutBlob { digest, contents } => {
+        Request::PutChunk { digest, contents } => {
             let _ = chan.send(Reply::Result(store.put_chunk(digest, contents.as_slice())));
         }
     }
@@ -261,6 +257,6 @@ mod tests {
 
         assert!(h.get_inode(0).is_err());
         let digest = hash(&[]);
-        assert!(h.get_blob(&digest).is_err());
+        assert!(h.get_chunk(&digest).is_err());
     }
 }

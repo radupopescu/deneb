@@ -184,7 +184,7 @@ impl<C, S> Filesystem for Fs<C, S>
                fh,
                offset,
                size);
-        let blob = self.open_files
+        let buffer = self.open_files
             .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(fh).ok())
             .and_then(|inode| {
@@ -193,9 +193,9 @@ impl<C, S> Filesystem for Fs<C, S>
                         chunks_to_buffer(chunks.as_slice(), &self.store).ok()
                     })
             });
-        match blob {
-            Some(blob) => {
-                reply.data(blob.as_slice());
+        match buffer {
+            Some(buffer) => {
+                reply.data(buffer.as_slice());
             }
             None => {
                 reply.error(EINVAL);
@@ -358,8 +358,8 @@ impl<C, S> Filesystem for Fs<C, S>
 fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> Result<Vec<u8>> {
     let mut buffer = Vec::new();
     for &ChunkPart(digest, begin, end) in chunks {
-        let blob = store.get_chunk(digest)?;
-        buffer.extend_from_slice(&blob[begin..end]);
+        let chunk = store.get_chunk(digest)?;
+        buffer.extend_from_slice(&chunk[begin..end]);
     }
     Ok(buffer)
 }

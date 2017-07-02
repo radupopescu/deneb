@@ -67,7 +67,7 @@ fn run() -> Result<()> {
                   sync_dir.as_path());
         }
 
-        // Save the generated catalog as a content-addressed blob in the store.
+        // Save the generated catalog as a content-addressed chunk in the store.
         let mut f = File::open(catalog_path.as_path())?;
         let mut buffer = Vec::new();
         let _ = f.read_to_end(&mut buffer);
