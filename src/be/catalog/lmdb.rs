@@ -124,8 +124,8 @@ impl LmdbCatalog {
 }
 
 impl Catalog for LmdbCatalog {
-    fn get_next_index(&self) -> Result<u64> {
-        Ok(self.index_generator.get_next())
+    fn get_next_index(&self) -> u64 {
+        self.index_generator.get_next()
     }
 
     fn get_inode(&self, index: u64) -> Result<INode> {

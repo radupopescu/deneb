@@ -35,7 +35,7 @@ enum Request {
 }
 
 enum Reply {
-    NextIndex(Result<u64>),
+    NextIndex(u64),
     INode(Result<INode>),
     Index(Result<u64>),
     DirEntries(Result<Vec<(PathBuf, u64)>>),
@@ -65,11 +65,11 @@ impl Handle {
 }
 
 impl Catalog for Handle {
-    fn get_next_index(&self) -> Result<u64> {
-        if let Reply::NextIndex(result) = self.make_request(Request::GetNextIndex)? {
+    fn get_next_index(&self) -> u64 {
+        if let Ok(Reply::NextIndex(result)) = self.make_request(Request::GetNextIndex) {
             result
         } else {
-            bail!("Invalid reply received from engine.")
+            panic!("Did not receive new inode index from engine")
         }
     }
 

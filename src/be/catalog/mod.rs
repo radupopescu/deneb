@@ -13,7 +13,7 @@ pub use self::lmdb::LmdbCatalog;
 /// Describes the interface of metadata catalogs
 ///
 pub trait Catalog {
-    fn get_next_index(&self) -> Result<u64>;
+    fn get_next_index(&self) -> u64;
 
     fn get_inode(&self, index: u64) -> Result<INode>;
 
