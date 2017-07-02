@@ -13,6 +13,7 @@ use std::io::Read;
 
 use deneb::be::cas::hash;
 use deneb::be::catalog::LmdbCatalog;
+use deneb::be::engine::Engine;
 use deneb::be::manifest::Manifest;
 use deneb::be::populate_with_dir;
 use deneb::be::store::{DiskStore, Store};
@@ -67,12 +68,12 @@ fn run() -> Result<()> {
                   sync_dir.as_path());
         }
 
-        // Save the generated catalog as a content-addressed blob in the store.
+        // Save the generated catalog as a content-addressed chunk in the store.
         let mut f = File::open(catalog_path.as_path())?;
         let mut buffer = Vec::new();
         let _ = f.read_to_end(&mut buffer);
         let digest = hash(buffer.as_slice());
-        store.put(digest.clone(), buffer.as_slice())?;
+        store.put_chunk(digest.clone(), buffer.as_slice())?;
 
         // Create and save the repository manifest
         let manifest = Manifest::new(digest, None, now_utc());
@@ -85,9 +86,7 @@ fn run() -> Result<()> {
     // Get the catalog out of storage and open it
     {
         let root_hash = manifest.root_hash;
-        let buffer = store.get(&root_hash)?.ok_or_else(|| {
-            format!("Could not retrieve catalog for root hash {:?}", root_hash)
-        })?;
+        let buffer = store.get_chunk(&root_hash)?;
         atomic_write(catalog_path.as_path(), buffer.as_slice())?;
     }
 
@@ -95,7 +94,8 @@ fn run() -> Result<()> {
     catalog.show_stats();
 
     // Create the file system data structure
-    let file_system = Fs::new(catalog, store);
+    let engine = Engine::new(catalog, store, 1000);
+    let file_system = Fs::new(engine.handle());
     let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
 
     // Install a handler for Ctrl-C and wait

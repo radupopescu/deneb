@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [features]
-default = ["fuse_module"]
+default = ["fuse_module", "watcher"]
 fuse_module = ["fuse"]
 watcher = ["notify"]
 
@@ -27,11 +27,16 @@ doc = false
 name = "bincode"
 doc = false
 
+[[bin]]
+name = "loop"
+doc = false
+
 [dependencies]
 bincode = "^0.8.0"
 clap = "^2.21.0"
 data-encoding = "^2.0.0-rc.1"
 error-chain = "^0.10.0"
+futures = "^0.1.14"
 lmdb-rs = "^0.7.5"
 log = "^0.3.0"
 log4rs = "^0.7.0"
@@ -41,6 +46,7 @@ serde = "^1.0.8"
 serde_bytes = "^0.10.0"
 serde_derive = "^1.0.8"
 time = "^0.1.0"
+tokio-core = "^0.1.8"
 toml = "^0.4.0"
 
 fuse = { version = "^0.3.0", optional = true}

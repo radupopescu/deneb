@@ -15,18 +15,16 @@ pub use self::lmdb::LmdbCatalog;
 pub trait Catalog {
     fn get_next_index(&self) -> u64;
 
-    fn get_inode(&self, index: u64) -> Option<INode>;
+    fn get_inode(&self, index: u64) -> Result<INode>;
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Option<u64>;
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64>;
 
-    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Option<INode> {
-        if let Some(index) = self.get_dir_entry_index(parent, name) {
-            return self.get_inode(index);
-        }
-        None
+    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Result<INode> {
+        let index = self.get_dir_entry_index(parent, name)?;
+        self.get_inode(index)
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>>;
+    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>>;
 
     fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()>;
 

@@ -53,7 +53,7 @@ impl DiskStore {
 }
 
 impl Store for DiskStore {
-    fn get(&self, digest: &Digest) -> Result<Option<Vec<u8>>> {
+    fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
         let mut prefix = digest.to_string();
         let file_name = prefix.split_off(PREFIX_SIZE);
         let full_path = self.object_dir.join(prefix).join(file_name);
@@ -63,13 +63,13 @@ impl Store for DiskStore {
         let bytes_read = f.read_to_end(&mut buffer)?;
         if bytes_read as i64 == file_stats.st_size {
             debug!("File read: {:?}", full_path);
-            Ok(Some(buffer))
+            Ok(buffer)
         } else {
-            Ok(None)
+            bail!("Could not retrive chunk from disk store.")
         }
     }
 
-    fn put(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
+    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
         let hex_digest = digest.to_string();
         let mut prefix = hex_digest.clone();
         let file_name = prefix.split_off(PREFIX_SIZE);
@@ -98,16 +98,13 @@ mod tests {
             if let Ok(mut store) = store {
                 let k1 = "some_key".as_ref();
                 let v1: Vec<u8> = vec![0 as u8; 1000];
-                let ret = store.put(hash(k1), v1.as_slice());
+                let ret = store.put_chunk(hash(k1), v1.as_slice());
                 assert!(ret.is_ok());
                 if ret.is_ok() {
-                    let v2 = store.get(&hash(k1));
+                    let v2 = store.get_chunk(&hash(k1));
                     assert!(v2.is_ok());
                     if let Ok(v2) = v2 {
-                        assert!(v2.is_some());
-                        if let Some(v2) = v2 {
-                            assert_eq!(v1, v2);
-                        }
+                        assert_eq!(v1, v2);
                     }
                 }
             }

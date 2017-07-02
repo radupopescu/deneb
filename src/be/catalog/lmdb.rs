@@ -128,41 +128,32 @@ impl Catalog for LmdbCatalog {
         self.index_generator.get_next()
     }
 
-    fn get_inode(&self, index: u64) -> Option<INode> {
-        if let Ok(reader) = self.env.get_reader() {
-            let db = reader.bind(&self.inodes);
-            if let Ok(buffer) = db.get::<&[u8]>(&index) {
-                return deserialize::<INode>(buffer).ok();
-            }
-        }
-        None
+    fn get_inode(&self, index: u64) -> Result<INode> {
+        let reader = self.env.get_reader()?;
+        let db = reader.bind(&self.inodes);
+        let buffer = db.get::<&[u8]>(&index)?;
+        deserialize::<INode>(buffer).map_err(|e| e.into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Option<u64> {
-        if let Ok(reader) = self.env.get_reader() {
-            let db = reader.bind(&self.dir_entries);
-            if let Ok(buffer) = db.get::<&[u8]>(&parent) {
-                if let Ok(entries) = deserialize::<BTreeMap<PathBuf, u64>>(buffer) {
-                    return entries.get(name).cloned();
-                }
-            }
-        }
-        None
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
+        let reader = self.env.get_reader()?;
+        let db = reader.bind(&self.dir_entries);
+        let buffer = db.get::<&[u8]>(&parent)?;
+        let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)?;
+        entries.get(name).cloned().ok_or_else(|| {
+            format!("Could not retrieve index in LMDB store for {:?}", name).into()
+        })
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Option<Vec<(PathBuf, u64)>> {
-        if let Ok(reader) = self.env.get_reader() {
-            let db = reader.bind(&self.dir_entries);
-            if let Ok(buffer) = db.get::<&[u8]>(&parent) {
-                if let Ok(entries) = deserialize::<BTreeMap<PathBuf, u64>>(buffer) {
-                    return Some(entries
-                                    .iter()
-                                    .map(|(name, index)| (name.to_owned(), *index))
-                                    .collect::<Vec<(PathBuf, u64)>>());
-                }
-            }
-        }
-        None
+    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
+        let reader = self.env.get_reader()?;
+        let db = reader.bind(&self.dir_entries);
+        let buffer = db.get::<&[u8]>(&parent)?;
+        let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)?;
+        Ok(entries
+            .iter()
+            .map(|(name, index)| (name.to_owned(), *index))
+            .collect::<Vec<(PathBuf, u64)>>())
     }
 
     fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {

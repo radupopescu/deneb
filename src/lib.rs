@@ -7,6 +7,7 @@ extern crate data_encoding;
 extern crate error_chain;
 #[cfg(feature = "fuse")]
 extern crate fuse;
+extern crate futures;
 extern crate lmdb_rs;
 #[macro_use]
 extern crate log;
@@ -25,6 +26,7 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate tempdir;
 extern crate time;
+extern crate tokio_core;
 extern crate toml;
 
 pub mod be;
