@@ -54,9 +54,18 @@ pub struct Handle {
 }
 
 impl Handle {
-    // Catalog operations
+    fn make_request(&self, req: Request) -> Result<Reply> {
+        let (tx, rx) = std_channel();
+        if let Ok(_) = self.channel.clone().send((req, tx)).wait() {
+            rx.recv().map_err(|e| e.into())
+        } else {
+            bail!("Could not make request to engine.")
+        }
+    }
+}
 
-    pub fn get_next_index(&self) -> Result<u64> {
+impl Catalog for Handle {
+    fn get_next_index(&self) -> Result<u64> {
         if let Reply::NextIndex(result) = self.make_request(Request::GetNextIndex)? {
             result
         } else {
@@ -64,7 +73,7 @@ impl Handle {
         }
     }
 
-    pub fn get_inode(&self, index: u64) -> Result<INode> {
+    fn get_inode(&self, index: u64) -> Result<INode> {
         if let Reply::INode(result) = self.make_request(Request::GetINode { index: index })? {
             result
         } else {
@@ -72,7 +81,7 @@ impl Handle {
         }
     }
 
-    pub fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
         if let Reply::Index(result) =
             self.make_request(Request::GetDirEntryIndex {
                                   parent: parent,
@@ -84,7 +93,7 @@ impl Handle {
         }
     }
 
-    pub fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Result<INode> {
+    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Result<INode> {
         if let Reply::INode(result) =
             self.make_request(Request::GetDirEntryINode {
                                   parent: parent,
@@ -96,7 +105,7 @@ impl Handle {
         }
     }
 
-    pub fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
+    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
         if let Reply::DirEntries(result) =
             self.make_request(Request::GetDirEntries { parent: parent })? {
             result
@@ -105,7 +114,7 @@ impl Handle {
         }
     }
 
-    pub fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::AddINode {
                                   entry: entry.to_owned(),
@@ -118,7 +127,7 @@ impl Handle {
         }
     }
 
-    pub fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::AddDirEntry {
                                   parent: parent,
@@ -130,10 +139,10 @@ impl Handle {
             bail!("Invalid reply received from engine")
         }
     }
+}
 
-    // Store operations
-
-    pub fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
+impl Store for Handle {
+    fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
         if let Reply::Chunk(result) =
             self.make_request(Request::GetChunk { digest: digest.clone() })? {
             result
@@ -142,7 +151,7 @@ impl Handle {
         }
     }
 
-    pub fn put_chunk(&self, digest: Digest, contents: &[u8]) -> Result<()> {
+    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::PutChunk {
                                   digest: digest.clone(),
@@ -151,15 +160,6 @@ impl Handle {
             result
         } else {
             bail!("Invalid reply received from engine.")
-        }
-    }
-
-    fn make_request(&self, req: Request) -> Result<Reply> {
-        let (tx, rx) = std_channel();
-        if let Ok(_) = self.channel.clone().send((req, tx)).wait() {
-            rx.recv().map_err(|e| e.into())
-        } else {
-            bail!("Could not make request to engine.")
         }
     }
 }
