@@ -21,6 +21,7 @@ mod common;
 use common::*;
 
 use deneb::be::catalog::{Catalog, LmdbCatalog, MemCatalog};
+use deneb::be::engine::Engine;
 use deneb::be::populate_with_dir;
 use deneb::be::store::{Store, DiskStore, MemStore};
 use deneb::common::errors::*;
@@ -59,11 +60,12 @@ fn init_repo<'a, C, S>(mut catalog: C,
                        mount_point: &Path,
                        chunk_size: u64)
                        -> Result<Session<'a>>
-    where C: 'a + Catalog + Send,
-          S: 'a + Store + Send
+    where C: 'a + Catalog + Send + 'static,
+          S: 'a + Store + Send + 'static
 {
     populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
-    let file_system = Fs::new(catalog, store);
+    let engine = Engine::new(catalog, store, 1000);
+    let file_system = Fs::new(engine.handle());
     unsafe { file_system.spawn_mount(&mount_point.to_owned(), &[]) }
 }
 
@@ -83,8 +85,8 @@ fn check_inout<C, S>(catalog: C,
                      prefix: &Path,
                      chunk_size: u64)
                      -> Result<()>
-    where C: Catalog + Send,
-          S: Store + Send
+    where C: Catalog + Send + 'static,
+          S: Store + Send + 'static
 {
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");

@@ -13,6 +13,7 @@ use std::io::Read;
 
 use deneb::be::cas::hash;
 use deneb::be::catalog::LmdbCatalog;
+use deneb::be::engine::Engine;
 use deneb::be::manifest::Manifest;
 use deneb::be::populate_with_dir;
 use deneb::be::store::{DiskStore, Store};
@@ -93,7 +94,8 @@ fn run() -> Result<()> {
     catalog.show_stats();
 
     // Create the file system data structure
-    let file_system = Fs::new(catalog, store);
+    let engine = Engine::new(catalog, store, 1000);
+    let file_system = Fs::new(engine.handle());
     let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
 
     // Install a handler for Ctrl-C and wait
