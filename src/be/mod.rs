@@ -22,7 +22,7 @@ pub mod store;
 pub fn populate_with_dir<C, S>(catalog: &mut C,
                                store: &mut S,
                                dir: &Path,
-                               chunk_size: u64)
+                               chunk_size: usize)
                                -> Result<()>
     where C: Catalog,
           S: Store

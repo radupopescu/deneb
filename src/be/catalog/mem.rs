@@ -5,6 +5,20 @@ use be::inode::{Chunk, INode};
 
 use super::*;
 
+pub struct MemCatalogBuilder;
+
+impl CatalogBuilder for MemCatalogBuilder {
+    type Catalog = MemCatalog;
+
+    fn create<P: AsRef<Path>>(&self, _path: P) -> Result<Self::Catalog> {
+        Ok(MemCatalog::new())
+    }
+
+    fn open<P: AsRef<Path>>(&self, _path: P) -> Result<Self::Catalog> {
+        Ok(MemCatalog::new())
+    }
+}
+
 #[derive(Default)]
 pub struct MemCatalog {
     inodes: HashMap<u64, INode>,

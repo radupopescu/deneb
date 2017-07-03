@@ -10,27 +10,17 @@ use be::cas::Digest;
 use common::util::file::atomic_write;
 use common::errors::*;
 
-use super::Store;
+use super::{Store, StoreBuilder};
 
 const OBJECT_PATH: &'static str = "data";
 const PREFIX_SIZE: usize = 2;
 
-/// A disk-based implementation of the `Store` trait.
-///
-/// Files are stored in subdirectories of `root_dir`/data, using a content-addressed
-/// naming scheme: the first two letters of the hex representation of the file digest
-/// is used as a subdirectory in which to store the file.
-///
-/// For example:
-/// The full path at which a file with the digest "abcdefg123456" is stored is:
-/// "`root_dir`/data/ab/cdefg123456"
-pub struct DiskStore {
-    _root_dir: PathBuf,
-    object_dir: PathBuf,
-}
+pub struct DiskStoreBuilder;
 
-impl DiskStore {
-    pub fn at_dir<P: AsRef<Path>>(dir: P) -> Result<DiskStore> {
+impl StoreBuilder for DiskStoreBuilder {
+    type Store = DiskStore;
+
+    fn at_dir<P: AsRef<Path>>(&self, dir: P) -> Result<Self::Store> {
         let root_dir = PathBuf::from(dir.as_ref());
         let object_dir = root_dir.join(OBJECT_PATH);
 
@@ -45,11 +35,25 @@ impl DiskStore {
             }
         }
 
-        Ok(DiskStore {
+        Ok(Self::Store {
                _root_dir: root_dir,
                object_dir: object_dir,
            })
     }
+}
+
+/// A disk-based implementation of the `Store` trait.
+///
+/// Files are stored in subdirectories of `root_dir`/data, using a content-addressed
+/// naming scheme: the first two letters of the hex representation of the file digest
+/// is used as a subdirectory in which to store the file.
+///
+/// For example:
+/// The full path at which a file with the digest "abcdefg123456" is stored is:
+/// "`root_dir`/data/ab/cdefg123456"
+pub struct DiskStore {
+    _root_dir: PathBuf,
+    object_dir: PathBuf,
 }
 
 impl Store for DiskStore {
@@ -92,8 +96,9 @@ mod tests {
     fn diskstore_create_put_get() {
         let temp_dir = TempDir::new("/tmp/deneb_test_diskstore");
         assert!(temp_dir.is_ok());
+        let sb = DiskStoreBuilder;
         if let Ok(temp_dir) = temp_dir {
-            let store = DiskStore::at_dir(temp_dir.path());
+            let store = sb.at_dir(temp_dir.path());
             assert!(store.is_ok());
             if let Ok(mut store) = store {
                 let k1 = "some_key".as_ref();

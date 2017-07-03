@@ -5,13 +5,13 @@ use std::path::PathBuf;
 
 use common::errors::*;
 
-pub const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
+pub const DEFAULT_CHUNK_SIZE: usize = 4194304; // 4MB default
 
 pub struct AppParameters {
     pub work_dir: PathBuf,
     pub mount_point: PathBuf,
     pub log_level: LogLevelFilter,
-    pub chunk_size: u64,
+    pub chunk_size: usize,
     pub sync_dir: Option<PathBuf>,
 }
 
@@ -83,7 +83,7 @@ impl AppParameters {
                 DEFAULT_CHUNK_SIZE
             }
             Some(chunk_size) => {
-                match u64::from_str_radix(chunk_size, 10) {
+                match usize::from_str_radix(chunk_size, 10) {
                     Ok(size) => {
                         size
                     }
