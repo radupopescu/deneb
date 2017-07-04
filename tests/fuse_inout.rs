@@ -13,18 +13,16 @@ extern crate uuid;
 use quickcheck::{QuickCheck, StdGen};
 use tempdir::TempDir;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs::create_dir;
 
 mod common;
 
 use common::*;
 
-use deneb::be::catalog::{Catalog, CatalogBuilder, MemCatalog, LmdbCatalogBuilder,
-                         MemCatalogBuilder};
+use deneb::be::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
 use deneb::be::engine::Engine;
-use deneb::be::populate_with_dir;
-use deneb::be::store::{Store, StoreBuilder, MemStore, DiskStoreBuilder, MemStoreBuilder};
+use deneb::be::store::{StoreBuilder, DiskStoreBuilder, MemStoreBuilder};
 use deneb::common::errors::*;
 use deneb::fe::fuse::{Fs, Session};
 use deneb::fe::fuse::DEFAULT_CHUNK_SIZE;
@@ -129,16 +127,14 @@ fn single_fuse_test(test_type: &TestType, chunk_size: usize) {
         if let Ok(dt) = dt {
             match *test_type {
                 TestType::InMemory => {
-                    let cb = MemCatalogBuilder;
-                    let sb = MemStoreBuilder;
+                    let (cb, sb) = (MemCatalogBuilder, MemStoreBuilder);
                     assert!(check_inout(cb, sb, &dt, prefix.path(), chunk_size).is_ok());
                 }
                 TestType::OnDisk => {
-                    let cb = LmdbCatalogBuilder;
-                    let sb = DiskStoreBuilder;
+                    let (cb, sb) = (LmdbCatalogBuilder, DiskStoreBuilder);
                     assert!(check_inout(cb, sb, &dt, prefix.path(), chunk_size).is_ok());
                 }
-            }
+            };
         }
 
         // Explicit cleanup
@@ -153,17 +149,17 @@ fn single_chunk_per_file_memory() {
 
 #[test]
 fn single_chunk_per_file() {
-    single_fuse_test(&TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
+    single_fuse_test(&TestType::OnDisk, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
 }
 
 #[test]
 fn multiple_chunks_per_file_memory() {
-    single_fuse_test(&TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
+    single_fuse_test(&TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
 #[test]
 fn multiple_chunks_per_file_disk() {
-    single_fuse_test(&TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
+    single_fuse_test(&TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
 #[test]
@@ -216,8 +212,7 @@ fn prop_inout_unchanged_disk_slow() {
 
             let cb = LmdbCatalogBuilder;
             let sb = DiskStoreBuilder;
-            let check_result =
-                check_inout(cb, sb, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
+            let check_result = check_inout(cb, sb, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
             if !check_result.is_ok() {
                 println!("Check failed: {:?}", check_result);
                 return false;
