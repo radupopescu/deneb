@@ -45,7 +45,7 @@ fn run() -> Result<()> {
                              params.sync_dir,
                              params.chunk_size,
                              1000)?;
-    let file_system = Fs::new(engine.handle());
+    let file_system = Fs::new(engine.handle(), engine.handle());
     let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
 
     // Install a handler for Ctrl-C and wait
