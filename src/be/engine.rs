@@ -1,14 +1,20 @@
 use futures::{Future, Sink, Stream};
 use futures::sync::mpsc::{Sender as FutureSender, channel as future_channel};
+use time::now_utc;
 use tokio_core::reactor::Core;
 
+use std::fs::{File, create_dir_all};
+use std::io::Read;
 use std::sync::mpsc::{Sender as StdSender, channel as std_channel};
 
-use be::cas::Digest;
-use be::catalog::Catalog;
+use be::cas::{Digest, hash};
+use be::catalog::{Catalog, CatalogBuilder};
 use be::inode::{INode, Chunk};
-use be::store::Store;
+use be::manifest::Manifest;
+use be::populate_with_dir;
+use be::store::{Store, StoreBuilder};
 use common::errors::*;
+use common::util::file::atomic_write;
 
 use std::path::{Path, PathBuf};
 use std::thread::spawn as tspawn;
@@ -169,27 +175,98 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new<C, S>(mut catalog: C, mut store: S, queue_size: usize) -> Engine
-        where C: Catalog + Send + 'static,
-              S: Store + Send + 'static
+    pub fn new<CB, SB>(catalog_builder: CB,
+                       store_builder: SB,
+                       work_dir: PathBuf,
+                       sync_dir: Option<PathBuf>,
+                       chunk_size: usize,
+                       queue_size: usize)
+                       -> Result<Engine>
+        where CB: CatalogBuilder,
+              <CB as CatalogBuilder>::Catalog: Send + 'static,
+              SB: StoreBuilder,
+              <SB as StoreBuilder>::Store: Send + 'static
     {
-        let (tx, rx) = future_channel(queue_size);
+        let (mut catalog, mut store) = init(catalog_builder,
+                                            store_builder,
+                                            work_dir,
+                                            sync_dir,
+                                            chunk_size)?;
 
+        let (tx, rx) = future_channel(queue_size);
         let _ = tspawn(|| if let Ok(mut core) = Core::new() {
                            let handler =
                                rx.for_each(move |(event, tx)| {
                                                handle_request(event, tx, &mut catalog, &mut store);
                                                Ok(())
                                            });
+
                            let _ = core.run(handler);
                        });
 
-        Engine { requests: tx }
+        Ok(Engine { requests: tx })
     }
 
     pub fn handle(&self) -> Handle {
         Handle { channel: self.requests.clone() }
     }
+}
+
+fn init<CB, SB>(catalog_builder: CB,
+                store_builder: SB,
+                work_dir: PathBuf,
+                sync_dir: Option<PathBuf>,
+                chunk_size: usize)
+                -> Result<(CB::Catalog, SB::Store)>
+    where CB: CatalogBuilder,
+          SB: StoreBuilder
+{
+    // Create an object store
+    let mut store = store_builder.at_dir(work_dir.as_path())?;
+
+    let catalog_root = work_dir.as_path().to_owned().join("scratch");
+    create_dir_all(catalog_root.as_path())?;
+    let catalog_path = catalog_root.join("current_catalog");
+    info!("Catalog path: {:?}", catalog_path);
+
+    let manifest_path = work_dir.as_path().to_owned().join("manifest");
+    info!("Manifest path: {:?}", manifest_path);
+
+    // Create the file metadata catalog and populate it with the contents of "sync_dir"
+    if let Some(sync_dir) = sync_dir {
+        {
+            let mut catalog = catalog_builder.create(catalog_path.as_path())?;
+            populate_with_dir(&mut catalog, &mut store, sync_dir.as_path(), chunk_size)?;
+            info!("Catalog populated with contents of {:?}",
+                  sync_dir.as_path());
+        }
+
+        // Save the generated catalog as a content-addressed chunk in the store.
+        let mut f = File::open(catalog_path.as_path())?;
+        let mut buffer = Vec::new();
+        let _ = f.read_to_end(&mut buffer);
+        let digest = hash(buffer.as_slice());
+        store.put_chunk(digest.clone(), buffer.as_slice())?;
+
+        // Create and save the repository manifest
+        let manifest = Manifest::new(digest, None, now_utc());
+        manifest.save(manifest_path.as_path())?;
+    }
+
+    // Load the repository manifest
+    let manifest = Manifest::load(manifest_path.as_path())?;
+
+    // Get the catalog out of storage and open it
+    {
+        let root_hash = manifest.root_hash;
+        let buffer = store.get_chunk(&root_hash)?;
+        atomic_write(catalog_path.as_path(), buffer.as_slice())?;
+    }
+
+    let catalog = catalog_builder.open(catalog_path)?;
+    catalog.show_stats();
+
+    Ok((catalog, store))
 }
 
 fn handle_request<C, S>(request: Request, chan: ReplyChannel, catalog: &mut C, store: &mut S)
@@ -243,20 +320,21 @@ fn handle_request<C, S>(request: Request, chan: ReplyChannel, catalog: &mut C, s
 #[cfg(test)]
 mod tests {
     use be::cas::hash;
-    use be::catalog::MemCatalog;
-    use be::store::MemStore;
+    use be::catalog::MemCatalogBuilder;
+    use be::store::MemStoreBuilder;
 
     use super::*;
 
     #[test]
     fn engine_works() {
-        let catalog = MemCatalog::new();
-        let store = MemStore::new();
-        let engine = Engine::new(catalog, store, 1000);
-        let h = engine.handle();
+        let cb = MemCatalogBuilder;
+        let sb = MemStoreBuilder;
+        if let Ok(engine) = Engine::new(cb, sb, PathBuf::new(), None, 1000, 1000) {
+            let h = engine.handle();
 
-        assert!(h.get_inode(0).is_err());
-        let digest = hash(&[]);
-        assert!(h.get_chunk(&digest).is_err());
+            assert!(h.get_inode(0).is_err());
+            let digest = hash(&[]);
+            assert!(h.get_chunk(&digest).is_err());
+        }
     }
 }

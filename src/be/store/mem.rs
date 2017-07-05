@@ -1,14 +1,26 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use be::cas::Digest;
 use common::errors::*;
 
-use super::Store;
+use super::{Store, StoreBuilder};
+
+pub struct MemStoreBuilder;
+
+impl StoreBuilder for MemStoreBuilder {
+    type Store = MemStore;
+
+    fn at_dir<P: AsRef<Path>>(&self, _dir: P) -> Result<Self::Store> {
+        Ok(MemStore::new())
+    }
+}
 
 #[derive(Default)]
 pub struct MemStore {
     objects: HashMap<Digest, Vec<u8>>,
 }
+
 impl MemStore {
     pub fn new() -> MemStore {
         Self::default()

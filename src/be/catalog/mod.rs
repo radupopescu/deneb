@@ -5,14 +5,25 @@ use common::errors::*;
 use be::inode::{Chunk, INode};
 
 mod mem;
-pub use self::mem::MemCatalog;
+pub use self::mem::{MemCatalog, MemCatalogBuilder};
 
 mod lmdb;
-pub use self::lmdb::LmdbCatalog;
+pub use self::lmdb::{LmdbCatalog, LmdbCatalogBuilder};
+
+/// Describes the interface of catalog builders
+pub trait CatalogBuilder {
+    type Catalog: self::Catalog;
+
+    fn create<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog>;
+
+    fn open<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog>;
+}
 
 /// Describes the interface of metadata catalogs
 ///
 pub trait Catalog {
+    fn show_stats(&self) {}
+
     fn get_next_index(&self) -> u64;
 
     fn get_inode(&self, index: u64) -> Result<INode>;

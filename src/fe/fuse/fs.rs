@@ -19,19 +19,22 @@ struct OpenFileContext;
 
 pub struct Session<'a>(BackgroundSession<'a>);
 
-pub struct Fs<H> {
-    engine_handle: H,
+pub struct Fs<C, S> {
+    catalog: C,
+    store: S,
 
     open_dirs: HashMap<u64, Vec<(PathBuf, u64)>>,
     open_files: HashMap<u64, OpenFileContext>,
 }
 
-impl<'a, H> Fs<H>
-    where H: 'a + Catalog + Store + Send
+impl<'a, C, S> Fs<C, S>
+    where C: 'a + Catalog + Send,
+          S: 'a + Store + Send
 {
-    pub fn new(handle: H) -> Fs<H> {
+    pub fn new(catalog: C, store: S) -> Fs<C, S> {
         Fs {
-            engine_handle: handle,
+            catalog: catalog,
+            store: store,
             open_dirs: HashMap::new(),
             open_files: HashMap::new(),
         }
@@ -51,8 +54,9 @@ impl<'a, H> Fs<H>
     }
 }
 
-impl<H> Filesystem for Fs<H>
-    where H: Catalog + Store
+impl<C, S> Filesystem for Fs<C, S>
+    where C: Catalog,
+          S: Store
 {
     // Filesystem lifetime callbacks
 
@@ -65,7 +69,7 @@ impl<H> Filesystem for Fs<H>
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         debug!("getattr(ino={})", ino);
-        match self.engine_handle.get_inode(ino) {
+        match self.catalog.get_inode(ino) {
             Ok(inode) => {
                 let ttl = Timespec::new(1, 0);
                 reply.attr(&ttl, &convert_fuse_fattr(&inode.attributes));
@@ -78,7 +82,7 @@ impl<H> Filesystem for Fs<H>
 
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         debug!("lookup(parent={}, name={:?}", parent, name);
-        let attrs = self.engine_handle
+        let attrs = self.catalog
             .get_dir_entry_inode(parent, PathBuf::from(name).as_path())
             .map(|inode| inode.attributes);
         match attrs {
@@ -94,7 +98,7 @@ impl<H> Filesystem for Fs<H>
 
     fn opendir(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
         debug!("opendir - ino: {}", ino);
-        match self.engine_handle.get_dir_entries(ino) {
+        match self.catalog.get_dir_entries(ino) {
             Ok(entries) => {
                 self.open_dirs.insert(ino, entries);
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
@@ -129,7 +133,7 @@ impl<H> Filesystem for Fs<H>
             Some(entries) => {
                 while index < entries.len() {
                     let (ref name, idx) = entries[index];
-                    if let Ok(inode) = self.engine_handle.get_inode(idx) {
+                    if let Ok(inode) = self.catalog.get_inode(idx) {
                         if !reply.add(idx,
                                       index as u64 + 1,
                                       convert_fuse_file_type(inode.attributes.kind),
@@ -156,7 +160,7 @@ impl<H> Filesystem for Fs<H>
             reply.error(EACCES);
         } else {
             debug!("open RO - ino: {}", ino);
-            match self.engine_handle.get_inode(ino) {
+            match self.catalog.get_inode(ino) {
                 Ok(_) => {
                     self.open_files.insert(ino, OpenFileContext);
                     reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
@@ -182,11 +186,11 @@ impl<H> Filesystem for Fs<H>
                size);
         let buffer = self.open_files
             .get(&fh)
-            .and_then(|_ctx| self.engine_handle.get_inode(fh).ok())
+            .and_then(|_ctx| self.catalog.get_inode(fh).ok())
             .and_then(|inode| {
                 lookup_chunks(offset as usize, size as usize, inode.chunks.as_slice())
                     .and_then(|chunks| {
-                        chunks_to_buffer(chunks.as_slice(), &self.engine_handle).ok()
+                        chunks_to_buffer(chunks.as_slice(), &self.store).ok()
                     })
             });
         match buffer {

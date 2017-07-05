@@ -24,8 +24,12 @@ pub struct LmdbCatalog {
     index_generator: IndexGenerator,
 }
 
-impl LmdbCatalog {
-    pub fn create<P: AsRef<Path>>(path: P) -> Result<LmdbCatalog> {
+pub struct LmdbCatalogBuilder;
+
+impl CatalogBuilder for LmdbCatalogBuilder {
+    type Catalog = LmdbCatalog;
+
+    fn create<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog> {
         let env = open_environment(path.as_ref())?;
         {
             // Create databases
@@ -45,7 +49,7 @@ impl LmdbCatalog {
 
             info!("Created LMDB catalog {:?}.", path.as_ref());
 
-            Ok(LmdbCatalog {
+            Ok(Self::Catalog {
                    env: env,
                    inodes: inodes,
                    dir_entries: dir_entries,
@@ -56,9 +60,8 @@ impl LmdbCatalog {
         }
     }
 
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<LmdbCatalog> {
+    fn open<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog> {
         let env = open_environment(path.as_ref())?;
-
         {
             // Create databases
             let inodes = try_create_db(&env, "inodes")?;
@@ -89,7 +92,7 @@ impl LmdbCatalog {
 
             info!("Opened LMDB catalog {:?}.", path.as_ref());
 
-            Ok(LmdbCatalog {
+            Ok(Self::Catalog {
                    env: env,
                    inodes: inodes,
                    dir_entries: dir_entries,
@@ -99,8 +102,10 @@ impl LmdbCatalog {
                })
         }
     }
+}
 
-    pub fn show_stats(&self) {
+impl Catalog for LmdbCatalog {
+    fn show_stats(&self) {
         if let Ok(env_info) = self.env.info() {
             info!("Environment information:");
             info!("  Map size: {}", env_info.me_mapsize);
@@ -121,9 +126,7 @@ impl LmdbCatalog {
         }
         info!("Catalog version: {}", self.version);
     }
-}
 
-impl Catalog for LmdbCatalog {
     fn get_next_index(&self) -> u64 {
         self.index_generator.get_next()
     }
@@ -248,9 +251,10 @@ mod tests {
         let tmp = TempDir::new("/tmp/deneb_lmdb_test");
         assert!(tmp.is_ok());
         if let Ok(prefix) = tmp {
+            let cb = LmdbCatalogBuilder;
             let catalog_path = prefix.path().to_owned().join("test-lmdb-catalog");
             {
-                let catalog = LmdbCatalog::create(&catalog_path);
+                let catalog = cb.create(&catalog_path);
                 assert!(catalog.is_ok());
                 if let Ok(mut catalog) = catalog {
                     catalog.show_stats();
@@ -259,7 +263,7 @@ mod tests {
                 }
             }
             {
-                let catalog = LmdbCatalog::open(&catalog_path);
+                let catalog = cb.open(&catalog_path);
                 assert!(catalog.is_ok());
                 if let Ok(catalog) = catalog {
                     assert_eq!(catalog.index_generator.get_next(), 4);

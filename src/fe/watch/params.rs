@@ -4,12 +4,12 @@ use std::path::PathBuf;
 
 use common::errors::*;
 
-const DEFAULT_CHUNK_SIZE: u64 = 4194304; // 4MB default
+const DEFAULT_CHUNK_SIZE: usize = 4194304; // 4MB default
 
 pub struct Params {
     pub sync_dir: PathBuf,
     pub work_dir: PathBuf,
-    pub chunk_size: u64,
+    pub chunk_size: usize,
 }
 
 impl Params {
@@ -60,7 +60,7 @@ impl Params {
         let chunk_size = match matches.value_of("chunk_size") {
             Some("DEFAULT") | None => DEFAULT_CHUNK_SIZE,
             Some(chunk_size) => {
-                match u64::from_str_radix(chunk_size, 10) {
+                match usize::from_str_radix(chunk_size, 10) {
                     Ok(size) => size,
                     _ => DEFAULT_CHUNK_SIZE,
                 }

@@ -20,10 +20,9 @@ mod common;
 
 use common::*;
 
-use deneb::be::catalog::{Catalog, LmdbCatalog, MemCatalog};
-use deneb::be::engine::Engine;
+use deneb::be::catalog::{Catalog, CatalogBuilder, LmdbCatalogBuilder, MemCatalog};
 use deneb::be::populate_with_dir;
-use deneb::be::store::{Store, DiskStore, MemStore};
+use deneb::be::store::{Store, StoreBuilder, DiskStoreBuilder, MemStore};
 use deneb::common::errors::*;
 use deneb::fe::fuse::{Fs, Session};
 use deneb::fe::fuse::DEFAULT_CHUNK_SIZE;
@@ -58,14 +57,13 @@ fn init_repo<'a, C, S>(mut catalog: C,
                        mut store: S,
                        input: &Path,
                        mount_point: &Path,
-                       chunk_size: u64)
+                       chunk_size: usize)
                        -> Result<Session<'a>>
-    where C: 'a + Catalog + Send + 'static,
-          S: 'a + Store + Send + 'static
+    where C: 'a + Catalog + Send,
+          S: 'a + Store + Send
 {
     populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
-    let engine = Engine::new(catalog, store, 1000);
-    let file_system = Fs::new(engine.handle());
+    let file_system = Fs::new(catalog, store);
     unsafe { file_system.spawn_mount(&mount_point.to_owned(), &[]) }
 }
 
@@ -83,10 +81,10 @@ fn check_inout<C, S>(catalog: C,
                      store: S,
                      dir: &DirTree,
                      prefix: &Path,
-                     chunk_size: u64)
+                     chunk_size: usize)
                      -> Result<()>
-    where C: Catalog + Send + 'static,
-          S: Store + Send + 'static
+    where C: Catalog + Send,
+          S: Store + Send
 {
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");
@@ -110,7 +108,7 @@ enum TestType {
     OnDisk,
 }
 
-fn single_fuse_test(test_type: &TestType, chunk_size: u64) {
+fn single_fuse_test(test_type: &TestType, chunk_size: usize) {
     let tmp = TempDir::new("/tmp/deneb_test_fuse_inout");
     assert!(tmp.is_ok());
     if let Ok(prefix) = tmp {
@@ -125,14 +123,17 @@ fn single_fuse_test(test_type: &TestType, chunk_size: u64) {
                 }
                 TestType::OnDisk => {
                     let catalog_path = prefix.path().join("current_catalog");
-                    let catalog = LmdbCatalog::create(catalog_path);
+                    let cb = LmdbCatalogBuilder;
+                    let catalog = cb.create(catalog_path);
                     assert!(catalog.is_ok());
                     if let Ok(catalog) = catalog {
                         let store_path = prefix.path().join("internal");
-                        let store = DiskStore::at_dir(store_path);
+                        let sb = DiskStoreBuilder;
+                        let store = sb.at_dir(store_path);
                         assert!(store.is_ok());
                         if let Ok(store) = store {
-                            assert!(check_inout(catalog, store, &dt, prefix.path(), chunk_size).is_ok());
+                            assert!(check_inout(catalog, store, &dt, prefix.path(), chunk_size)
+                                        .is_ok());
                         }
                     }
                 }
@@ -213,13 +214,16 @@ fn prop_inout_unchanged_disk_slow() {
             let _ = dt.create();
 
             let catalog_path = prefix.path().join("current_catalog");
-            let catalog = LmdbCatalog::create(catalog_path);
+            let cb = LmdbCatalogBuilder;
+            let catalog = cb.create(catalog_path);
             if let Ok(catalog) = catalog {
                 let store_path = prefix.path().join("internal");
-                let store = DiskStore::at_dir(store_path);
+                let sb = DiskStoreBuilder;
+                let store = sb.at_dir(store_path);
                 assert!(store.is_ok());
                 if let Ok(store) = store {
-                    let check_result = check_inout(catalog, store, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
+                    let check_result =
+                        check_inout(catalog, store, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
                     if !check_result.is_ok() {
                         println!("Check failed: {:?}", check_result);
                         return false;

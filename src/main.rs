@@ -6,21 +6,12 @@ extern crate log;
 extern crate rust_sodium;
 extern crate time;
 
-use time::now_utc;
-
-use std::fs::{File, create_dir_all};
-use std::io::Read;
-
-use deneb::be::cas::hash;
-use deneb::be::catalog::LmdbCatalog;
+use deneb::be::catalog::LmdbCatalogBuilder;
 use deneb::be::engine::Engine;
-use deneb::be::manifest::Manifest;
-use deneb::be::populate_with_dir;
-use deneb::be::store::{DiskStore, Store};
+use deneb::be::store::DiskStoreBuilder;
 use deneb::common::errors::*;
 use deneb::common::logging;
 use deneb::common::util::{block_signals, set_sigint_handler};
-use deneb::common::util::file::atomic_write;
 use deneb::fe::fuse::{AppParameters, Fs};
 
 fn run() -> Result<()> {
@@ -45,57 +36,16 @@ fn run() -> Result<()> {
     info!("Chunk size: {:?}", params.chunk_size);
     info!("Sync dir: {:?}", params.sync_dir);
 
-    // Create an object store
-    let mut store = DiskStore::at_dir(params.work_dir.as_path())?;
-
-    let catalog_root = params.work_dir.as_path().to_owned().join("scratch");
-    create_dir_all(catalog_root.as_path())?;
-    let catalog_path = catalog_root.join("current_catalog");
-    info!("Catalog path: {:?}", catalog_path);
-
-    let manifest_path = params.work_dir.as_path().to_owned().join("manifest");
-    info!("Manifest path: {:?}", manifest_path);
-
-    // Create the file metadata catalog and populate it with the contents of "sync_dir"
-    if let Some(sync_dir) = params.sync_dir {
-        {
-            let mut catalog = LmdbCatalog::create(catalog_path.as_path())?;
-            populate_with_dir(&mut catalog,
-                              &mut store,
-                              sync_dir.as_path(),
-                              params.chunk_size)?;
-            info!("Catalog populated with contents of {:?}",
-                  sync_dir.as_path());
-        }
-
-        // Save the generated catalog as a content-addressed chunk in the store.
-        let mut f = File::open(catalog_path.as_path())?;
-        let mut buffer = Vec::new();
-        let _ = f.read_to_end(&mut buffer);
-        let digest = hash(buffer.as_slice());
-        store.put_chunk(digest.clone(), buffer.as_slice())?;
-
-        // Create and save the repository manifest
-        let manifest = Manifest::new(digest, None, now_utc());
-        manifest.save(manifest_path.as_path())?;
-    }
-
-    // Load the repository manifest
-    let manifest = Manifest::load(manifest_path.as_path())?;
-
-    // Get the catalog out of storage and open it
-    {
-        let root_hash = manifest.root_hash;
-        let buffer = store.get_chunk(&root_hash)?;
-        atomic_write(catalog_path.as_path(), buffer.as_slice())?;
-    }
-
-    let catalog = LmdbCatalog::open(catalog_path)?;
-    catalog.show_stats();
-
     // Create the file system data structure
-    let engine = Engine::new(catalog, store, 1000);
-    let file_system = Fs::new(engine.handle());
+    let cb = LmdbCatalogBuilder;
+    let sb = DiskStoreBuilder;
+    let engine = Engine::new(cb,
+                             sb,
+                             params.work_dir,
+                             params.sync_dir,
+                             params.chunk_size,
+                             1000)?;
+    let file_system = Fs::new(engine.handle(), engine.handle());
     let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
 
     // Install a handler for Ctrl-C and wait
