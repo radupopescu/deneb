@@ -41,7 +41,7 @@ impl CatalogBuilder for LmdbCatalogBuilder {
                 let writer = env.new_transaction()?;
                 {
                     // Write catalog format version
-                    let db = writer.bind(&meta);
+                    let mut db = writer.bind(&meta);
                     db.set(&"catalog_version", &CATALOG_VERSION)?;
                 }
                 writer.commit()?;
@@ -168,7 +168,7 @@ impl Catalog for LmdbCatalog {
 
         let writer = self.env.new_transaction()?;
         {
-            let db = writer.bind(&self.inodes);
+            let mut db = writer.bind(&self.inodes);
             db.set(&index, &buffer)
                 .chain_err(|| format!("Could not write inode {} to database", index))?;
         }
@@ -181,7 +181,7 @@ impl Catalog for LmdbCatalog {
         let writer = self.env.new_transaction()?;
         {
             // Retrieve and update dir entries for parent
-            let dir_entry_db = writer.bind(&self.dir_entries);
+            let mut dir_entry_db = writer.bind(&self.dir_entries);
             let mut entries = BTreeMap::new();
             if let Ok(buffer) = dir_entry_db.get::<&[u8]>(&parent) {
                 // Dir entries exist for parent
@@ -203,7 +203,7 @@ impl Catalog for LmdbCatalog {
                 .chain_err(|| format!("Could not write dir entries for {} to database", parent))?;
 
             // Retrieve inode of index
-            let inode_db = writer.bind(&self.inodes);
+            let mut inode_db = writer.bind(&self.inodes);
             let buffer = inode_db
                 .get::<&[u8]>(&index)
                 .chain_err(|| format!("Could not retrieve inode {}", index))?;
