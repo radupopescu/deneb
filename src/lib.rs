@@ -8,7 +8,8 @@ extern crate error_chain;
 #[cfg(feature = "fuse")]
 extern crate fuse;
 extern crate futures;
-extern crate lmdb_rs;
+extern crate lmdb;
+extern crate lmdb_sys;
 #[macro_use]
 extern crate log;
 extern crate log4rs;

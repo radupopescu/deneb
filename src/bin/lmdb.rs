@@ -1,8 +1,9 @@
-extern crate lmdb_rs;
+extern crate lmdb;
 
-use lmdb_rs::core::{DbCreate, EnvBuilder, EnvCreateNoSubDir};
+use lmdb::{DatabaseFlags, Environment, Transaction, WriteFlags, NO_SUB_DIR};
 
 use std::fs::remove_dir_all;
+use std::path::Path;
 
 fn main() {
     println!("Hello from the LMDB playground!");
@@ -11,57 +12,52 @@ fn main() {
     let _ = remove_dir_all("/tmp/test-lmdb-lock");
 
     // Open the environment
-    let env = EnvBuilder::new()
-        .flags(EnvCreateNoSubDir)
-        .max_dbs(100)
-        .open("/tmp/test-lmdb", 0o600).unwrap();
+    let env = Environment::new()
+        .set_flags(NO_SUB_DIR)
+        .set_max_dbs(100)
+        .open_with_permissions(&Path::new("/tmp/test-lmdb"), 0o600)
+        .unwrap();
 
     // Create a named database
-    let db_hd = env.create_db("test", DbCreate).unwrap();
+    let db = env.create_db(Some("test"), DatabaseFlags::empty())
+        .unwrap();
 
     // Start a write transaction
-    let writer = env.new_transaction().unwrap();
-    {
-        // Write something with mdb_put
-        let db = writer.bind(&db_hd);
-        db.set(&"hello", &"world").unwrap();
-    }
+    let mut writer = env.begin_rw_txn().unwrap();
+    writer
+        .put(db, &"hello", &"world", WriteFlags::empty())
+        .unwrap();
 
     // Commit transaction
     writer.commit().unwrap();
 
     // Create a read-only transaction
-    let mut reader = env.get_reader().unwrap();
+    let reader = env.begin_ro_txn().unwrap();
+
     {
-        let db = reader.bind(&db_hd);
-
-        // Read something with mdb_get
         let key = "hello";
-        let val = db.get::<&str>(&key).unwrap();
+        let val = reader.get(db, &key).unwrap();
 
-        println!("{} -> {}", key, val);
+        println!("{} -> {:?}", key, val);
     }
-    reader.reset();
+
+    let inactive = reader.reset();
 
     // Start a write transaction
-    let writer = env.new_transaction().unwrap();
-    {
-        // Write something with mdb_put
-        let db = writer.bind(&db_hd);
-        db.set(&"hello2", &"world2").unwrap();
-    }
+    let mut writer = env.begin_rw_txn().unwrap();
+
+    writer
+        .put(db, &"hello2", &"world2", WriteFlags::empty())
+        .unwrap();
 
     // Commit transaction
     writer.commit().unwrap();
 
-    reader.renew().unwrap();
-    {
-        let db = reader.bind(&db_hd);
+    let reader = inactive.renew().unwrap();
 
-        // Read something with mdb_get
-        let key = "hello2";
-        let val = db.get::<&str>(&key).unwrap();
+    // Read something with mdb_get
+    let key = "hello2";
+    let val = reader.get(db, &key).unwrap();
 
-        println!("{} -> {}", key, val);
-    }
+    println!("{} -> {:?}", key, val);
 }
