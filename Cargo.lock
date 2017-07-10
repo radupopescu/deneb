@@ -338,7 +338,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "liblmdb-sys"
 version = "0.2.2"
-source = "git+https://github.com/radupopescu/lmdb-rs#1df3a121f871daf1ecc2b0c4c5ac88d29c242c64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "gcc 0.3.51 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -357,19 +357,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "lmdb-rs"
 version = "0.7.6"
-source = "git+https://github.com/radupopescu/lmdb-rs#1df3a121f871daf1ecc2b0c4c5ac88d29c242c64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "liblmdb-sys 0.2.2 (git+https://github.com/radupopescu/lmdb-rs)",
+ "liblmdb-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "lmdb-rs"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-replace = "lmdb-rs 0.7.6 (git+https://github.com/radupopescu/lmdb-rs)"
 
 [[package]]
 name = "log"
@@ -1042,10 +1036,9 @@ dependencies = [
 "checksum lazy_static 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "3b37545ab726dd833ec6420aaba8231c5b320814b9029ad585555d2a03e94fbf"
 "checksum lazycell 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ce12306c4739d86ee97c23139f3a34ddf0387bbf181bc7929d287025a8c3ef6b"
 "checksum libc 0.2.26 (registry+https://github.com/rust-lang/crates.io-index)" = "30885bcb161cf67054244d10d4a7f4835ffd58773bc72e07d35fecf472295503"
-"checksum liblmdb-sys 0.2.2 (git+https://github.com/radupopescu/lmdb-rs)" = "<none>"
+"checksum liblmdb-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "feed38a3a580f60bf61aaa067b0ff4123395966839adeaf67258a9e50c4d2e49"
 "checksum linked-hash-map 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6d262045c5b87c0861b3f004610afd0e2c851e2908d08b6c870cbb9d5f494ecd"
 "checksum linked-hash-map 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7860ec297f7008ff7a1e3382d7f7e1dcd69efc94751a2284bafc3d013c2aa939"
-"checksum lmdb-rs 0.7.6 (git+https://github.com/radupopescu/lmdb-rs)" = "<none>"
 "checksum lmdb-rs 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)" = "4aefe7b433f795629ce42f35ccf7a620c38bd457238bfaa2489dafc7e36167e7"
 "checksum log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)" = "880f77541efa6e5cc74e76910c9884d9859683118839d6a1dc3b11e63512565b"
 "checksum log-mdc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a94d21414c1f4a51209ad204c1776a3d0765002c76c6abcb602a6f09f1e881c7"
