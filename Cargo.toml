@@ -59,5 +59,3 @@ rand = "^0.3.15"
 tempdir = "^0.3.5"
 uuid = { version = "^0.5.0", features = ["v4"]}
 
-[replace]
-"lmdb-rs:0.7.6" = { git = 'https://github.com/radupopescu/lmdb-rs' }

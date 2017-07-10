@@ -23,7 +23,7 @@ fn main() {
     let writer = env.new_transaction().unwrap();
     {
         // Write something with mdb_put
-        let mut db = writer.bind(&db_hd);
+        let db = writer.bind(&db_hd);
         db.set(&"hello", &"world").unwrap();
     }
 
@@ -47,7 +47,7 @@ fn main() {
     let writer = env.new_transaction().unwrap();
     {
         // Write something with mdb_put
-        let mut db = writer.bind(&db_hd);
+        let db = writer.bind(&db_hd);
         db.set(&"hello2", &"world2").unwrap();
     }
 
