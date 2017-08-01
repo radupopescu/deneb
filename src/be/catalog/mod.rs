@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
 use common::errors::*;
-use be::inode::{Chunk, INode};
+use be::inode::{ChunkDescriptor, INode};
 
 mod mem;
 pub use self::mem::{MemCatalog, MemCatalogBuilder};
@@ -37,7 +37,7 @@ pub trait Catalog {
 
     fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>>;
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()>;
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()>;
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()>;
 }

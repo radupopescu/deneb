@@ -43,7 +43,7 @@ pub struct FileAttributes {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Chunk {
+pub struct ChunkDescriptor {
     pub digest: Digest,
     pub size: usize,
 }
@@ -53,16 +53,16 @@ pub struct Chunk {
 /// The digest identifying a chunk and the indices which define an exclusive
 /// range of that should be read from the chunk data.
 #[derive(Debug, PartialEq)]
-pub struct ChunkPart<'a> (pub &'a Digest, pub usize, pub usize);
+pub struct ChunkPart<'a>(pub &'a Digest, pub usize, pub usize);
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct INode {
     pub attributes: FileAttributes,
-    pub chunks: Vec<Chunk>,
+    pub chunks: Vec<ChunkDescriptor>,
 }
 
 impl INode {
-    pub fn new(index: u64, path: &Path, chunks: Vec<Chunk>) -> Result<INode> {
+    pub fn new(index: u64, path: &Path, chunks: Vec<ChunkDescriptor>) -> Result<INode> {
         let stats = lstat(path)?;
         // Note: we prefix `attributes` with an underscore to avoid triggering an
         //       "unused_mut" warning on Linux.
@@ -108,10 +108,13 @@ impl INode {
 
 /// Lookup a subset of consecutive chunks corresponding to a memory slice
 ///
-/// Given a list of `Chunk`, representing consecutive chunks of a file and a segment identified by
+/// Given a list of `ChunkDescriptor`, representing consecutive chunks of a file and a segment identified by
 /// `offset` - the offset from the beginning of the file - and `size` - the size of the segment,
 /// this function returns a vector of `ChunkPart`
-pub fn lookup_chunks(offset: usize, size: usize, chunks: &[Chunk]) -> Option<Vec<ChunkPart>> {
+pub fn lookup_chunks(offset: usize,
+                     size: usize,
+                     chunks: &[ChunkDescriptor])
+                     -> Option<Vec<ChunkPart>> {
     let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
     let mut output = Vec::new();
     let mut bytes_left = size;
@@ -161,7 +164,7 @@ fn mode_to_permissions(mode: mode_t) -> u16 {
 ///
 /// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
 /// and the offset inside the chunk which correspond to the give offset
-fn chunk_idx_for_offset(offset: usize, chunks: &[Chunk]) -> (usize, usize) {
+fn chunk_idx_for_offset(offset: usize, chunks: &[ChunkDescriptor]) -> (usize, usize) {
     let mut acc = 0;
     let mut idx = 0;
     let mut offset_in_chunk = 0;
@@ -206,7 +209,7 @@ mod tests {
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
     }
 
-    fn make_chunks(input_size: usize, chunk_size: usize) -> Vec<Chunk> {
+    fn make_chunks(input_size: usize, chunk_size: usize) -> Vec<ChunkDescriptor> {
         let input = (0..)
             .map(|e| (e as u64 % 256) as u8)
             .take(input_size)
@@ -219,7 +222,7 @@ mod tests {
         let mut blobs = Vec::new();
         if let Ok(cs) = raw_chunks {
             for (digest, data) in cs {
-                chunks.push(Chunk {
+                chunks.push(ChunkDescriptor {
                                 digest: digest,
                                 size: data.len(),
                             });

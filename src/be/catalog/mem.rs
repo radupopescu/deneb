@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use be::inode::{Chunk, INode};
+use be::inode::{ChunkDescriptor, INode};
 
 use super::*;
 
@@ -86,13 +86,13 @@ impl Catalog for MemCatalog {
                         })
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()> {
         let inode = INode::new(index, entry, chunks)
             .chain_err(|| {
-                           format!("Could not construct inode {} for path: {:?}",
-                                   index,
-                                   entry)
-                       })?;
+                format!("Could not construct inode {} for path: {:?}",
+                        index,
+                        entry)
+            })?;
         self.inodes.insert(index, inode);
         Ok(())
     }

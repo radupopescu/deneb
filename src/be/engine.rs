@@ -9,7 +9,7 @@ use std::sync::mpsc::{Sender as StdSender, channel as std_channel};
 
 use be::cas::{Digest, hash};
 use be::catalog::{Catalog, CatalogBuilder};
-use be::inode::{INode, Chunk};
+use be::inode::{INode, ChunkDescriptor};
 use be::manifest::Manifest;
 use be::populate_with_dir;
 use be::store::{Store, StoreBuilder};
@@ -28,7 +28,7 @@ enum Request {
     AddINode {
         entry: PathBuf,
         index: u64,
-        chunks: Vec<Chunk>,
+        chunks: Vec<ChunkDescriptor>,
     },
     AddDirEntry {
         parent: u64,
@@ -120,7 +120,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::AddINode {
                                   entry: entry.to_owned(),
