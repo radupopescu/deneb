@@ -7,7 +7,7 @@ extern crate log;
 extern crate notify;
 extern crate rust_sodium;
 
-use log::LogLevelFilter;
+use log::LevelFilter;
 
 use deneb::be::catalog::MemCatalog;
 use deneb::be::populate_with_dir;
@@ -22,7 +22,7 @@ fn run() -> Result<()> {
     ensure!(rust_sodium::init(),
             "Could not initialize rust_sodium library. Exiting");
 
-    logging::init(LogLevelFilter::Trace)
+    logging::init(LevelFilter::Trace)
         .chain_err(|| "Could not initialize log4rs")?;
     info!("Deneb - dir watcher!");
 

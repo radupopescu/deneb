@@ -1,22 +1,20 @@
 extern crate memmap;
 
-use memmap::{Mmap, Protection};
+use memmap::{Mmap, MmapMut, MmapOptions};
 
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, File};
 use std::io::Write;
 
 fn main() {
     // Read from existing memory-mapped file
-    let file_mmap = Mmap::open_path("README.md", Protection::Read).unwrap();
-    let bytes: &[u8] = unsafe { file_mmap.as_slice() };
-    assert_eq!(b"# Deneb", &bytes[0..7]);
+    let f = File::open("README.md").unwrap();
+    let file_mmap = unsafe { Mmap::map(&f) }.unwrap();
+    assert_eq!(b"# Deneb", &file_mmap[0..7]);
 
     // Create a writable, anonymous memory-mapped file
-    let mut anon_mmap = Mmap::anonymous(4096, Protection::ReadWrite).unwrap();
-    unsafe { anon_mmap.as_mut_slice() }
-        .write_all(b"foo")
-        .unwrap();
-    assert_eq!(b"foo\0\0", unsafe { &anon_mmap.as_slice()[0..5] });
+    let mut anon_mmap = MmapOptions::new().len(4096).map_anon().unwrap();
+    (&mut anon_mmap[..]).write_all(b"foo").unwrap();
+    assert_eq!(b"foo\0\0", &anon_mmap[0..5]);
 
     // Create a new file, resize it and memory-map it to write to it through
     // multiple views
@@ -26,20 +24,9 @@ fn main() {
         .create(true)
         .open("/tmp/output.txt").unwrap();
     output_file.set_len(20).unwrap();
-    let output_map = Mmap::open(&output_file, Protection::ReadWrite).unwrap();
+    let mut output_map = unsafe {MmapMut::map_mut(&output_file) }.unwrap();
 
-    let mut view1 = output_map.into_view();
-    let mut view2 = unsafe { view1.clone() };
-    let mut view3 = unsafe { view2.clone() };
-
-    view1.restrict(2, 5).unwrap();
-    let mut buffer1 = unsafe { view1.as_mut_slice() };
-    buffer1.write_all(b"one").unwrap();
-
-    view2.restrict(7, 5).unwrap();
-    let mut buffer2 = unsafe { view2.as_mut_slice() };
-    buffer2.write_all(b"two").unwrap();
-
-    let buffer3 = unsafe { view3.as_mut_slice() };
-    (&mut buffer3[12..]).write(b"three").unwrap();
+    let (mut view1, mut view2) = output_map.split_at_mut(7);
+    view1.write_all(b"one").unwrap();
+    view2.write_all(b"two").unwrap();
 }

@@ -1,10 +1,10 @@
-use log::LogLevelFilter;
+use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 
 use common::errors::*;
 
-pub fn init(log_level: LogLevelFilter) -> Result<()> {
+pub fn init(log_level: LevelFilter) -> Result<()> {
     let stdout = ConsoleAppender::builder().build();
 
     let config = Config::builder().appender(Appender::builder().build("stdout", Box::new(stdout)))
