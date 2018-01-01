@@ -3,7 +3,6 @@ test:stable:
   cache:
     paths:
       - target/
-      - merkle/target/
       - cargo/
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/cargo
@@ -17,7 +16,6 @@ test:nightly:
   cache:
     paths:
       - target/
-      - merkle/target/
       - cargo/
   variables:
     CARGO_HOME: $CI_PROJECT_DIR/cargo

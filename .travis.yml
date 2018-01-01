@@ -17,7 +17,6 @@ cache:
     directories:
         - $HOME/.cargo
         - target
-        - merkle/target
 
 script:
     - rustc --version && cargo --version
