@@ -8,7 +8,7 @@ use std::path::Path;
 
 use self::cas::read_chunks;
 use self::catalog::Catalog;
-use self::inode::Chunk;
+use self::inode::ChunkDescriptor;
 use self::store::Store;
 use common::errors::*;
 
@@ -68,7 +68,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
             let mut reader = BufReader::new(f);
             for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
                 store.put_chunk(digest.clone(), data.as_ref())?;
-                chunks.push(Chunk {
+                chunks.push(ChunkDescriptor {
                                 digest: digest.clone(),
                                 size: data.len(),
                             });
@@ -85,4 +85,3 @@ fn visit_dirs<C, S>(catalog: &mut C,
     }
     Ok(())
 }
-

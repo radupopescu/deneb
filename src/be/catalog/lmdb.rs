@@ -94,13 +94,13 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         info!("Opened LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-            env: env,
-            inodes: inodes,
-            dir_entries: dir_entries,
-            _meta: meta,
-            version: ver,
-            index_generator: IndexGenerator::starting_at(starting_index)?,
-        })
+               env: env,
+               inodes: inodes,
+               dir_entries: dir_entries,
+               _meta: meta,
+               version: ver,
+               index_generator: IndexGenerator::starting_at(starting_index)?,
+           })
     }
 }
 
@@ -157,7 +157,7 @@ impl Catalog for LmdbCatalog {
                .collect::<Vec<(PathBuf, u64)>>())
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<Chunk>) -> Result<()> {
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()> {
         let inode = INode::new(index, entry, chunks)
             .chain_err(|| format!("Could not construct inode {} for path: {:?}", index, entry))?;
 
@@ -166,7 +166,11 @@ impl Catalog for LmdbCatalog {
 
         let mut writer = self.env.begin_rw_txn()?;
 
-        writer.put(self.inodes, &format!("{}", index), &buffer, WriteFlags::empty())
+        writer
+            .put(self.inodes,
+                 &format!("{}", index),
+                 &buffer,
+                 WriteFlags::empty())
             .chain_err(|| format!("Could not write inode {} to database", index))?;
 
         writer.commit()?;
@@ -193,25 +197,36 @@ impl Catalog for LmdbCatalog {
             // Write updated dir entries to database
             let buffer =
                 serialize(&entries, Infinite)
-                .chain_err(|| format!("Could not serialize dir entries for {}", parent))?;
-            writer.put(self.dir_entries, &format!("{}", parent), &buffer, WriteFlags::empty())
+                    .chain_err(|| format!("Could not serialize dir entries for {}", parent))?;
+            writer
+                .put(self.dir_entries,
+                     &format!("{}", parent),
+                     &buffer,
+                     WriteFlags::empty())
                 .chain_err(|| format!("Could not write dir entries for {} to database", parent))?;
 
             // Retrieve inode of index
-            let buffer = {
-                let buffer = writer.get(self.inodes, &format!("{}", index))
-                    .chain_err(|| format!("Could not retrieve inode {}", index))?;
-                let mut inode = deserialize::<INode>(buffer)
-                    .chain_err(|| format!("Could not deserialize inode {}", index))?;
+            let buffer =
+                {
+                    let buffer = writer
+                        .get(self.inodes, &format!("{}", index))
+                        .chain_err(|| format!("Could not retrieve inode {}", index))?;
+                    let mut inode =
+                        deserialize::<INode>(buffer)
+                            .chain_err(|| format!("Could not deserialize inode {}", index))?;
 
-                // Update number of hardlink in inode
-                inode.attributes.nlink += 1;
+                    // Update number of hardlink in inode
+                    inode.attributes.nlink += 1;
 
-                // Write inode back to database
-                serialize(&inode, Infinite)
+                    // Write inode back to database
+                    serialize(&inode, Infinite)
                     .chain_err(|| format!("Could not serialize inode of {}", index))
-            }?;
-            writer.put(self.inodes, &format!("{}", index), &buffer, WriteFlags::empty())
+                }?;
+            writer
+                .put(self.inodes,
+                     &format!("{}", index),
+                     &buffer,
+                     WriteFlags::empty())
                 .chain_err(|| format!("Could not write inode of {} to database", index))?;
         }
         writer.commit()?;
