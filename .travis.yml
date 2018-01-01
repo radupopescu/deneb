@@ -19,7 +19,7 @@ cache:
     - target
 
 before_install:
-  - if [ $TRAVIS_OS_NAME = linux ]; then sudo apt-get install -y fuse libfuse-dev libsodium-dev; else brew update && brew cask install osxfuse; fi
+  - if [ $TRAVIS_OS_NAME = linux ]; then sudo apt-get install -y fuse libfuse-dev; else brew update && brew cask install osxfuse; fi
 
 script:
   - rustc --version && cargo --version
