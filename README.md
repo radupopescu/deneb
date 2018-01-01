@@ -1,6 +1,7 @@
 # Deneb - distributed directory syncronization
 
-[![Build Status](https://github.com/radupopescu/deneb/badges/master/build.svg)](https://github.com/radupopescu/deneb/commits/master)
+[![Build
+Status](https://travis-ci.org/radupopescu/deneb.svg?branch=master)](https://travis-ci.org/radupopescu/deneb.svg?branch=master)
 
 ## Overview
 
