@@ -1,27 +1,26 @@
 language: rust
 
 os:
-    - linux
-    - osx
+  - linux
+  - osx
 
 rust:
-    - stable
-    - beta
-    - nightly
+  - stable
+  - beta
+  - nightly
 
 matrix:
-    allow_failures:
-        - rust: nightly
+  allow_failures:
+    - rust: nightly
 
 cache:
-    directories:
-        - $HOME/.cargo
-        - target
+  directories:
+    - $HOME/.cargo
+    - target
 
 before_install:
-  - brew update
-  - brew cask install osxfuse
+  - if [ $TRAVIS_OS_NAME = linux ]; then sudo apt-get install -y fuse libfuse-dev; else brew update && brew cask install osxfuse; fi
 
 script:
-    - rustc --version && cargo --version
-    - cargo test --verbose --jobs 1 --all
+  - rustc --version && cargo --version
+  - cargo test --verbose --jobs 1 --all

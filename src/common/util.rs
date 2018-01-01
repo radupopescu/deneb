@@ -3,10 +3,7 @@ pub mod file {
 
     use std::fs::{remove_file, rename};
     use std::io::Write;
-    #[cfg(target_os="macos")]
     use std::os::unix::io::FromRawFd;
-    #[cfg(target_os="linux")]
-    use std::os::linux::io::FromRawFd;
 
     use std::fs::File;
     use std::path::{Path, PathBuf};
