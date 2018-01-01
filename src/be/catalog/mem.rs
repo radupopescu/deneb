@@ -98,7 +98,7 @@ impl Catalog for MemCatalog {
     }
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
-        let mut dir_entry = self.dir_entries
+        let dir_entry = self.dir_entries
             .entry(parent)
             .or_insert_with(|| {
                                 let mut dir_entry = HashMap::new();

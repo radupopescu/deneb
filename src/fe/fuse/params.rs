@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use common::errors::*;
 
-pub const DEFAULT_CHUNK_SIZE: usize = 4194304; // 4MB default
+pub const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default
 
 pub struct AppParameters {
     pub work_dir: PathBuf,
