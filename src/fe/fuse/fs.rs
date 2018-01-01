@@ -125,17 +125,17 @@ impl<C, S> Filesystem for Fs<C, S>
                _req: &Request,
                ino: u64,
                fh: u64,
-               offset: u64,
+               offset: i64,
                mut reply: ReplyDirectory) {
         debug!("readdir - ino: {}, fh: {}, offset: {}", ino, fh, offset);
-        let mut index = offset as usize;
+        let mut index = ::std::cmp::max(offset, 0) as usize;
         match self.open_dirs.get(&fh) {
             Some(entries) => {
                 while index < entries.len() {
                     let (ref name, idx) = entries[index];
                     if let Ok(inode) = self.catalog.get_inode(idx) {
                         if !reply.add(idx,
-                                      index as u64 + 1,
+                                      index as i64 + 1,
                                       convert_fuse_file_type(inode.attributes.kind),
                                       name) {
                             index += 1;
@@ -176,7 +176,7 @@ impl<C, S> Filesystem for Fs<C, S>
             _req: &Request,
             ino: u64,
             fh: u64,
-            offset: u64,
+            offset: i64,
             size: u32,
             reply: ReplyData) {
         debug!("read - ino: {}, fh: {}, offset: {}, size: {}",
@@ -184,11 +184,12 @@ impl<C, S> Filesystem for Fs<C, S>
                fh,
                offset,
                size);
+        let offset = ::std::cmp::max(offset, 0) as usize;
         let buffer = self.open_files
             .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(fh).ok())
             .and_then(|inode| {
-                lookup_chunks(offset as usize, size as usize, inode.chunks.as_slice())
+                lookup_chunks(offset, size as usize, inode.chunks.as_slice())
                     .and_then(|chunks| {
                         chunks_to_buffer(chunks.as_slice(), &self.store).ok()
                     })

@@ -1,16 +1,16 @@
 use clap::{App, Arg};
-use log::LogLevelFilter;
+use log::LevelFilter;
 
 use std::path::PathBuf;
 
 use common::errors::*;
 
-pub const DEFAULT_CHUNK_SIZE: usize = 4194304; // 4MB default
+pub const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default
 
 pub struct AppParameters {
     pub work_dir: PathBuf,
     pub mount_point: PathBuf,
-    pub log_level: LogLevelFilter,
+    pub log_level: LevelFilter,
     pub chunk_size: usize,
     pub sync_dir: Option<PathBuf>,
 }
@@ -67,16 +67,16 @@ impl AppParameters {
             .map(|d| d.to_string())
             .ok_or_else(|| ErrorKind::CommandLineParameter("mount_point missing".to_owned()))?);
         let log_level = match matches.value_of("log_level") {
-            Some("off") => LogLevelFilter::Off,
-            Some("error") => LogLevelFilter::Error,
-            Some("warn") => LogLevelFilter::Warn,
-            Some("info") => LogLevelFilter::Info,
-            Some("debug") => LogLevelFilter::Debug,
-            Some("trace") => LogLevelFilter::Trace,
+            Some("off") => LevelFilter::Off,
+            Some("error") => LevelFilter::Error,
+            Some("warn") => LevelFilter::Warn,
+            Some("info") => LevelFilter::Info,
+            Some("debug") => LevelFilter::Debug,
+            Some("trace") => LevelFilter::Trace,
             Some(level) => {
                 bail!(ErrorKind::CommandLineParameter("invalid log_level: ".to_string() + level))
             },
-            None => { LogLevelFilter::Info }
+            None => { LevelFilter::Info }
         };
         let chunk_size = match matches.value_of("chunk_size") {
             Some("DEFAULT") | None => {

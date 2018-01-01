@@ -72,9 +72,8 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         let ver = {
             let reader = env.begin_ro_txn()?;
             let v = reader.get(meta, &"catalog_version")?;
-            let ver = from_utf8(v)?.parse::<u32>()?;
-            ver
-        };
+            from_utf8(v)?.parse::<u32>()
+        }?;
 
         if ver > CATALOG_VERSION {
             bail!(ErrorKind::LmdbCatalogError("Invalid catalog version".to_owned()));

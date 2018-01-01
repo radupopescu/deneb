@@ -62,7 +62,7 @@ pub struct Handle {
 impl Handle {
     fn make_request(&self, req: Request) -> Result<Reply> {
         let (tx, rx) = std_channel();
-        if let Ok(_) = self.channel.clone().send((req, tx)).wait() {
+        if self.channel.clone().send((req, tx)).wait().is_ok() {
             rx.recv().map_err(|e| e.into())
         } else {
             bail!("Could not make request to engine.")
@@ -187,9 +187,9 @@ impl Engine {
               SB: StoreBuilder,
               <SB as StoreBuilder>::Store: Send + 'static
     {
-        let (mut catalog, mut store) = init(catalog_builder,
-                                            store_builder,
-                                            work_dir,
+        let (mut catalog, mut store) = init(&catalog_builder,
+                                            &store_builder,
+                                            &work_dir,
                                             sync_dir,
                                             chunk_size)?;
 
@@ -197,7 +197,7 @@ impl Engine {
         let _ = tspawn(|| if let Ok(mut core) = Core::new() {
                            let handler =
                                rx.for_each(move |(event, tx)| {
-                                               handle_request(event, tx, &mut catalog, &mut store);
+                                               handle_request(event, &tx, &mut catalog, &mut store);
                                                Ok(())
                                            });
 
@@ -212,9 +212,9 @@ impl Engine {
     }
 }
 
-fn init<CB, SB>(catalog_builder: CB,
-                store_builder: SB,
-                work_dir: PathBuf,
+fn init<CB, SB>(catalog_builder: &CB,
+                store_builder: &SB,
+                work_dir: &PathBuf,
                 sync_dir: Option<PathBuf>,
                 chunk_size: usize)
                 -> Result<(CB::Catalog, SB::Store)>
@@ -269,7 +269,7 @@ fn init<CB, SB>(catalog_builder: CB,
     Ok((catalog, store))
 }
 
-fn handle_request<C, S>(request: Request, chan: ReplyChannel, catalog: &mut C, store: &mut S)
+fn handle_request<C, S>(request: Request, chan: &ReplyChannel, catalog: &mut C, store: &mut S)
     where C: Catalog,
           S: Store
 {

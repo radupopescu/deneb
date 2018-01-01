@@ -15,7 +15,7 @@ fn main() {
     let env = Environment::new()
         .set_flags(NO_SUB_DIR)
         .set_max_dbs(100)
-        .open_with_permissions(&Path::new("/tmp/test-lmdb"), 0o600)
+        .open_with_permissions(Path::new("/tmp/test-lmdb"), 0o600)
         .unwrap();
 
     // Create a named database

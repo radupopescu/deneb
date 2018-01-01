@@ -72,15 +72,15 @@ impl INode {
             blocks: max::<i64>(stats.st_blocks, 0) as u64,
             atime: Timespec {
                 sec: stats.st_atime,
-                nsec: min::<i64>(stats.st_atime_nsec, i32::MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_atime_nsec, i64::from(i32::MAX)) as i32,
             },
             mtime: Timespec {
                 sec: stats.st_mtime,
-                nsec: min::<i64>(stats.st_mtime_nsec, i32::MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_mtime_nsec, i64::from(i32::MAX)) as i32,
             },
             ctime: Timespec {
                 sec: stats.st_ctime,
-                nsec: min::<i64>(stats.st_ctime_nsec, i32::MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_ctime_nsec, i64::from(i32::MAX)) as i32,
             },
             crtime: Timespec { sec: 0, nsec: 0 },
             kind: mode_to_file_type(stats.st_mode),
@@ -95,7 +95,7 @@ impl INode {
         {
             _attributes.crtime = Timespec {
                 sec: stats.st_birthtime,
-                nsec: min::<i64>(stats.st_birthtime_nsec, i32::MAX as i64) as i32,
+                nsec: min::<i64>(stats.st_birthtime_nsec, i64::from(i32::MAX)) as i32,
             };
         }
 

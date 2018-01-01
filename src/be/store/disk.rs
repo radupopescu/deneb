@@ -12,7 +12,7 @@ use common::errors::*;
 
 use super::{Store, StoreBuilder};
 
-const OBJECT_PATH: &'static str = "data";
+const OBJECT_PATH: &str = "data";
 const PREFIX_SIZE: usize = 2;
 
 pub struct DiskStoreBuilder;

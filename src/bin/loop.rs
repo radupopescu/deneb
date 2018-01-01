@@ -21,7 +21,7 @@ fn main() {
 
     let (task_tx, task_rx) = future_chan(10);
 
-    let niter = 100000;
+    let niter = 100_000;
     let t1 = std::thread::spawn(move || {
         let mut sum: u64 = 0;
         let (tx, rx) = std_chan();
@@ -88,5 +88,5 @@ mod tests {
         let _ = t1.join();
         });
     }
-}   
+}
 */
