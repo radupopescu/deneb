@@ -18,6 +18,10 @@ cache:
         - $HOME/.cargo
         - target
 
+before_install:
+  - brew update
+  - brew cask install osxfuse
+
 script:
     - rustc --version && cargo --version
     - cargo test --verbose --jobs 1 --all
