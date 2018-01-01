@@ -15,21 +15,25 @@ doc = false
 required-features = ["fuse_module"]
 
 [[bin]]
-name = "watcher"
+name = "bincode"
 doc = false
-required-features = ["watcher"]
 
 [[bin]]
 name = "lmdb"
 doc = false
 
 [[bin]]
-name = "bincode"
+name = "loop"
 doc = false
 
 [[bin]]
-name = "loop"
+name = "mmap"
 doc = false
+
+[[bin]]
+name = "watcher"
+doc = false
+required-features = ["watcher"]
 
 [dependencies]
 bincode = "^0.8.0"
@@ -41,6 +45,7 @@ lmdb = "^0.7.0"
 lmdb-sys = "^0.7.0"
 log = "^0.3.0"
 log4rs = "^0.7.0"
+memmap = "0.5.2"
 nix = "^0.8.0"
 rust_sodium = "^0.3.0"
 serde = "^1.0.8"
