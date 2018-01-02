@@ -23,8 +23,7 @@ fn run() -> Result<()> {
     ensure!(rust_sodium::init(),
             "Could not initialize rust_sodium library. Exiting");
 
-    let params = AppParameters::read()
-        .chain_err(|| "Could not read command-line parameters")?;
+    let params = AppParameters::read();
 
     logging::init(params.log_level)
         .chain_err(|| "Could not initialize log4rs")?;

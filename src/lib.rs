@@ -1,7 +1,6 @@
 #![recursion_limit = "1024"]
 
 extern crate bincode;
-extern crate clap;
 extern crate data_encoding;
 #[macro_use]
 extern crate error_chain;
@@ -24,6 +23,9 @@ extern crate rust_sodium;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate structopt;
+#[macro_use]
+extern crate structopt_derive;
 #[cfg(test)]
 extern crate tempdir;
 extern crate time;

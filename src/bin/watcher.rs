@@ -1,4 +1,3 @@
-extern crate clap;
 #[macro_use]
 extern crate error_chain;
 extern crate deneb;
@@ -26,8 +25,7 @@ fn run() -> Result<()> {
         .chain_err(|| "Could not initialize log4rs")?;
     info!("Deneb - dir watcher!");
 
-    let Params {sync_dir, work_dir, chunk_size} = Params::read()
-        .chain_err(|| "Could not read command-line parameters")?;
+    let Params {sync_dir, work_dir, chunk_size} = Params::read();
     info!("Sync dir: {:?}", sync_dir);
     info!("Work dir: {:?}", work_dir);
 

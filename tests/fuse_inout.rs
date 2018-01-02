@@ -25,7 +25,8 @@ use deneb::be::populate_with_dir;
 use deneb::be::store::{Store, StoreBuilder, DiskStoreBuilder, MemStore};
 use deneb::common::errors::*;
 use deneb::fe::fuse::{Fs, Session};
-use deneb::fe::fuse::DEFAULT_CHUNK_SIZE;
+
+const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
 
 // Function to generate an input dir tree
 fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
