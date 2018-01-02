@@ -146,6 +146,7 @@ fn single_fuse_test(test_type: &TestType, chunk_size: usize) {
     }
 }
 
+#[ignore]
 #[test]
 fn single_chunk_per_file_memory() {
     single_fuse_test(&TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
@@ -157,6 +158,7 @@ fn single_chunk_per_file_disk() {
     single_fuse_test(&TestType::OnDisk, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
 }
 
+#[ignore]
 #[test]
 fn multiple_chunks_per_file_memory() {
     single_fuse_test(&TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
@@ -168,6 +170,7 @@ fn multiple_chunks_per_file_disk() {
     single_fuse_test(&TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
+#[ignore]
 #[test]
 fn prop_inout_unchanged() {
     fn inout_unchanged(mut dt: DirTree) -> bool {
