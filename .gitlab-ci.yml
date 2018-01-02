@@ -1,5 +1,5 @@
 test:stable:
-  image: jimmycuadra/rust
+  image: rust
   cache:
     paths:
       - target/
@@ -12,7 +12,7 @@ test:stable:
 
 test:nightly:
   allow_failure: true
-  image: schickling/rust
+  image: rustlang/rust
   cache:
     paths:
       - target/
