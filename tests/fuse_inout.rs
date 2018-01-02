@@ -150,6 +150,7 @@ fn single_chunk_per_file_memory() {
     single_fuse_test(&TestType::InMemory, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
 }
 
+#[ignore]
 #[test]
 fn single_chunk_per_file_disk() {
     single_fuse_test(&TestType::OnDisk, DEFAULT_CHUNK_SIZE); // test with 4MB chunk size (1 chunk per file)
@@ -160,6 +161,7 @@ fn multiple_chunks_per_file_memory() {
     single_fuse_test(&TestType::InMemory, 4); // test with 4B chunk size (multiple chunks per file are needed)
 }
 
+#[ignore]
 #[test]
 fn multiple_chunks_per_file_disk() {
     single_fuse_test(&TestType::OnDisk, 4); // test with 4B chunk size (multiple chunks per file are needed)
