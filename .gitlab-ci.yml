@@ -14,7 +14,7 @@ test:stable:
 
 test:nightly:
   allow_failure: true
-  image: rustlang/rust
+  image: rustlang/rust:nightly
   cache:
     paths:
       - target/
