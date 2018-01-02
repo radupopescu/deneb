@@ -1,6 +1,7 @@
 # Deneb - distributed directory syncronization
 
-[![Travis-CI build status](https://travis-ci.org/radupopescu/deneb.svg?branch=master)](https://travis-ci.org/radupopescu/deneb)[![Gitlab-CI build status](https://gitlab.com/radupopescu/deneb/badges/master/build.svg)](https://gitlab.com/radupopescu/deneb/pipelines)
+Travis-CI: [![Build status](https://travis-ci.org/radupopescu/deneb.svg?branch=master)](https://travis-ci.org/radupopescu/deneb)
+Gitlab-CI: [![Build status](https://gitlab.com/radupopescu/deneb/badges/master/build.svg)](https://gitlab.com/radupopescu/deneb/pipelines)
 
 ## Overview
 
