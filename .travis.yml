@@ -6,7 +6,6 @@ os:
 
 rust:
   - stable
-  - beta
   - nightly
 
 matrix:
