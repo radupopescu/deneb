@@ -1,105 +1,41 @@
-use clap::{App, Arg};
 use log::LevelFilter;
+use structopt::StructOpt;
 
 use std::path::PathBuf;
 
 use common::errors::*;
 
-pub const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default
+fn parse_log_level_str(s: &str) -> Result<LevelFilter> {
+    match s {
+        "off" => { Ok(LevelFilter::Off) },
+        "error" => { Ok(LevelFilter::Error) },
+        "warn" => { Ok(LevelFilter::Warn) },
+        "info" => { Ok(LevelFilter::Info) },
+        "debug" => { Ok(LevelFilter::Debug) },
+        "trace" => { Ok(LevelFilter::Trace) },
+        _ => { bail!(ErrorKind::CommandLineParameter("invalid log_level: ".to_string() + s)) }
+    }
+}
 
+#[derive(StructOpt)]
+#[structopt(about="Flew into the light of Deneb")]
 pub struct AppParameters {
+    #[structopt(short = "w", long = "work_dir", parse(from_os_str))]
     pub work_dir: PathBuf,
+    #[structopt(short = "m", long = "mount_point", parse(from_os_str))]
     pub mount_point: PathBuf,
+    #[structopt(short = "l", long = "log_level", default_value = "info",
+                parse(try_from_str = "parse_log_level_str"))]
     pub log_level: LevelFilter,
+    // Default chunk size: 4 MB
+    #[structopt(long = "chunk_size", default_value = "4194304")]
     pub chunk_size: usize,
+    #[structopt(short = "s", long = "sync_dir", parse(from_os_str))]
     pub sync_dir: Option<PathBuf>,
 }
 
 impl AppParameters {
-    pub fn read() -> Result<AppParameters> {
-        let matches = App::new("Deneb")
-            .version("0.1.0")
-            .author("Radu Popescu <mail@radupopescu.net>")
-            .about("Flew into the light of Deneb")
-            .arg(Arg::with_name("sync_dir")
-                .short("s")
-                .long("sync_dir")
-                .takes_value(true)
-                .value_name("SYNC_DIR")
-                .required(false)
-                .help("Synced directory"))
-            .arg(Arg::with_name("work_dir")
-                .short("w")
-                .long("work_dir")
-                .takes_value(true)
-                .value_name("WORK_DIR")
-                .required(true)
-                .help("Work (scratch) directory"))
-            .arg(Arg::with_name("mount_point")
-                .short("m")
-                .long("mount_point")
-                .takes_value(true)
-                .value_name("MOUNT_POINT")
-                .required(true)
-                .help("Mount point"))
-            .arg(Arg::with_name("log_level")
-                .short("l")
-                .long("log_level")
-                .takes_value(true)
-                .value_name("LOG_LEVEL")
-                .required(false)
-                .default_value("info")
-                .help("Log level for the console logger"))
-            .arg(Arg::with_name("chunk_size")
-                 .long("chunk_size")
-                 .takes_value(true)
-                 .value_name("CHUNK_SIZE")
-                 .required(false)
-                 .default_value("DEFAULT")//DEFAULT_CHUNK_SIZE) // default 4MB chunks
-                 .help("Chunk size used for storing files"))
-            .get_matches();
-
-        let sync_dir = matches.value_of("sync_dir").map(PathBuf::from);
-        let work_dir = PathBuf::from(matches.value_of("work_dir")
-            .map(|d| d.to_string())
-            .ok_or_else(|| ErrorKind::CommandLineParameter("sync_dir missing".to_owned()))?);
-        let mount_point = PathBuf::from(matches.value_of("mount_point")
-            .map(|d| d.to_string())
-            .ok_or_else(|| ErrorKind::CommandLineParameter("mount_point missing".to_owned()))?);
-        let log_level = match matches.value_of("log_level") {
-            Some("off") => LevelFilter::Off,
-            Some("error") => LevelFilter::Error,
-            Some("warn") => LevelFilter::Warn,
-            Some("info") => LevelFilter::Info,
-            Some("debug") => LevelFilter::Debug,
-            Some("trace") => LevelFilter::Trace,
-            Some(level) => {
-                bail!(ErrorKind::CommandLineParameter("invalid log_level: ".to_string() + level))
-            },
-            None => { LevelFilter::Info }
-        };
-        let chunk_size = match matches.value_of("chunk_size") {
-            Some("DEFAULT") | None => {
-                DEFAULT_CHUNK_SIZE
-            }
-            Some(chunk_size) => {
-                match usize::from_str_radix(chunk_size, 10) {
-                    Ok(size) => {
-                        size
-                    }
-                    _ => {
-                        DEFAULT_CHUNK_SIZE
-                    }
-                }
-            }
-        };
-
-        Ok(AppParameters {
-            work_dir: work_dir,
-            mount_point: mount_point,
-            log_level: log_level,
-            chunk_size: chunk_size,
-            sync_dir: sync_dir,
-        })
+    pub fn read() -> AppParameters {
+        AppParameters::from_args()
     }
 }

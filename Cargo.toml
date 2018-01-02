@@ -37,7 +37,6 @@ required-features = ["watcher"]
 
 [dependencies]
 bincode = "^0.9.0"
-clap = "^2.0.0"
 data-encoding = "^2.1.0"
 error-chain = "^0.11.0"
 futures = "^0.1.0"
@@ -51,6 +50,8 @@ rust_sodium = "^0.7.0"
 serde = "^1.0.0"
 serde_bytes = "^0.10.0"
 serde_derive = "^1.0.0"
+structopt = "0.1.0"
+structopt-derive = "0.1.0"
 time = "^0.1.0"
 tokio-core = "^0.1.0"
 toml = "^0.4.0"
