@@ -2,6 +2,8 @@
 //!
 //! The back-end includes storage, data and metadata management etc.
 
+use failure::ResultExt;
+
 use std::fs::{File, read_dir};
 use std::io::BufReader;
 use std::path::Path;
@@ -10,7 +12,7 @@ use self::cas::read_chunks;
 use self::catalog::Catalog;
 use self::inode::ChunkDescriptor;
 use self::store::Store;
-use common::errors::*;
+use common::errors::{DenebError, DenebResult};
 
 pub mod cas;
 pub mod catalog;
@@ -23,17 +25,17 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
                                store: &mut S,
                                dir: &Path,
                                chunk_size: usize)
-                               -> Result<()>
+                               -> DenebResult<()>
     where C: Catalog,
           S: Store
 {
     catalog
         .add_inode(dir, 1, vec![])
-        .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
+        .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
     visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)
-        .chain_err(|| ErrorKind::DirVisitError(dir.to_path_buf()))?;
+        .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
 
     Ok(())
 }
@@ -44,7 +46,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
                     dir: &Path,
                     dir_index: u64,
                     parent_index: u64)
-                    -> Result<()>
+                    -> DenebResult<()>
     where C: Catalog,
           S: Store
 {
@@ -58,7 +60,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
         let fpath = &path.as_path();
         let fname = Path::new(fpath
                                   .file_name()
-                                  .ok_or_else(|| "Could not get file name from path")?);
+                                  .ok_or(format_err!("Could not get file name from path"))?);
 
         let mut chunks = Vec::new();
         if path.is_file() {

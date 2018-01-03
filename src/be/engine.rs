@@ -13,7 +13,7 @@ use be::inode::{INode, ChunkDescriptor};
 use be::manifest::Manifest;
 use be::populate_with_dir;
 use be::store::{Store, StoreBuilder};
-use common::errors::*;
+use common::errors::DenebResult;
 use common::util::file::atomic_write;
 
 use std::path::{Path, PathBuf};
@@ -42,13 +42,13 @@ enum Request {
 
 enum Reply {
     NextIndex(u64),
-    INode(Result<INode>),
-    Index(Result<u64>),
-    DirEntries(Result<Vec<(PathBuf, u64)>>),
+    INode(DenebResult<INode>),
+    Index(DenebResult<u64>),
+    DirEntries(DenebResult<Vec<(PathBuf, u64)>>),
 
-    Chunk(Result<Vec<u8>>),
+    Chunk(DenebResult<Vec<u8>>),
 
-    Result(Result<()>),
+    Result(DenebResult<()>),
 }
 
 type ReplyChannel = StdSender<Reply>;
@@ -60,7 +60,7 @@ pub struct Handle {
 }
 
 impl Handle {
-    fn make_request(&self, req: Request) -> Result<Reply> {
+    fn make_request(&self, req: Request) -> DenebResult<Reply> {
         let (tx, rx) = std_channel();
         if self.channel.clone().send((req, tx)).wait().is_ok() {
             rx.recv().map_err(|e| e.into())
@@ -79,7 +79,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn get_inode(&self, index: u64) -> Result<INode> {
+    fn get_inode(&self, index: u64) -> DenebResult<INode> {
         if let Reply::INode(result) = self.make_request(Request::GetINode { index: index })? {
             result
         } else {
@@ -87,7 +87,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
         if let Reply::Index(result) =
             self.make_request(Request::GetDirEntryIndex {
                                   parent: parent,
@@ -99,7 +99,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Result<INode> {
+    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> DenebResult<INode> {
         if let Reply::INode(result) =
             self.make_request(Request::GetDirEntryINode {
                                   parent: parent,
@@ -111,7 +111,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
+    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         if let Reply::DirEntries(result) =
             self.make_request(Request::GetDirEntries { parent: parent })? {
             result
@@ -120,7 +120,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()> {
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::AddINode {
                                   entry: entry.to_owned(),
@@ -133,7 +133,7 @@ impl Catalog for Handle {
         }
     }
 
-    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::AddDirEntry {
                                   parent: parent,
@@ -148,7 +148,7 @@ impl Catalog for Handle {
 }
 
 impl Store for Handle {
-    fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
         if let Reply::Chunk(result) =
             self.make_request(Request::GetChunk { digest: digest.clone() })? {
             result
@@ -157,7 +157,7 @@ impl Store for Handle {
         }
     }
 
-    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
+    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
         if let Ok(Reply::Result(result)) =
             self.make_request(Request::PutChunk {
                                   digest: digest.clone(),
@@ -181,7 +181,7 @@ impl Engine {
                        sync_dir: Option<PathBuf>,
                        chunk_size: usize,
                        queue_size: usize)
-                       -> Result<Engine>
+                       -> DenebResult<Engine>
         where CB: CatalogBuilder,
               <CB as CatalogBuilder>::Catalog: Send + 'static,
               SB: StoreBuilder,
@@ -217,7 +217,7 @@ fn init<CB, SB>(catalog_builder: &CB,
                 work_dir: &PathBuf,
                 sync_dir: Option<PathBuf>,
                 chunk_size: usize)
-                -> Result<(CB::Catalog, SB::Store)>
+                -> DenebResult<(CB::Catalog, SB::Store)>
     where CB: CatalogBuilder,
           SB: StoreBuilder
 {

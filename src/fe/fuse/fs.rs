@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use be::catalog::Catalog;
 use be::inode::{ChunkPart, FileAttributes, FileType as FT, lookup_chunks};
 use be::store::Store;
-use common::errors::*;
+use common::errors::DenebResult;
 
 struct OpenFileContext;
 
@@ -40,14 +40,14 @@ impl<'a, C, S> Fs<C, S>
         }
     }
 
-    pub fn mount<P: AsRef<Path>>(self, mount_point: &P, options: &[&OsStr]) -> Result<()> {
+    pub fn mount<P: AsRef<Path>>(self, mount_point: &P, options: &[&OsStr]) -> DenebResult<()> {
         mount(self, mount_point, options).map_err(|e| e.into())
     }
 
     pub unsafe fn spawn_mount<P: AsRef<Path>>(self,
                                               mount_point: &P,
                                               options: &[&OsStr])
-                                              -> Result<Session<'a>> {
+                                              -> DenebResult<Session<'a>> {
         spawn_mount(self, mount_point, options)
             .map(Session)
             .map_err(|e| e.into())
@@ -356,7 +356,7 @@ impl<C, S> Filesystem for Fs<C, S>
 }
 
 /// Fill a buffer using the list of `ChunkPart`
-fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> Result<Vec<u8>> {
+fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> DenebResult<Vec<u8>> {
     let mut buffer = Vec::new();
     for &ChunkPart(digest, begin, end) in chunks {
         let chunk = store.get_chunk(digest)?;

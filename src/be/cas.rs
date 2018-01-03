@@ -7,7 +7,7 @@ use serde::de::{Error, Visitor};
 use std::fmt;
 use std::io::BufRead;
 
-use common::errors::*;
+use common::errors::{DenebError, DenebResult};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);
@@ -22,12 +22,12 @@ impl Digest {
         HEXLOWER.encode(&digest)
     }
 
-    pub fn from_slice(s: &[u8]) -> Result<Digest> {
+    pub fn from_slice(s: &[u8]) -> DenebResult<Digest> {
         let decoded = HEXLOWER.decode(s)?;
         if let Some(sd) = SodiumDigest::from_slice(decoded.as_slice()) {
             Ok(Digest(sd))
         } else {
-            bail!("Could not decode string as HEXLOWER")
+            Err(format_err!("Could not decode string as HEXLOWER"))
         }
     }
 }
@@ -75,7 +75,7 @@ pub fn hash(msg: &[u8]) -> Digest {
     Digest::new(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: BufRead>(mut reader: R, buffer: &mut [u8]) -> Result<Vec<(Digest,Vec<u8>)>> {
+pub fn read_chunks<R: BufRead>(mut reader: R, buffer: &mut [u8]) -> DenebResult<Vec<(Digest,Vec<u8>)>> {
     let chunk_size = buffer.len();
     let mut chunks = Vec::new();
     let mut offset = 0;
@@ -97,7 +97,7 @@ pub fn read_chunks<R: BufRead>(mut reader: R, buffer: &mut [u8]) -> Result<Vec<(
                     // Retry if interrupted
                     continue;
                 } else {
-                    bail!(ErrorKind::IoError(e));
+                    return Err(DenebError::DiskIO.into());
                 }
             }
         }
@@ -130,7 +130,7 @@ mod tests {
         }
     }
 
-    fn helper(file_size: usize, chunk_size: u64) -> Result<bool> {
+    fn helper(file_size: usize, chunk_size: u64) -> DenebResult<bool> {
         let mut contents = vec![0 as u8; file_size];
         thread_rng().fill_bytes(contents.as_mut());
         let mut buffer = vec![0 as u8; chunk_size as usize];

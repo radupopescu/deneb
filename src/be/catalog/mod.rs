@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
-use common::errors::*;
+use common::errors::{DenebError, DenebResult};
 use be::inode::{ChunkDescriptor, INode};
 
 mod mem;
@@ -14,9 +14,9 @@ pub use self::lmdb::{LmdbCatalog, LmdbCatalogBuilder};
 pub trait CatalogBuilder {
     type Catalog: self::Catalog;
 
-    fn create<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog>;
+    fn create<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog>;
 
-    fn open<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog>;
+    fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog>;
 }
 
 /// Describes the interface of metadata catalogs
@@ -26,20 +26,20 @@ pub trait Catalog {
 
     fn get_next_index(&self) -> u64;
 
-    fn get_inode(&self, index: u64) -> Result<INode>;
+    fn get_inode(&self, index: u64) -> DenebResult<INode>;
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64>;
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64>;
 
-    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> Result<INode> {
+    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> DenebResult<INode> {
         let index = self.get_dir_entry_index(parent, name)?;
         self.get_inode(index)
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>>;
+    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>>;
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()>;
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()>;
 
-    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()>;
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()>;
 }
 
 struct IndexGenerator {
@@ -53,11 +53,11 @@ impl Default for IndexGenerator {
 }
 
 impl IndexGenerator {
-    fn starting_at(i0: u64) -> Result<IndexGenerator> {
+    fn starting_at(i0: u64) -> Result<IndexGenerator, DenebError> {
         if i0 > 0 {
             Ok(IndexGenerator { current_index: Cell::new(i0) })
         } else {
-            bail!("Invalid starting index for IndexGenerator");
+            Err(DenebError::IndexGenerator)
         }
     }
 

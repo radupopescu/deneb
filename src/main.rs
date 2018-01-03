@@ -1,23 +1,25 @@
 extern crate deneb;
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 #[macro_use]
 extern crate log;
 extern crate rust_sodium;
 extern crate time;
 
+use failure::ResultExt;
+
 use deneb::be::catalog::LmdbCatalogBuilder;
 use deneb::be::engine::Engine;
 use deneb::be::store::DiskStoreBuilder;
-use deneb::common::errors::*;
+use deneb::common::errors::DenebResult;
 use deneb::common::logging;
 use deneb::common::util::{block_signals, set_sigint_handler};
 use deneb::fe::fuse::{AppParameters, Fs};
 
-fn run() -> Result<()> {
+fn run() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
     // spawning any new threads.
-    block_signals()?;
+    block_signals().context("Could not block signals in current thread")?;
 
     // Initialize the rust_sodium library (needed to make all its functions thread-safe)
     ensure!(rust_sodium::init(),
@@ -26,7 +28,7 @@ fn run() -> Result<()> {
     let params = AppParameters::read();
 
     logging::init(params.log_level)
-        .chain_err(|| "Could not initialize log4rs")?;
+        .context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
     info!("Log level: {}", params.log_level);
@@ -49,23 +51,26 @@ fn run() -> Result<()> {
 
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
-    let _th = set_sigint_handler(tx)?;
+    let _th = set_sigint_handler(tx);
     let _ = rx.recv();
 
     Ok(())
 }
 
 fn main() {
-    if let Err(ref e) = run() {
-        error!("error: {}", e);
+    if let Err(ref fail) = run() {
+        error!("Error: {}", fail);
 
-        for e in e.iter().skip(1) {
-            error!("caused by: {}", e);
+        {
+            let mut fail = fail.cause();
+            error!("caused by: {}", fail);
+            while let Some(cause) = fail.cause() {
+                error!("caused by: {}", cause);
+                fail = cause;
+            }
         }
 
-        if let Some(bt) = e.backtrace() {
-            error!("Backtrace: {:?}", bt);
-        }
+        error!("Backtrace: {}", fail.backtrace());
 
         ::std::process::exit(1)
     }

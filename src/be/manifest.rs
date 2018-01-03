@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::Path;
 
 use be::cas::Digest;
-use common::errors::*;
+use common::errors::DenebResult;
 use common::util::file::atomic_write;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -27,13 +27,13 @@ impl Manifest {
         }
     }
 
-    pub fn save(&self, manifest_file: &Path) -> Result<()> {
+    pub fn save(&self, manifest_file: &Path) -> DenebResult<()> {
         let m = to_string(self)?;
         atomic_write(manifest_file, m.as_bytes())?;
         Ok(())
     }
 
-    pub fn load(manifest_file: &Path) -> Result<Manifest> {
+    pub fn load(manifest_file: &Path) -> DenebResult<Manifest> {
         let mut f = File::open(manifest_file)?;
         let mut m = String::new();
         let _ = f.read_to_string(&mut m)?;

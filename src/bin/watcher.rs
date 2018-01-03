@@ -1,28 +1,30 @@
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 extern crate deneb;
 #[macro_use]
 extern crate log;
 extern crate notify;
 extern crate rust_sodium;
 
+use failure::ResultExt;
+
 use log::LevelFilter;
 
 use deneb::be::catalog::MemCatalog;
 use deneb::be::populate_with_dir;
 use deneb::be::store::MemStore;
-use deneb::common::errors::*;
+use deneb::common::errors::DenebResult;
 use deneb::common::logging;
 use deneb::fe::watch::DirectoryWatcher;
 use deneb::fe::watch::params::Params;
 
-fn run() -> Result<()> {
+fn run() -> DenebResult<()> {
     // Initialize the rust_sodium library (needed to make all its functions thread-safe)
     ensure!(rust_sodium::init(),
             "Could not initialize rust_sodium library. Exiting");
 
     logging::init(LevelFilter::Trace)
-        .chain_err(|| "Could not initialize log4rs")?;
+        .context("Could not initialize log4rs")?;
     info!("Deneb - dir watcher!");
 
     let Params {sync_dir, work_dir, chunk_size} = Params::read();

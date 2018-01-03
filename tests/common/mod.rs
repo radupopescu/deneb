@@ -9,7 +9,7 @@ use std::fs::{File, create_dir_all, remove_dir_all};
 use std::io::{Read, BufReader};
 use std::path::{Path, PathBuf};
 
-use deneb::common::errors::*;
+use deneb::common::errors::DenebResult;
 use deneb::common::util::file::atomic_write;
 
 #[derive(Clone, Debug)]
@@ -71,7 +71,7 @@ impl DirTree {
         }
     }
 
-    pub fn show(&self) -> Result<()> {
+    pub fn show(&self) -> DenebResult<()> {
         self.visit(&|dir: &Path, entry: &DirEntry| {
             if let DirEntry::File(ref name, ref contents) = *entry {
                 if let Ok(body) = String::from_utf8(contents.to_vec()) {
@@ -84,7 +84,7 @@ impl DirTree {
         })
     }
 
-    pub fn create(&self) -> Result<()> {
+    pub fn create(&self) -> DenebResult<()> {
         self.visit(&|dir: &Path, entry: &DirEntry| {
                         if let DirEntry::File(ref name, ref contents) = *entry {
                             create_dir_all(dir)?;
@@ -94,7 +94,7 @@ impl DirTree {
                     })
     }
 
-    pub fn compare(&self, other: &Path) -> Result<()> {
+    pub fn compare(&self, other: &Path) -> DenebResult<()> {
         self.visit(&|dir: &Path, entry: &DirEntry| {
             if let DirEntry::File(ref name, ref _contents) = *entry {
                 let input_file_name = dir.join(name);
@@ -108,18 +108,18 @@ impl DirTree {
         })
     }
 
-    pub fn clean_up(&self) -> Result<()> {
+    pub fn clean_up(&self) -> DenebResult<()> {
         Ok(remove_dir_all(&self.root)?)
     }
 
-    fn visit<V>(&self, action: V) -> Result<()>
-        where V: Fn(&Path, &DirEntry) -> Result<()> + Copy
+    fn visit<V>(&self, action: V) -> DenebResult<()>
+        where V: Fn(&Path, &DirEntry) -> DenebResult<()> + Copy
     {
         self.visit_rec(&self.root, &self.entries, action)
     }
 
-    fn visit_rec<V>(&self, dir: &Path, entries: &[DirEntry], action: V) -> Result<()>
-        where V: Fn(&Path, &DirEntry) -> Result<()> + Copy
+    fn visit_rec<V>(&self, dir: &Path, entries: &[DirEntry], action: V) -> DenebResult<()>
+        where V: Fn(&Path, &DirEntry) -> DenebResult<()> + Copy
     {
         for entry in entries.iter() {
             action(dir, entry)?;

@@ -3,7 +3,7 @@
 extern crate copy_dir;
 extern crate deneb;
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 extern crate quickcheck;
 extern crate rand;
 extern crate rust_sodium;
@@ -23,13 +23,13 @@ use common::*;
 use deneb::be::catalog::{Catalog, CatalogBuilder, LmdbCatalogBuilder, MemCatalog};
 use deneb::be::populate_with_dir;
 use deneb::be::store::{Store, StoreBuilder, DiskStoreBuilder, MemStore};
-use deneb::common::errors::*;
+use deneb::common::errors::DenebResult;
 use deneb::fe::fuse::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
 
 // Function to generate an input dir tree
-fn make_test_dir_tree(prefix: &Path) -> Result<DirTree> {
+fn make_test_dir_tree(prefix: &Path) -> DenebResult<DirTree> {
     let root = prefix.join("input");
     println!("Root: {:?}", root);
 
@@ -59,7 +59,7 @@ fn init_repo<'a, C, S>(mut catalog: C,
                        input: &Path,
                        mount_point: &Path,
                        chunk_size: usize)
-                       -> Result<Session<'a>>
+                       -> DenebResult<Session<'a>>
     where C: 'a + Catalog + Send,
           S: 'a + Store + Send
 {
@@ -69,7 +69,7 @@ fn init_repo<'a, C, S>(mut catalog: C,
 }
 
 // Copy the contents of the Deneb repo out to a new location
-fn copy_dir_tree(source: &Path, dest: &Path) -> Result<()> {
+fn copy_dir_tree(source: &Path, dest: &Path) -> DenebResult<()> {
     copy_dir::copy_dir(source, dest)?;
     Ok(())
 }
@@ -83,7 +83,7 @@ fn check_inout<C, S>(catalog: C,
                      dir: &DirTree,
                      prefix: &Path,
                      chunk_size: usize)
-                     -> Result<()>
+                     -> DenebResult<()>
     where C: Catalog + Send,
           S: Store + Send
 {

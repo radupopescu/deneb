@@ -3,7 +3,7 @@
 extern crate bincode;
 extern crate data_encoding;
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 #[cfg(feature = "fuse")]
 extern crate fuse;
 extern crate futures;

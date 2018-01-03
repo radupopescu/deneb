@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [features]
-default = ["fuse_module", "watcher"]
+default = ["fuse_module"]
 fuse_module = ["fuse"]
 watcher = ["notify"]
 
@@ -38,7 +38,7 @@ required-features = ["watcher"]
 [dependencies]
 bincode = "^0.9.0"
 data-encoding = "^2.1.0"
-error-chain = "^0.11.0"
+failure = "^0.1.0"
 futures = "^0.1.0"
 lmdb = "^0.7.0"
 lmdb-sys = "^0.7.0"

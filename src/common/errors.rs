@@ -1,55 +1,48 @@
-use bincode::Error as BCError;
-use data_encoding::DecodeError;
-use futures::Canceled as FCanceled;
-use log;
 use log4rs;
-use lmdb;
 use nix;
-use time;
-use toml;
 
-use std::io;
-use std::path::{PathBuf, StripPrefixError};
-use std::sync;
-use std::time::SystemTimeError;
+use std::path::PathBuf;
 
-error_chain! {
-    types {}
+pub type DenebResult<T> = ::std::result::Result<T, ::failure::Error>;
 
-    links {}
+// Errors from the nix crate
 
-    foreign_links {
-        BincodeError(BCError) #[doc="bincode error"];
-        DataEncodingDecodeError(DecodeError) #[doc="data_encoding decode error"];
-        FutureCancelled(FCanceled) #[doc="canceled future"];
-        IoError(io::Error) #[doc="io error"];
-        LogError(log::SetLoggerError) #[doc="log error"];
-        Log4rsConfigError(log4rs::config::Errors) #[doc="log4rs config error"];
-        LmdbError(lmdb::Error) #[doc="LMDB error"];
-        NixError(nix::Error) #[doc="nix error"];
-        PathStripPrefixError(StripPrefixError) #[doc="path prefix strip error"];
-        DurationOutOfRangeError(time::OutOfRangeError) #[doc="duration out-of-range error"];
-        StdMpscRecvError(sync::mpsc::RecvError) #[doc="std::mpsc receive error"];
-        IntFromStrError(::std::num::ParseIntError) #[doc="int from str error"];
-        StrFromUtf8Error(::std::str::Utf8Error) #[doc="str from Utf8 vec error"];
-        SystemTimeError(SystemTimeError) #[doc="system time conversion error"];
-        TimeParseError(time::ParseError) #[doc="time format parsing error"];
-        TomlDeError(toml::de::Error) #[doc="toml deserialization error"];
-        TomlSerError(toml::ser::Error) #[doc="toml serialization error"];
+#[derive(Debug, Fail)]
+#[fail(display = "Nix error: {}", inner)]
+pub struct UnixError {
+    #[cause] inner: nix::Error,
+}
+
+impl From<nix::Error> for UnixError {
+    fn from(ne: nix::Error) -> UnixError {
+        UnixError { inner: ne }
     }
+}
 
-    errors {
-        CommandLineParameter(p: String) {
-            description("Command-line parameter error")
-            display("Command-line parameter error: '{}'", p)
-        }
-        DirVisitError(p: PathBuf) {
-            description("Recursive directory visit error")
-            display("Recursive directory visit error: {:?}", p)
-        }
-        LmdbCatalogError(e: String) {
-            description("LMDB catalog operation error")
-            display("LMDB catalog operation error: {}", e)
-        }
-    }
+// Errors related to the logger
+
+#[derive(Debug, Fail)]
+pub enum LoggerError {
+    #[fail(display = "Error setting logger")]
+    SetLogger,
+    #[fail(display = "Log4rs configuration error")]
+    Log4rsConfig(#[cause] log4rs::config::Errors),
+}
+
+// Internal Deneb errors
+
+#[derive(Debug, Fail)]
+pub enum DenebError {
+    #[fail(display = "Disk IO error")]
+    DiskIO,
+    #[fail(display = "Chunk retrieval error")]
+    ChunkRetrieval,
+    #[fail(display = "Command line parameter parsing error: {}", _0)]
+    CommandLineParameter(String),
+    #[fail(display = "Directory visit error: {:?}", _0)]
+    DirectoryVisit(PathBuf),
+    #[fail(display = "Index generator error")]
+    IndexGenerator,
+    #[fail(display = "LMDB catalog error: {}", _0)]
+    LmdbCatalogError(String),
 }
