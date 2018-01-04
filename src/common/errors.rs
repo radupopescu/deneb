@@ -63,10 +63,10 @@ pub enum DenebError {
 
 #[derive(Debug, Fail)]
 pub enum StoreError {
-    #[fail(display = "Store creation error")]
-    Creation,
-    #[fail(display = "Chunk retrieval error")]
-    ChunkRetrieval,
+    #[fail(display = "Get error for: {}", _0)]
+    ChunkGet(String),
+    #[fail(display = "Put error for: {}", _0)]
+    ChunkPut(String),
 }
 
 // Catalog errors

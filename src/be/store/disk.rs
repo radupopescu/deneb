@@ -31,8 +31,7 @@ impl StoreBuilder for DiskStoreBuilder {
                 if let (Some(i), Some(j)) = (from_digit(i, 16), from_digit(j, 16)) {
                     let mut prefix = i.to_string();
                     prefix.push(j);
-                    create_dir_all(object_dir.join(prefix))
-                        .context(StoreError::Creation)?;
+                    create_dir_all(object_dir.join(prefix))?;
                 }
             }
         }
@@ -73,7 +72,7 @@ impl Store for DiskStore {
             debug!("File read: {:?}", full_path);
             Ok(buffer)
         } else {
-            Err(StoreError::ChunkRetrieval.into())
+            Err(StoreError::ChunkGet(digest.to_string()).into())
         }
     }
 
@@ -82,9 +81,8 @@ impl Store for DiskStore {
         let mut prefix = hex_digest.clone();
         let file_name = prefix.split_off(PREFIX_SIZE);
         let full_path = self.object_dir.join(prefix).join(file_name);
-        if let Ok(()) = atomic_write(full_path.as_path(), contents) {
-            debug!("File written: {:?}", full_path);
-        }
+        atomic_write(full_path.as_path(), contents)?;
+        debug!("File written: {:?}", full_path);
         Ok(())
     }
 }

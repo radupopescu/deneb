@@ -36,7 +36,7 @@ impl Store for MemStore {
         self.objects
             .get(digest)
             .cloned()
-            .ok_or(StoreError::ChunkRetrieval.into())
+            .ok_or(StoreError::ChunkGet(digest.to_string()).into())
     }
 
     fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
