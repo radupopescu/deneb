@@ -2,20 +2,18 @@ use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 
-use common::errors::LoggerError;
+use common::errors::DenebResult;
 
-pub fn init(log_level: LevelFilter) -> Result<(), LoggerError> {
+pub fn init(log_level: LevelFilter) -> DenebResult<()> {
     let stdout = ConsoleAppender::builder().build();
 
     let config = Config::builder().appender(Appender::builder().build("stdout", Box::new(stdout)))
         .build(Root::builder()
                .appender("stdout")
                // Just enable all logging levels for now
-               .build(log_level)).map_err(|e| LoggerError::Log4rsConfig(e))?;
+               .build(log_level))?;
 
-    if ::log4rs::init_config(config).is_err() {
-        return Err(LoggerError::SetLogger);
-    }
+    ::log4rs::init_config(config)?;
 
     Ok(())
 }

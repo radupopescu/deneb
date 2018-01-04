@@ -1,5 +1,4 @@
 use lmdb;
-use log4rs;
 use nix;
 
 use std::ffi::OsString;
@@ -33,16 +32,6 @@ impl From<lmdb::Error> for LMDBError {
     fn from(ne: lmdb::Error) -> LMDBError {
         LMDBError { inner: ne }
     }
-}
-
-// Errors related to the logger
-
-#[derive(Debug, Fail)]
-pub enum LoggerError {
-    #[fail(display = "Error setting logger")]
-    SetLogger,
-    #[fail(display = "Log4rs configuration error")]
-    Log4rsConfig(#[cause] log4rs::config::Errors),
 }
 
 // Common Deneb errors
