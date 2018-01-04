@@ -45,7 +45,7 @@ pub enum LoggerError {
     Log4rsConfig(#[cause] log4rs::config::Errors),
 }
 
-// Internal Deneb errors (common)
+// Common Deneb errors
 
 #[derive(Debug, Fail)]
 pub enum DenebError {
@@ -55,6 +55,8 @@ pub enum DenebError {
     CommandLineParameter(String),
     #[fail(display = "Directory visit error: {:?}", _0)]
     DirectoryVisit(PathBuf),
+    #[fail(display = "Invalid path encountered: {:?}", _0)]
+    InvalidPath(PathBuf),
     #[fail(display = "Index generator error")]
     IndexGenerator,
     #[fail(display = "Digest read error")]
@@ -96,5 +98,3 @@ pub enum CatalogError {
     #[fail(display = "Invalid catalog version: {}", _0)]
     Version(u32),
 }
-
-

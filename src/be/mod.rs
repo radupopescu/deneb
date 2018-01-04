@@ -29,13 +29,10 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
     where C: Catalog,
           S: Store
 {
-    catalog
-        .add_inode(dir, 1, vec![])
-        .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
+    catalog.add_inode(dir, 1, vec![])?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
-    visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)
-        .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
+    visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)?;
 
     Ok(())
 }
@@ -57,10 +54,9 @@ fn visit_dirs<C, S>(catalog: &mut C,
 
     for entry in read_dir(dir)? {
         let path = (entry?).path();
-        let fpath = &path.as_path();
-        let fname = Path::new(fpath
+        let fname = Path::new(path.as_path()
                                   .file_name()
-                                  .ok_or_else(|| format_err!("Could not get file name from path"))?);
+                                  .ok_or_else(|| DenebError::InvalidPath(path.clone()))?);
 
         let mut chunks = Vec::new();
         if path.is_file() {
@@ -78,11 +74,12 @@ fn visit_dirs<C, S>(catalog: &mut C,
         }
 
         let index = catalog.get_next_index();
-        catalog.add_inode(fpath, index, chunks)?;
+        catalog.add_inode(&path, index, chunks)?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {
-            visit_dirs(catalog, store, buffer, &path, index, dir_index)?;
+            visit_dirs(catalog, store, buffer, &path, index, dir_index)
+                .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
         }
     }
     Ok(())
