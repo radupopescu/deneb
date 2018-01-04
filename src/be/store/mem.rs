@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use be::cas::Digest;
-use common::errors::{DenebError, DenebResult};
+use common::errors::{StoreError, DenebResult};
 
 use super::{Store, StoreBuilder};
 
@@ -36,7 +36,7 @@ impl Store for MemStore {
         self.objects
             .get(digest)
             .cloned()
-            .ok_or(DenebError::ChunkRetrieval.into())
+            .ok_or(StoreError::ChunkRetrieval.into())
     }
 
     fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {

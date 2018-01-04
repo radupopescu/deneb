@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use be::cas::Digest;
 use common::util::file::atomic_write;
-use common::errors::{DenebError, DenebResult};
+use common::errors::{DenebError, DenebResult, StoreError};
 
 use super::{Store, StoreBuilder};
 
@@ -31,7 +31,8 @@ impl StoreBuilder for DiskStoreBuilder {
                 if let (Some(i), Some(j)) = (from_digit(i, 16), from_digit(j, 16)) {
                     let mut prefix = i.to_string();
                     prefix.push(j);
-                    create_dir_all(object_dir.join(prefix))?;
+                    create_dir_all(object_dir.join(prefix))
+                        .context(StoreError::Creation)?;
                 }
             }
         }
@@ -66,12 +67,13 @@ impl Store for DiskStore {
         let mut buffer = Vec::new();
         let mut f = File::open(&full_path)
             .context(DenebError::DiskIO)?;
-        let bytes_read = f.read_to_end(&mut buffer)?;
+        let bytes_read = f.read_to_end(&mut buffer)
+            .context(DenebError::DiskIO)?;
         if bytes_read as i64 == file_stats.st_size {
             debug!("File read: {:?}", full_path);
             Ok(buffer)
         } else {
-            Err(DenebError::ChunkRetrieval.into())
+            Err(StoreError::ChunkRetrieval.into())
         }
     }
 

@@ -29,14 +29,12 @@ pub enum LoggerError {
     Log4rsConfig(#[cause] log4rs::config::Errors),
 }
 
-// Internal Deneb errors
+// Internal Deneb errors (common)
 
 #[derive(Debug, Fail)]
 pub enum DenebError {
     #[fail(display = "Disk IO error")]
     DiskIO,
-    #[fail(display = "Chunk retrieval error")]
-    ChunkRetrieval,
     #[fail(display = "Command line parameter parsing error: {}", _0)]
     CommandLineParameter(String),
     #[fail(display = "Directory visit error: {:?}", _0)]
@@ -45,4 +43,14 @@ pub enum DenebError {
     IndexGenerator,
     #[fail(display = "LMDB catalog error: {}", _0)]
     LmdbCatalogError(String),
+}
+
+// Object store errors
+
+#[derive(Debug, Fail)]
+pub enum StoreError {
+    #[fail(display = "Store creation error")]
+    Creation,
+    #[fail(display = "Chunk retrieval error")]
+    ChunkRetrieval,
 }
