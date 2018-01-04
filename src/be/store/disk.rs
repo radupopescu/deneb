@@ -1,3 +1,4 @@
+use failure::ResultExt;
 use nix::sys::stat::stat;
 
 use std::char::from_digit;
@@ -7,8 +8,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use be::cas::Digest;
-use common::util::file::atomic_write;
-use common::errors::*;
+use common::errors::{DenebError, DenebResult, StoreError};
+use common::atomic_write;
 
 use super::{Store, StoreBuilder};
 
@@ -20,7 +21,7 @@ pub struct DiskStoreBuilder;
 impl StoreBuilder for DiskStoreBuilder {
     type Store = DiskStore;
 
-    fn at_dir<P: AsRef<Path>>(&self, dir: P) -> Result<Self::Store> {
+    fn at_dir<P: AsRef<Path>>(&self, dir: P) -> DenebResult<Self::Store> {
         let root_dir = PathBuf::from(dir.as_ref());
         let object_dir = root_dir.join(OBJECT_PATH);
 
@@ -57,30 +58,31 @@ pub struct DiskStore {
 }
 
 impl Store for DiskStore {
-    fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
         let mut prefix = digest.to_string();
         let file_name = prefix.split_off(PREFIX_SIZE);
         let full_path = self.object_dir.join(prefix).join(file_name);
         let file_stats = stat(full_path.as_path())?;
         let mut buffer = Vec::new();
-        let mut f = File::open(&full_path)?;
-        let bytes_read = f.read_to_end(&mut buffer)?;
+        let mut f = File::open(&full_path)
+            .context(DenebError::DiskIO)?;
+        let bytes_read = f.read_to_end(&mut buffer)
+            .context(DenebError::DiskIO)?;
         if bytes_read as i64 == file_stats.st_size {
             debug!("File read: {:?}", full_path);
             Ok(buffer)
         } else {
-            bail!("Could not retrive chunk from disk store.")
+            Err(StoreError::ChunkGet(digest.to_string()).into())
         }
     }
 
-    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
+    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
         let hex_digest = digest.to_string();
         let mut prefix = hex_digest.clone();
         let file_name = prefix.split_off(PREFIX_SIZE);
         let full_path = self.object_dir.join(prefix).join(file_name);
-        if let Ok(()) = atomic_write(full_path.as_path(), contents) {
-            debug!("File written: {:?}", full_path);
-        }
+        atomic_write(full_path.as_path(), contents)?;
+        debug!("File written: {:?}", full_path);
         Ok(())
     }
 }

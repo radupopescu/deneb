@@ -1,3 +1,5 @@
+use failure::ResultExt;
+
 use bincode::{serialize, deserialize, Infinite};
 use lmdb::{Cursor, Database, DatabaseFlags, Environment, Transaction, WriteFlags, NO_SUB_DIR};
 use lmdb_sys::{MDB_envinfo, MDB_stat, mdb_env_info, mdb_env_stat};
@@ -6,6 +8,7 @@ use std::collections::BTreeMap;
 use std::cmp::max;
 use std::str::from_utf8;
 
+use common::errors::{CatalogError, LMDBError};
 use super::*;
 
 const MAX_CATALOG_SIZE: usize = 100 * 1024 * 1024; // 100MB
@@ -30,22 +33,15 @@ pub struct LmdbCatalogBuilder;
 impl CatalogBuilder for LmdbCatalogBuilder {
     type Catalog = LmdbCatalog;
 
-    fn create<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog> {
-        let env = open_environment(path.as_ref())?;
-
-        // Create databases
-        let inodes = try_create_db(&env, "inodes")?;
-        let dir_entries = try_create_db(&env, "dir_entries")?;
-        let meta = try_create_db(&env, "meta")?;
+    fn create<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
+        let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         {
             let mut writer = env.begin_rw_txn()?;
             // Write catalog format version
-            writer
-                .put(meta,
-                     &"catalog_version",
-                     &format!("{}", CATALOG_VERSION),
-                     WriteFlags::empty())?;
+            writer.put(meta, &"catalog_version",
+                       &format!("{}", CATALOG_VERSION),
+                       WriteFlags::empty())?;
             writer.commit()?;
         }
 
@@ -61,13 +57,8 @@ impl CatalogBuilder for LmdbCatalogBuilder {
            })
     }
 
-    fn open<P: AsRef<Path>>(&self, path: P) -> Result<Self::Catalog> {
-        let env = open_environment(path.as_ref())?;
-
-        // Create databases
-        let inodes = try_create_db(&env, "inodes")?;
-        let dir_entries = try_create_db(&env, "dir_entries")?;
-        let meta = try_create_db(&env, "meta")?;
+    fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
+        let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         let ver = {
             let reader = env.begin_ro_txn()?;
@@ -76,7 +67,7 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         }?;
 
         if ver > CATALOG_VERSION {
-            bail!(ErrorKind::LmdbCatalogError("Invalid catalog version".to_owned()));
+            return Err(CatalogError::Version(ver).into());
         }
 
         // Retrieve the largest inode index in the catalog
@@ -99,7 +90,7 @@ impl CatalogBuilder for LmdbCatalogBuilder {
                _meta: meta,
                version: ver,
                index_generator: IndexGenerator::starting_at(starting_index)?,
-           })
+        })
     }
 }
 
@@ -130,63 +121,66 @@ impl Catalog for LmdbCatalog {
         self.index_generator.get_next()
     }
 
-    fn get_inode(&self, index: u64) -> Result<INode> {
+    fn get_inode(&self, index: u64) -> DenebResult<INode> {
         let reader = self.env.begin_ro_txn()?;
-        let buffer = reader.get(self.inodes, &format!("{}", index))?;
-        deserialize::<INode>(buffer).map_err(|e| e.into())
+        let buffer = reader.get(self.inodes, &format!("{}", index))
+            .context(CatalogError::INodeRead(index))?;
+        deserialize::<INode>(buffer)
+            .context(CatalogError::INodeDeserialization(index))
+            .map_err(|e| e.into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
         let reader = self.env.begin_ro_txn()?;
-        let buffer = reader.get(self.dir_entries, &format!("{}", parent))?;
-        let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)?;
-        entries
+        let buffer = reader.get(self.dir_entries, &format!("{}", parent))
+            .context(CatalogError::DEntryRead(parent))?;
+        let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
+            .context(CatalogError::DEntryDeserialization(parent))?;
+        let idx = entries
             .get(name)
             .cloned()
-            .ok_or_else(|| format!("Could not retrieve index in LMDB store for {:?}", name).into())
+            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent))?;
+        Ok(idx)
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
+    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         let reader = self.env.begin_ro_txn()?;
-        let buffer = reader.get(self.dir_entries, &format!("{}", parent))?;
-        let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)?;
+        let buffer = reader.get(self.dir_entries, &format!("{}", parent))
+            .context(CatalogError::DEntryRead(parent))?;
+        let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
+            .context(CatalogError::DEntryDeserialization(parent))?;
         Ok(entries
                .iter()
                .map(|(name, index)| (name.to_owned(), *index))
                .collect::<Vec<(PathBuf, u64)>>())
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()> {
-        let inode = INode::new(index, entry, chunks)
-            .chain_err(|| format!("Could not construct inode {} for path: {:?}", index, entry))?;
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()> {
+        let inode = INode::new(index, entry, chunks)?;
 
         let buffer = serialize(&inode, Infinite)
-            .chain_err(|| format!("Could not serialize inode {}", index))?;
+            .context(CatalogError::INodeSerialization(index))?;
 
         let mut writer = self.env.begin_rw_txn()?;
 
         writer
-            .put(self.inodes,
-                 &format!("{}", index),
-                 &buffer,
-                 WriteFlags::empty())
-            .chain_err(|| format!("Could not write inode {} to database", index))?;
+            .put(self.inodes, &format!("{}", index), &buffer, WriteFlags::empty())
+            .context(CatalogError::INodeWrite(index))?;
 
         writer.commit()?;
 
         Ok(())
     }
 
-    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()> {
         let mut writer = self.env.begin_rw_txn()?;
         {
             // Retrieve and update dir entries for parent
             let mut entries = BTreeMap::new();
             if let Ok(buffer) = writer.get(self.dir_entries, &format!("{}", parent)) {
                 // Dir entries exist for parent
-                entries =
-                    deserialize::<BTreeMap<PathBuf, u64>>(buffer)
-                        .chain_err(|| format!("Could no retrieve dir entries for {}", parent))?;
+                entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
+                    .context(CatalogError::DEntryDeserialization(parent))?;
                 entries.insert(name.to_owned(), index);
             } else {
                 // No dir entries exist for parent
@@ -194,58 +188,63 @@ impl Catalog for LmdbCatalog {
             }
 
             // Write updated dir entries to database
-            let buffer =
-                serialize(&entries, Infinite)
-                    .chain_err(|| format!("Could not serialize dir entries for {}", parent))?;
+            let buffer = serialize(&entries, Infinite)
+                .context(CatalogError::DEntrySerialization(parent))?;
             writer
-                .put(self.dir_entries,
-                     &format!("{}", parent),
-                     &buffer,
+                .put(self.dir_entries, &format!("{}", parent), &buffer,
                      WriteFlags::empty())
-                .chain_err(|| format!("Could not write dir entries for {} to database", parent))?;
+                .context(CatalogError::DEntryWrite(parent))?;
 
             // Retrieve inode of index
             let buffer =
                 {
-                    let buffer = writer
-                        .get(self.inodes, &format!("{}", index))
-                        .chain_err(|| format!("Could not retrieve inode {}", index))?;
-                    let mut inode =
-                        deserialize::<INode>(buffer)
-                            .chain_err(|| format!("Could not deserialize inode {}", index))?;
+                    let buffer = writer.get(self.inodes, &format!("{}", index))
+                        .context(CatalogError::INodeRead(index))?;
+                    let mut inode = deserialize::<INode>(buffer)
+                        .context(CatalogError::INodeDeserialization(index))?;
 
                     // Update number of hardlink in inode
                     inode.attributes.nlink += 1;
 
                     // Write inode back to database
                     serialize(&inode, Infinite)
-                    .chain_err(|| format!("Could not serialize inode of {}", index))
+                        .context(CatalogError::INodeSerialization(index))
                 }?;
             writer
-                .put(self.inodes,
-                     &format!("{}", index),
-                     &buffer,
+                .put(self.inodes, &format!("{}", index), &buffer,
                      WriteFlags::empty())
-                .chain_err(|| format!("Could not write inode of {} to database", index))?;
+                .context(CatalogError::INodeWrite(index))?;
         }
         writer.commit()?;
         Ok(())
     }
 }
 
-fn open_environment(path: &Path) -> Result<Environment> {
+fn init_db<P: AsRef<Path>>(path: P) -> Result<(Environment, Database, Database, Database),
+                                              LMDBError> {
+    let env = open_environment(path.as_ref())?;
+
+    // Create databases
+    let inodes = try_create_db(&env, "inodes")?;
+    let dir_entries = try_create_db(&env, "dir_entries")?;
+    let meta = try_create_db(&env, "meta")?;
+
+    Ok((env, inodes, dir_entries, meta))
+}
+
+fn open_environment(path: &Path) -> Result<Environment, LMDBError> {
     Environment::new()
         .set_flags(NO_SUB_DIR)
         .set_max_dbs(MAX_CATALOG_DBS)
         .set_max_readers(MAX_CATALOG_READERS)
         .set_map_size(MAX_CATALOG_SIZE)
         .open_with_permissions(path, 0o600)
-        .chain_err(|| "Could not open LMDB environment")
+        .map_err(|e| e.into())
 }
 
-fn try_create_db(env: &Environment, name: &str) -> Result<Database> {
+fn try_create_db(env: &Environment, name: &str) -> Result<Database, LMDBError> {
     env.create_db(Some(name), DatabaseFlags::empty())
-        .chain_err(|| format!("Could not get a handle to the {} database", name))
+        .map_err(|e| e.into())
 }
 
 fn get_env_info(env: &Environment) -> MDB_envinfo {

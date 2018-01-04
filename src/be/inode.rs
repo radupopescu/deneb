@@ -7,7 +7,7 @@ use std::i32;
 use std::u16;
 use std::path::Path;
 
-use common::errors::*;
+use common::errors::UnixError;
 use be::cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -62,7 +62,7 @@ pub struct INode {
 }
 
 impl INode {
-    pub fn new(index: u64, path: &Path, chunks: Vec<ChunkDescriptor>) -> Result<INode> {
+    pub fn new(index: u64, path: &Path, chunks: Vec<ChunkDescriptor>) -> Result<INode, UnixError> {
         let stats = lstat(path)?;
         // Note: we prefix `attributes` with an underscore to avoid triggering an
         //       "unused_mut" warning on Linux.

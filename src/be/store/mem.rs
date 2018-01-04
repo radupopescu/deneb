@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use be::cas::Digest;
-use common::errors::*;
+use common::errors::{StoreError, DenebResult};
 
 use super::{Store, StoreBuilder};
 
@@ -11,7 +11,7 @@ pub struct MemStoreBuilder;
 impl StoreBuilder for MemStoreBuilder {
     type Store = MemStore;
 
-    fn at_dir<P: AsRef<Path>>(&self, _dir: P) -> Result<Self::Store> {
+    fn at_dir<P: AsRef<Path>>(&self, _dir: P) -> DenebResult<Self::Store> {
         Ok(MemStore::new())
     }
 }
@@ -32,14 +32,14 @@ impl MemStore {
 }
 
 impl Store for MemStore {
-    fn get_chunk(&self, digest: &Digest) -> Result<Vec<u8>> {
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
         self.objects
             .get(digest)
             .cloned()
-            .ok_or_else(|| "Could not retrieve chunk from mem store.".into())
+            .ok_or(StoreError::ChunkGet(digest.to_string()).into())
     }
 
-    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> Result<()> {
+    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
         self.objects
             .entry(digest)
             .or_insert_with(|| contents.to_vec());

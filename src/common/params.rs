@@ -3,9 +3,9 @@ use structopt::StructOpt;
 
 use std::path::PathBuf;
 
-use common::errors::*;
+use common::errors::DenebError;
 
-fn parse_log_level_str(s: &str) -> Result<LevelFilter> {
+fn parse_log_level_str(s: &str) -> Result<LevelFilter, DenebError> {
     match s {
         "off" => { Ok(LevelFilter::Off) },
         "error" => { Ok(LevelFilter::Error) },
@@ -13,7 +13,7 @@ fn parse_log_level_str(s: &str) -> Result<LevelFilter> {
         "info" => { Ok(LevelFilter::Info) },
         "debug" => { Ok(LevelFilter::Debug) },
         "trace" => { Ok(LevelFilter::Trace) },
-        _ => { bail!(ErrorKind::CommandLineParameter("invalid log_level: ".to_string() + s)) }
+        _ => { Err(DenebError::CommandLineParameter("log_level: ".to_string() + s)) }
     }
 }
 

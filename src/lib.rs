@@ -3,7 +3,7 @@
 extern crate bincode;
 extern crate data_encoding;
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 #[cfg(feature = "fuse")]
 extern crate fuse;
 extern crate futures;
@@ -13,8 +13,6 @@ extern crate lmdb_sys;
 extern crate log;
 extern crate log4rs;
 extern crate nix;
-#[cfg(feature = "watcher")]
-extern crate notify;
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]

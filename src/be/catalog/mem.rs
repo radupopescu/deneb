@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use be::inode::{ChunkDescriptor, INode};
 
+use common::errors::CatalogError;
 use super::*;
 
 pub struct MemCatalogBuilder;
@@ -10,11 +11,11 @@ pub struct MemCatalogBuilder;
 impl CatalogBuilder for MemCatalogBuilder {
     type Catalog = MemCatalog;
 
-    fn create<P: AsRef<Path>>(&self, _path: P) -> Result<Self::Catalog> {
+    fn create<P: AsRef<Path>>(&self, _path: P) -> DenebResult<Self::Catalog> {
         Ok(MemCatalog::new())
     }
 
-    fn open<P: AsRef<Path>>(&self, _path: P) -> Result<Self::Catalog> {
+    fn open<P: AsRef<Path>>(&self, _path: P) -> DenebResult<Self::Catalog> {
         Ok(MemCatalog::new())
     }
 }
@@ -47,30 +48,22 @@ impl Catalog for MemCatalog {
         self.index_generator.get_next()
     }
 
-    fn get_inode(&self, index: u64) -> Result<INode> {
+    fn get_inode(&self, index: u64) -> DenebResult<INode> {
         self.inodes
             .get(&index)
             .cloned()
-            .ok_or_else(|| {
-                            format!("Could not get inode from mem catalog for index {}.", index)
-                                .into()
-                        })
+            .ok_or_else(|| CatalogError::INodeRead(index).into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> Result<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
         self.dir_entries
             .get(&parent)
             .and_then(|entries| entries.get(name))
             .cloned()
-            .ok_or_else(|| {
-                            format!("Could not get index from mem catalog for dir entry {:?} at {}",
-                                    name,
-                                    parent)
-                                    .into()
-                        })
+            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent).into())
     }
 
-    fn get_dir_entries(&self, parent: u64) -> Result<Vec<(PathBuf, u64)>> {
+    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         self.dir_entries
             .get(&parent)
             .map(|entries| {
@@ -79,25 +72,16 @@ impl Catalog for MemCatalog {
                          .map(|(name, index)| (name.to_owned(), *index))
                          .collect::<Vec<(PathBuf, u64)>>()
                  })
-            .ok_or_else(|| {
-                            format!("Could not get dir entries from mem catalog for at {}",
-                                    parent)
-                                    .into()
-                        })
+            .ok_or_else(|| CatalogError::DEntryRead(parent).into())
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> Result<()> {
-        let inode = INode::new(index, entry, chunks)
-            .chain_err(|| {
-                format!("Could not construct inode {} for path: {:?}",
-                        index,
-                        entry)
-            })?;
+    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()> {
+        let inode = INode::new(index, entry, chunks)?;
         self.inodes.insert(index, inode);
         Ok(())
     }
 
-    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> Result<()> {
+    fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()> {
         let dir_entry = self.dir_entries
             .entry(parent)
             .or_insert_with(|| {
@@ -109,7 +93,7 @@ impl Catalog for MemCatalog {
 
         let inode = self.inodes
             .get_mut(&index)
-            .ok_or_else(|| format!("Could not read inode: {}", index))?;
+            .ok_or_else(|| CatalogError::INodeRead(index))?;
 
         inode.attributes.nlink += 1;
 
