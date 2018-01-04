@@ -1,10 +1,9 @@
-use failure::ResultExt;
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use be::inode::{ChunkDescriptor, INode};
 
+use common::errors::CatalogError;
 use super::*;
 
 pub struct MemCatalogBuilder;
@@ -53,7 +52,7 @@ impl Catalog for MemCatalog {
         self.inodes
             .get(&index)
             .cloned()
-            .ok_or_else(|| format_err!("Could not get inode from mem catalog for index {}.", index))
+            .ok_or_else(|| CatalogError::INodeRead(index).into())
     }
 
     fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
@@ -61,8 +60,7 @@ impl Catalog for MemCatalog {
             .get(&parent)
             .and_then(|entries| entries.get(name))
             .cloned()
-            .ok_or_else(|| format_err!("Could not get index from mem catalog for dir entry {:?} at {}",
-                                    name, parent))
+            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent).into())
     }
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
@@ -74,12 +72,11 @@ impl Catalog for MemCatalog {
                          .map(|(name, index)| (name.to_owned(), *index))
                          .collect::<Vec<(PathBuf, u64)>>()
                  })
-            .ok_or_else(|| format_err!("Could not get dir entries from mem catalog for at {}", parent))
+            .ok_or_else(|| CatalogError::DEntryRead(parent).into())
     }
 
     fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()> {
-        let inode = INode::new(index, entry, chunks)
-            .context(format!("Could not construct inode {} for path: {:?}", index, entry))?;
+        let inode = INode::new(index, entry, chunks)?;
         self.inodes.insert(index, inode);
         Ok(())
     }
@@ -96,7 +93,7 @@ impl Catalog for MemCatalog {
 
         let inode = self.inodes
             .get_mut(&index)
-            .ok_or_else(|| format_err!("Could not read inode: {}", index))?;
+            .ok_or_else(|| CatalogError::INodeRead(index))?;
 
         inode.attributes.nlink += 1;
 

@@ -1,6 +1,8 @@
+use lmdb;
 use log4rs;
 use nix;
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 pub type DenebResult<T> = ::std::result::Result<T, ::failure::Error>;
@@ -16,6 +18,20 @@ pub struct UnixError {
 impl From<nix::Error> for UnixError {
     fn from(ne: nix::Error) -> UnixError {
         UnixError { inner: ne }
+    }
+}
+
+// Errors from the LMDB crate
+
+#[derive(Debug, Fail)]
+#[fail(display = "LMDB error: {}", inner)]
+pub struct LMDBError {
+    #[cause] inner: lmdb::Error,
+}
+
+impl From<lmdb::Error> for LMDBError {
+    fn from(ne: lmdb::Error) -> LMDBError {
+        LMDBError { inner: ne }
     }
 }
 
@@ -41,8 +57,6 @@ pub enum DenebError {
     DirectoryVisit(PathBuf),
     #[fail(display = "Index generator error")]
     IndexGenerator,
-    #[fail(display = "LMDB catalog error: {}", _0)]
-    LmdbCatalogError(String),
 }
 
 // Object store errors
@@ -54,3 +68,31 @@ pub enum StoreError {
     #[fail(display = "Chunk retrieval error")]
     ChunkRetrieval,
 }
+
+// Catalog errors
+
+#[derive(Debug, Fail)]
+pub enum CatalogError {
+    #[fail(display = "INode serialization error for index: {}", _0)]
+    INodeSerialization(u64),
+    #[fail(display = "Dir entry serialization error for index: {}", _0)]
+    DEntrySerialization(u64),
+    #[fail(display = "INode deserialization error for index: {}", _0)]
+    INodeDeserialization(u64),
+    #[fail(display = "Dir entry deserialization error for index: {}", _0)]
+    DEntryDeserialization(u64),
+    #[fail(display = "INode read error for index: {}", _0)]
+    INodeRead(u64),
+    #[fail(display = "INode write error for index: {}", _0)]
+    INodeWrite(u64),
+    #[fail(display = "Dir entry read error for index: {}", _0)]
+    DEntryRead(u64),
+    #[fail(display = "Dir entry write error for index: {}", _0)]
+    DEntryWrite(u64),
+    #[fail(display = "Dir entry {:?} not found at index: {}", _0, _1)]
+    DEntryNotFound(OsString, u64),
+    #[fail(display = "Invalid catalog version: {}", _0)]
+    Version(u32),
+}
+
+

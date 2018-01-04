@@ -60,7 +60,7 @@ fn visit_dirs<C, S>(catalog: &mut C,
         let fpath = &path.as_path();
         let fname = Path::new(fpath
                                   .file_name()
-                                  .ok_or(format_err!("Could not get file name from path"))?);
+                                  .ok_or_else(|| format_err!("Could not get file name from path"))?);
 
         let mut chunks = Vec::new();
         if path.is_file() {
