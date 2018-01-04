@@ -14,7 +14,7 @@ use be::manifest::Manifest;
 use be::populate_with_dir;
 use be::store::{Store, StoreBuilder};
 use common::errors::DenebResult;
-use common::util::file::atomic_write;
+use common::atomic_write;
 
 use std::path::{Path, PathBuf};
 use std::thread::spawn as tspawn;

@@ -11,10 +11,9 @@ use failure::ResultExt;
 use deneb::be::catalog::LmdbCatalogBuilder;
 use deneb::be::engine::Engine;
 use deneb::be::store::DiskStoreBuilder;
+use deneb::common::{AppParameters, block_signals, init_logger, set_sigint_handler};
 use deneb::common::errors::DenebResult;
-use deneb::common::logging;
-use deneb::common::util::{block_signals, set_sigint_handler};
-use deneb::fe::fuse::{AppParameters, Fs};
+use deneb::fe::fuse::Fs;
 
 fn run() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
@@ -27,8 +26,7 @@ fn run() -> DenebResult<()> {
 
     let params = AppParameters::read();
 
-    logging::init(params.log_level)
-        .context("Could not initialize logger")?;
+    init_logger(params.log_level).context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
     info!("Log level: {}", params.log_level);

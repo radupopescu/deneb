@@ -8,8 +8,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use be::cas::Digest;
-use common::util::file::atomic_write;
 use common::errors::{DenebError, DenebResult, StoreError};
+use common::atomic_write;
 
 use super::{Store, StoreBuilder};
 

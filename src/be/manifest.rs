@@ -7,7 +7,7 @@ use std::path::Path;
 
 use be::cas::Digest;
 use common::errors::DenebResult;
-use common::util::file::atomic_write;
+use common::atomic_write;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {

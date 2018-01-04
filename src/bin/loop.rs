@@ -12,7 +12,7 @@ use tokio_core::reactor::Core;
 
 use std::sync::mpsc::channel as std_chan;
 
-use deneb::common::util::{tick, tock};
+use deneb::common::{tick, tock};
 
 fn main() {
     let t0 = tick();
