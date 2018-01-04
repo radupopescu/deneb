@@ -57,6 +57,8 @@ pub enum DenebError {
     DirectoryVisit(PathBuf),
     #[fail(display = "Index generator error")]
     IndexGenerator,
+    #[fail(display = "Digest read error")]
+    DigestFromSlice,
 }
 
 // Object store errors
