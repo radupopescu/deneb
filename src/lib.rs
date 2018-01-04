@@ -13,8 +13,6 @@ extern crate lmdb_sys;
 extern crate log;
 extern crate log4rs;
 extern crate nix;
-#[cfg(feature = "watcher")]
-extern crate notify;
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
