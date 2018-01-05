@@ -2,7 +2,7 @@ use failure::ResultExt;
 use nix::sys::stat::stat;
 
 use std::char::from_digit;
-use std::fs::{File, create_dir_all};
+use std::fs::{create_dir_all, File};
 use std::io::Read;
 
 use std::path::{Path, PathBuf};
@@ -37,9 +37,9 @@ impl StoreBuilder for DiskStoreBuilder {
         }
 
         Ok(Self::Store {
-               _root_dir: root_dir,
-               object_dir: object_dir,
-           })
+            _root_dir: root_dir,
+            object_dir: object_dir,
+        })
     }
 }
 
@@ -64,10 +64,8 @@ impl Store for DiskStore {
         let full_path = self.object_dir.join(prefix).join(file_name);
         let file_stats = stat(full_path.as_path())?;
         let mut buffer = Vec::new();
-        let mut f = File::open(&full_path)
-            .context(DenebError::DiskIO)?;
-        let bytes_read = f.read_to_end(&mut buffer)
-            .context(DenebError::DiskIO)?;
+        let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
+        let bytes_read = f.read_to_end(&mut buffer).context(DenebError::DiskIO)?;
         if bytes_read as i64 == file_stats.st_size {
             debug!("File read: {:?}", full_path);
             Ok(buffer)

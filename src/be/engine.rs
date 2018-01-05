@@ -1,15 +1,15 @@
 use futures::{Future, Sink, Stream};
-use futures::sync::mpsc::{Sender as FutureSender, channel as future_channel};
+use futures::sync::mpsc::{channel as future_channel, Sender as FutureSender};
 use time::now_utc;
 use tokio_core::reactor::Core;
 
-use std::fs::{File, create_dir_all};
+use std::fs::{create_dir_all, File};
 use std::io::Read;
-use std::sync::mpsc::{Sender as StdSender, channel as std_channel};
+use std::sync::mpsc::{channel as std_channel, Sender as StdSender};
 
-use be::cas::{Digest, hash};
+use be::cas::{hash, Digest};
 use be::catalog::{Catalog, CatalogBuilder};
-use be::inode::{INode, ChunkDescriptor};
+use be::inode::{ChunkDescriptor, INode};
 use be::manifest::Manifest;
 use be::populate_with_dir;
 use be::store::{Store, StoreBuilder};
@@ -21,10 +21,20 @@ use std::thread::spawn as tspawn;
 
 enum Request {
     GetNextIndex,
-    GetINode { index: u64 },
-    GetDirEntryIndex { parent: u64, name: PathBuf },
-    GetDirEntryINode { parent: u64, name: PathBuf },
-    GetDirEntries { parent: u64 },
+    GetINode {
+        index: u64,
+    },
+    GetDirEntryIndex {
+        parent: u64,
+        name: PathBuf,
+    },
+    GetDirEntryINode {
+        parent: u64,
+        name: PathBuf,
+    },
+    GetDirEntries {
+        parent: u64,
+    },
     AddINode {
         entry: PathBuf,
         index: u64,
@@ -36,8 +46,13 @@ enum Request {
         index: u64,
     },
 
-    GetChunk { digest: Digest },
-    PutChunk { digest: Digest, contents: Vec<u8> },
+    GetChunk {
+        digest: Digest,
+    },
+    PutChunk {
+        digest: Digest,
+        contents: Vec<u8>,
+    },
 }
 
 enum Reply {
@@ -88,11 +103,10 @@ impl Catalog for Handle {
     }
 
     fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
-        if let Reply::Index(result) =
-            self.make_request(Request::GetDirEntryIndex {
-                                  parent: parent,
-                                  name: name.to_owned(),
-                              })? {
+        if let Reply::Index(result) = self.make_request(Request::GetDirEntryIndex {
+            parent: parent,
+            name: name.to_owned(),
+        })? {
             result
         } else {
             bail!("Invalid reply received from engine.")
@@ -100,11 +114,10 @@ impl Catalog for Handle {
     }
 
     fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> DenebResult<INode> {
-        if let Reply::INode(result) =
-            self.make_request(Request::GetDirEntryINode {
-                                  parent: parent,
-                                  name: name.to_owned(),
-                              })? {
+        if let Reply::INode(result) = self.make_request(Request::GetDirEntryINode {
+            parent: parent,
+            name: name.to_owned(),
+        })? {
             result
         } else {
             bail!("Invalid reply received from engine.")
@@ -113,20 +126,25 @@ impl Catalog for Handle {
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         if let Reply::DirEntries(result) =
-            self.make_request(Request::GetDirEntries { parent: parent })? {
+            self.make_request(Request::GetDirEntries { parent: parent })?
+        {
             result
         } else {
             bail!("Invalid reply received from engine.")
         }
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()> {
-        if let Ok(Reply::Result(result)) =
-            self.make_request(Request::AddINode {
-                                  entry: entry.to_owned(),
-                                  index: index,
-                                  chunks: chunks,
-                              }) {
+    fn add_inode(
+        &mut self,
+        entry: &Path,
+        index: u64,
+        chunks: Vec<ChunkDescriptor>,
+    ) -> DenebResult<()> {
+        if let Ok(Reply::Result(result)) = self.make_request(Request::AddINode {
+            entry: entry.to_owned(),
+            index: index,
+            chunks: chunks,
+        }) {
             result
         } else {
             bail!("Invalid reply received from engine")
@@ -134,12 +152,11 @@ impl Catalog for Handle {
     }
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()> {
-        if let Ok(Reply::Result(result)) =
-            self.make_request(Request::AddDirEntry {
-                                  parent: parent,
-                                  name: name.to_owned(),
-                                  index: index,
-                              }) {
+        if let Ok(Reply::Result(result)) = self.make_request(Request::AddDirEntry {
+            parent: parent,
+            name: name.to_owned(),
+            index: index,
+        }) {
             result
         } else {
             bail!("Invalid reply received from engine")
@@ -149,8 +166,9 @@ impl Catalog for Handle {
 
 impl Store for Handle {
     fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
-        if let Reply::Chunk(result) =
-            self.make_request(Request::GetChunk { digest: digest.clone() })? {
+        if let Reply::Chunk(result) = self.make_request(Request::GetChunk {
+            digest: digest.clone(),
+        })? {
             result
         } else {
             bail!("Invalid reply received from engine")
@@ -158,11 +176,10 @@ impl Store for Handle {
     }
 
     fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
-        if let Ok(Reply::Result(result)) =
-            self.make_request(Request::PutChunk {
-                                  digest: digest.clone(),
-                                  contents: contents.to_owned(),
-                              }) {
+        if let Ok(Reply::Result(result)) = self.make_request(Request::PutChunk {
+            digest: digest.clone(),
+            contents: contents.to_owned(),
+        }) {
             result
         } else {
             bail!("Invalid reply received from engine.")
@@ -175,51 +192,60 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new<CB, SB>(catalog_builder: &CB,
-                       store_builder: &SB,
-                       work_dir: &Path,
-                       sync_dir: Option<PathBuf>,
-                       chunk_size: usize,
-                       queue_size: usize)
-                       -> DenebResult<Engine>
-        where CB: CatalogBuilder,
-              <CB as CatalogBuilder>::Catalog: Send + 'static,
-              SB: StoreBuilder,
-              <SB as StoreBuilder>::Store: Send + 'static
+    pub fn new<CB, SB>(
+        catalog_builder: &CB,
+        store_builder: &SB,
+        work_dir: &Path,
+        sync_dir: Option<PathBuf>,
+        chunk_size: usize,
+        queue_size: usize,
+    ) -> DenebResult<Engine>
+    where
+        CB: CatalogBuilder,
+        <CB as CatalogBuilder>::Catalog: Send + 'static,
+        SB: StoreBuilder,
+        <SB as StoreBuilder>::Store: Send + 'static,
     {
-        let (mut catalog, mut store) = init(catalog_builder,
-                                            store_builder,
-                                            work_dir,
-                                            sync_dir,
-                                            chunk_size)?;
+        let (mut catalog, mut store) = init(
+            catalog_builder,
+            store_builder,
+            work_dir,
+            sync_dir,
+            chunk_size,
+        )?;
 
         let (tx, rx) = future_channel(queue_size);
-        let _ = tspawn(|| if let Ok(mut core) = Core::new() {
-                           let handler =
-                               rx.for_each(move |(event, tx)| {
-                                               handle_request(event, &tx, &mut catalog, &mut store);
-                                               Ok(())
-                                           });
+        let _ = tspawn(|| {
+            if let Ok(mut core) = Core::new() {
+                let handler = rx.for_each(move |(event, tx)| {
+                    handle_request(event, &tx, &mut catalog, &mut store);
+                    Ok(())
+                });
 
-                           let _ = core.run(handler);
-                       });
+                let _ = core.run(handler);
+            }
+        });
 
         Ok(Engine { requests: tx })
     }
 
     pub fn handle(&self) -> Handle {
-        Handle { channel: self.requests.clone() }
+        Handle {
+            channel: self.requests.clone(),
+        }
     }
 }
 
-fn init<CB, SB>(catalog_builder: &CB,
-                store_builder: &SB,
-                work_dir: &Path,
-                sync_dir: Option<PathBuf>,
-                chunk_size: usize)
-                -> DenebResult<(CB::Catalog, SB::Store)>
-    where CB: CatalogBuilder,
-          SB: StoreBuilder,
+fn init<CB, SB>(
+    catalog_builder: &CB,
+    store_builder: &SB,
+    work_dir: &Path,
+    sync_dir: Option<PathBuf>,
+    chunk_size: usize,
+) -> DenebResult<(CB::Catalog, SB::Store)>
+where
+    CB: CatalogBuilder,
+    SB: StoreBuilder,
 {
     // Create an object store
     let mut store = store_builder.at_dir(work_dir)?;
@@ -237,8 +263,10 @@ fn init<CB, SB>(catalog_builder: &CB,
         {
             let mut catalog = catalog_builder.create(catalog_path.as_path())?;
             populate_with_dir(&mut catalog, &mut store, sync_dir.as_path(), chunk_size)?;
-            info!("Catalog populated with contents of {:?}",
-                  sync_dir.as_path());
+            info!(
+                "Catalog populated with contents of {:?}",
+                sync_dir.as_path()
+            );
         }
 
         // Save the generated catalog as a content-addressed chunk in the store.
@@ -270,8 +298,9 @@ fn init<CB, SB>(catalog_builder: &CB,
 }
 
 fn handle_request<C, S>(request: Request, chan: &ReplyChannel, catalog: &mut C, store: &mut S)
-    where C: Catalog,
-          S: Store
+where
+    C: Catalog,
+    S: Store,
 {
     match request {
         // Catalog operations
@@ -282,10 +311,14 @@ fn handle_request<C, S>(request: Request, chan: &ReplyChannel, catalog: &mut C, 
             let _ = chan.send(Reply::INode(catalog.get_inode(index)));
         }
         Request::GetDirEntryIndex { parent, name } => {
-            let _ = chan.send(Reply::Index(catalog.get_dir_entry_index(parent, name.as_path())));
+            let _ = chan.send(Reply::Index(
+                catalog.get_dir_entry_index(parent, name.as_path()),
+            ));
         }
         Request::GetDirEntryINode { parent, name } => {
-            let _ = chan.send(Reply::INode(catalog.get_dir_entry_inode(parent, name.as_path())));
+            let _ = chan.send(Reply::INode(
+                catalog.get_dir_entry_inode(parent, name.as_path()),
+            ));
         }
         Request::GetDirEntries { parent } => {
             let _ = chan.send(Reply::DirEntries(catalog.get_dir_entries(parent)));
@@ -296,7 +329,11 @@ fn handle_request<C, S>(request: Request, chan: &ReplyChannel, catalog: &mut C, 
             index,
             chunks,
         } => {
-            let _ = chan.send(Reply::Result(catalog.add_inode(entry.as_path(), index, chunks)));
+            let _ = chan.send(Reply::Result(catalog.add_inode(
+                entry.as_path(),
+                index,
+                chunks,
+            )));
         }
 
         Request::AddDirEntry {
@@ -304,7 +341,11 @@ fn handle_request<C, S>(request: Request, chan: &ReplyChannel, catalog: &mut C, 
             name,
             index,
         } => {
-            let _ = chan.send(Reply::Result(catalog.add_dir_entry(parent, name.as_path(), index)));
+            let _ = chan.send(Reply::Result(catalog.add_dir_entry(
+                parent,
+                name.as_path(),
+                index,
+            )));
         }
 
         // Store operations

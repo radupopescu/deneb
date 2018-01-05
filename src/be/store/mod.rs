@@ -20,4 +20,3 @@ pub trait Store {
 
     fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()>;
 }
-

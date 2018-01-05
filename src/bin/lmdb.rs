@@ -19,8 +19,7 @@ fn main() {
         .unwrap();
 
     // Create a named database
-    let db = env.create_db(Some("test"), DatabaseFlags::empty())
-        .unwrap();
+    let db = env.create_db(Some("test"), DatabaseFlags::empty()).unwrap();
 
     // Start a write transaction
     let mut writer = env.begin_rw_txn().unwrap();

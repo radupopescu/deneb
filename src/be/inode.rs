@@ -1,8 +1,8 @@
 use nix::libc::mode_t;
-use nix::sys::stat::{S_IFMT, S_IFDIR, S_IFCHR, S_IFBLK, S_IFREG, S_IFLNK, S_IFIFO, lstat};
+use nix::sys::stat::{lstat, S_IFBLK, S_IFCHR, S_IFDIR, S_IFIFO, S_IFLNK, S_IFMT, S_IFREG};
 use time::Timespec;
 
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 use std::i32;
 use std::u16;
 use std::path::Path;
@@ -25,14 +25,10 @@ pub struct FileAttributes {
     pub ino: u64,
     pub size: u64,
     pub blocks: u64,
-    #[serde(with = "TimespecDef")]
-    pub atime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub mtime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub ctime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub crtime: Timespec,
+    #[serde(with = "TimespecDef")] pub atime: Timespec,
+    #[serde(with = "TimespecDef")] pub mtime: Timespec,
+    #[serde(with = "TimespecDef")] pub ctime: Timespec,
+    #[serde(with = "TimespecDef")] pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
     pub nlink: u32,
@@ -91,7 +87,7 @@ impl INode {
             rdev: 0,
             flags: 0,
         };
-        #[cfg(target_os="macos")]
+        #[cfg(target_os = "macos")]
         {
             _attributes.crtime = Timespec {
                 sec: stats.st_birthtime,
@@ -100,9 +96,9 @@ impl INode {
         }
 
         Ok(INode {
-               attributes: _attributes,
-               chunks: chunks,
-           })
+            attributes: _attributes,
+            chunks: chunks,
+        })
     }
 }
 
@@ -111,16 +107,21 @@ impl INode {
 /// Given a list of `ChunkDescriptor`, representing consecutive chunks of a file and a segment identified by
 /// `offset` - the offset from the beginning of the file - and `size` - the size of the segment,
 /// this function returns a vector of `ChunkPart`
-pub fn lookup_chunks(offset: usize,
-                     size: usize,
-                     chunks: &[ChunkDescriptor])
-                     -> Option<Vec<ChunkPart>> {
+pub fn lookup_chunks(
+    offset: usize,
+    size: usize,
+    chunks: &[ChunkDescriptor],
+) -> Option<Vec<ChunkPart>> {
     let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
     let mut output = Vec::new();
     let mut bytes_left = size;
     for c in chunks[first_chunk..].iter() {
         let read_bytes = min(bytes_left, c.size - offset_in_chunk);
-        output.push(ChunkPart(&c.digest, offset_in_chunk, offset_in_chunk + read_bytes));
+        output.push(ChunkPart(
+            &c.digest,
+            offset_in_chunk,
+            offset_in_chunk + read_bytes,
+        ));
         offset_in_chunk = 0;
         bytes_left -= read_bytes;
         if bytes_left == 0 {
@@ -155,7 +156,7 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
 }
 
 fn mode_to_permissions(mode: mode_t) -> u16 {
-    #[cfg(target_os="linux")]
+    #[cfg(target_os = "linux")]
     debug_assert!(mode <= u16::MAX as u32);
     (mode & !S_IFMT.bits()) as u16
 }
@@ -223,9 +224,9 @@ mod tests {
         if let Ok(cs) = raw_chunks {
             for (digest, data) in cs {
                 chunks.push(ChunkDescriptor {
-                                digest: digest,
-                                size: data.len(),
-                            });
+                    digest: digest,
+                    size: data.len(),
+                });
                 blobs.push(data);
             }
         }

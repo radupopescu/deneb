@@ -14,8 +14,7 @@ pub struct Manifest {
     pub root_hash: Digest,
     // Note: may need to be changed to previous_manifest (store old manifests as CA chunks)
     pub previous_root_hash: Option<Digest>,
-    #[serde(with = "serde_tm")]
-    pub timestamp: Tm,
+    #[serde(with = "serde_tm")] pub timestamp: Tm,
 }
 
 impl Manifest {
@@ -45,17 +44,19 @@ mod serde_tm {
     use std::fmt;
     use serde::{Deserializer, Serializer};
     use serde::de::{Error, Visitor};
-    use time::{Tm, strptime};
+    use time::{strptime, Tm};
 
     pub fn serialize<S>(tm: &Tm, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let s = format!("{}", tm.rfc822());
         serializer.serialize_str(s.as_str())
     }
 
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Tm, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         struct TmVisitor;
 
@@ -67,7 +68,8 @@ mod serde_tm {
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-                where E: Error
+            where
+                E: Error,
             {
                 strptime(v, "%a, %d %b %Y %H:%M:%S GMT").map_err(Error::custom)
             }

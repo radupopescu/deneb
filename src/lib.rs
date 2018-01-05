@@ -9,9 +9,9 @@ extern crate fuse;
 extern crate futures;
 extern crate lmdb;
 extern crate lmdb_sys;
+extern crate log4rs;
 #[macro_use]
 extern crate log;
-extern crate log4rs;
 extern crate nix;
 #[cfg(test)]
 extern crate quickcheck;

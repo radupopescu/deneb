@@ -37,7 +37,12 @@ pub trait Catalog {
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>>;
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()>;
+    fn add_inode(
+        &mut self,
+        entry: &Path,
+        index: u64,
+        chunks: Vec<ChunkDescriptor>,
+    ) -> DenebResult<()>;
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()>;
 }
@@ -48,14 +53,18 @@ struct IndexGenerator {
 
 impl Default for IndexGenerator {
     fn default() -> IndexGenerator {
-        IndexGenerator { current_index: Cell::new(1) }
+        IndexGenerator {
+            current_index: Cell::new(1),
+        }
     }
 }
 
 impl IndexGenerator {
     fn starting_at(i0: u64) -> Result<IndexGenerator, DenebError> {
         if i0 > 0 {
-            Ok(IndexGenerator { current_index: Cell::new(i0) })
+            Ok(IndexGenerator {
+                current_index: Cell::new(i0),
+            })
         } else {
             Err(DenebError::IndexGenerator)
         }

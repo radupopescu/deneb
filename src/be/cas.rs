@@ -16,9 +16,10 @@ pub fn hash(msg: &[u8]) -> Digest {
     Digest(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: BufRead>(mut reader: R,
-                               buffer: &mut [u8]) -> Result<Vec<(Digest,Vec<u8>)>,
-                                                            DenebError> {
+pub fn read_chunks<R: BufRead>(
+    mut reader: R,
+    buffer: &mut [u8],
+) -> Result<Vec<(Digest, Vec<u8>)>, DenebError> {
     let chunk_size = buffer.len();
     let mut chunks = Vec::new();
     let mut offset = 0;
@@ -62,7 +63,8 @@ impl Display for Digest {
 
 impl Serialize for Digest {
     fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
-        where S: Serializer
+    where
+        S: Serializer,
     {
         let s = self.to_string();
         serializer.serialize_str(s.as_str())
@@ -71,7 +73,8 @@ impl Serialize for Digest {
 
 impl<'de> Deserialize<'de> for Digest {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Digest, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         struct DigestVisitor;
 
@@ -83,7 +86,8 @@ impl<'de> Deserialize<'de> for Digest {
             }
 
             fn visit_str<E>(self, v: &str) -> ::std::result::Result<Self::Value, E>
-                where E: Error
+            where
+                E: Error,
             {
                 digest_from_slice(v.as_bytes()).map_err(Error::custom)
             }
@@ -110,7 +114,7 @@ fn hash_buf(buffer: &[u8]) -> (Digest, Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use quickcheck::{QuickCheck, StdGen, TestResult};
-    use rand::{Rng, thread_rng};
+    use rand::{thread_rng, Rng};
 
     use super::*;
 
@@ -118,6 +122,7 @@ mod tests {
     fn digest_to_string_and_back() {
         let digest = hash("some_key".as_ref());
         let serialized = digest.to_string();
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         assert_eq!(serialized, "41bcc5cb17c49e80e1f20fde666dedad51bc35f146051da2689419948c07a4974e65be08e41fc194126a3e162aee9165271a32119e0cd369e587cf519a68e293");
 
         let deserialized = digest_from_slice(serialized.as_bytes());
@@ -161,12 +166,11 @@ mod tests {
             if chunk_size == 0 {
                 TestResult::discard()
             } else {
-                TestResult::from_bool(
-                    if let Ok(res) = helper(file_size, chunk_size) {
-                        res
-                    } else {
-                        false
-                    })
+                TestResult::from_bool(if let Ok(res) = helper(file_size, chunk_size) {
+                    res
+                } else {
+                    false
+                })
             }
         }
         QuickCheck::new()
