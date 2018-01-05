@@ -35,9 +35,9 @@ fn main() {
     });
 
     let fut = task_rx.for_each(move |(v, tx)| {
-                                   let _ = tx.send(v * 2);
-                                   Ok(())
-                               });
+        let _ = tx.send(v * 2);
+        Ok(())
+    });
 
     let _ = core.run(fut);
 

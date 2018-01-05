@@ -1,13 +1,13 @@
-use nix::sys::signal::{SigmaskHow, Signal, SigSet, pthread_sigmask};
+use nix::sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal};
 use nix::unistd::mkstemp;
 use time::precise_time_ns;
 
-use std::fs::{File, remove_file, rename};
+use std::fs::{remove_file, rename, File};
 use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
-use std::thread::{JoinHandle, spawn};
+use std::thread::{spawn, JoinHandle};
 
 use common::errors::{DenebResult, UnixError};
 
@@ -61,4 +61,3 @@ fn create_temp_file(prefix: &Path) -> Result<(File, PathBuf), UnixError> {
     let f = unsafe { File::from_raw_fd(fd) };
     Ok((f, temp_path))
 }
-

@@ -2,7 +2,7 @@ extern crate memmap;
 
 use memmap::{Mmap, MmapMut, MmapOptions};
 
-use std::fs::{OpenOptions, File};
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 
 fn main() {
@@ -22,9 +22,10 @@ fn main() {
         .read(true)
         .write(true)
         .create(true)
-        .open("/tmp/output.txt").unwrap();
+        .open("/tmp/output.txt")
+        .unwrap();
     output_file.set_len(20).unwrap();
-    let mut output_map = unsafe {MmapMut::map_mut(&output_file) }.unwrap();
+    let mut output_map = unsafe { MmapMut::map_mut(&output_file) }.unwrap();
 
     let (mut view1, mut view2) = output_map.split_at_mut(7);
     view1.write_all(b"one").unwrap();

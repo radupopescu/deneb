@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
 use quickcheck::{Arbitrary, Gen};
-use rand::{Rng,thread_rng};
+use rand::{thread_rng, Rng};
 use rust_sodium::crypto::hash::hash;
 use uuid::Uuid;
 
-use std::fs::{File, create_dir_all, remove_dir_all};
-use std::io::{Read, BufReader};
+use std::fs::{create_dir_all, remove_dir_all, File};
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use deneb::common::atomic_write;
@@ -38,9 +38,7 @@ impl DirEntry {
                 }
                 DirEntry::Dir(name, children)
             }
-            _ => {
-                panic!("Not supposed to be here")
-            }
+            _ => panic!("Not supposed to be here"),
         }
     }
 }
@@ -86,12 +84,12 @@ impl DirTree {
 
     pub fn create(&self) -> DenebResult<()> {
         self.visit(&|dir: &Path, entry: &DirEntry| {
-                        if let DirEntry::File(ref name, ref contents) = *entry {
-                            create_dir_all(dir)?;
-                            atomic_write(dir.join(name).as_path(), contents)?;
-                        }
-                        Ok(())
-                    })
+            if let DirEntry::File(ref name, ref contents) = *entry {
+                create_dir_all(dir)?;
+                atomic_write(dir.join(name).as_path(), contents)?;
+            }
+            Ok(())
+        })
     }
 
     pub fn compare(&self, other: &Path) -> DenebResult<()> {
@@ -113,13 +111,15 @@ impl DirTree {
     }
 
     fn visit<V>(&self, action: V) -> DenebResult<()>
-        where V: Fn(&Path, &DirEntry) -> DenebResult<()> + Copy
+    where
+        V: Fn(&Path, &DirEntry) -> DenebResult<()> + Copy,
     {
         self.visit_rec(&self.root, &self.entries, action)
     }
 
     fn visit_rec<V>(&self, dir: &Path, entries: &[DirEntry], action: V) -> DenebResult<()>
-        where V: Fn(&Path, &DirEntry) -> DenebResult<()> + Copy
+    where
+        V: Fn(&Path, &DirEntry) -> DenebResult<()> + Copy,
     {
         for entry in entries.iter() {
             action(dir, entry)?;
@@ -157,7 +157,7 @@ fn compare_files(fn1: &Path, fn2: &Path) -> bool {
             println!("Error opening old file {:?}", fn1);
             false
         }
-        _ => false
+        _ => false,
     }
 }
 

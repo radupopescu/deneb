@@ -22,7 +22,7 @@ use common::*;
 
 use deneb::be::catalog::{Catalog, CatalogBuilder, LmdbCatalogBuilder, MemCatalog};
 use deneb::be::populate_with_dir;
-use deneb::be::store::{Store, StoreBuilder, DiskStoreBuilder, MemStore};
+use deneb::be::store::{DiskStoreBuilder, MemStore, Store, StoreBuilder};
 use deneb::common::errors::DenebResult;
 use deneb::fe::fuse::{Fs, Session};
 
@@ -33,15 +33,25 @@ fn make_test_dir_tree(prefix: &Path) -> DenebResult<DirTree> {
     let root = prefix.join("input");
     println!("Root: {:?}", root);
 
-    let entries =
-        vec![DirEntry::File("a.txt".to_owned(), b"hello\n".to_vec()),
-             DirEntry::Dir("dir1".to_owned(),
-                           vec![DirEntry::File("b.txt".to_owned(), b"is it me\n".to_vec()),
-                                DirEntry::File("c.txt".to_owned(), b"you're looking\n".to_vec())]),
-             DirEntry::Dir("dir2".to_owned(),
-                           vec![DirEntry::Dir("dir3".to_owned(),
-                                              vec![DirEntry::File("c.txt".to_owned(),
-                                                                  b"for?\n".to_vec())])])];
+    let entries = vec![
+        DirEntry::File("a.txt".to_owned(), b"hello\n".to_vec()),
+        DirEntry::Dir(
+            "dir1".to_owned(),
+            vec![
+                DirEntry::File("b.txt".to_owned(), b"is it me\n".to_vec()),
+                DirEntry::File("c.txt".to_owned(), b"you're looking\n".to_vec()),
+            ],
+        ),
+        DirEntry::Dir(
+            "dir2".to_owned(),
+            vec![
+                DirEntry::Dir(
+                    "dir3".to_owned(),
+                    vec![DirEntry::File("c.txt".to_owned(), b"for?\n".to_vec())],
+                ),
+            ],
+        ),
+    ];
 
     let dt = DirTree::with_entries(root, entries);
 
@@ -52,16 +62,17 @@ fn make_test_dir_tree(prefix: &Path) -> DenebResult<DirTree> {
     Ok(dt)
 }
 
-
 // Initialize a Deneb repo with the input directory
-fn init_repo<'a, C, S>(mut catalog: C,
-                       mut store: S,
-                       input: &Path,
-                       mount_point: &Path,
-                       chunk_size: usize)
-                       -> DenebResult<Session<'a>>
-    where C: 'a + Catalog + Send,
-          S: 'a + Store + Send
+fn init_repo<'a, C, S>(
+    mut catalog: C,
+    mut store: S,
+    input: &Path,
+    mount_point: &Path,
+    chunk_size: usize,
+) -> DenebResult<Session<'a>>
+where
+    C: 'a + Catalog + Send,
+    S: 'a + Store + Send,
 {
     populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
     let file_system = Fs::new(catalog, store);
@@ -78,23 +89,27 @@ fn copy_dir_tree(source: &Path, dest: &Path) -> DenebResult<()> {
 //
 // Use a previously generated DirTree to populate a Deneb repository.
 // Copy all the files back out of the Deneb repository and compare with the originals.
-fn check_inout<C, S>(catalog: C,
-                     store: S,
-                     dir: &DirTree,
-                     prefix: &Path,
-                     chunk_size: usize)
-                     -> DenebResult<()>
-    where C: Catalog + Send,
-          S: Store + Send
+fn check_inout<C, S>(
+    catalog: C,
+    store: S,
+    dir: &DirTree,
+    prefix: &Path,
+    chunk_size: usize,
+) -> DenebResult<()>
+where
+    C: Catalog + Send,
+    S: Store + Send,
 {
     // Create and mount the deneb repo
     let mount_point = prefix.join("mount");
     create_dir(mount_point.as_path())?;
-    let _session = init_repo(catalog,
-                             store,
-                             dir.root.as_path(),
-                             mount_point.as_path(),
-                             chunk_size)?;
+    let _session = init_repo(
+        catalog,
+        store,
+        dir.root.as_path(),
+        mount_point.as_path(),
+        chunk_size,
+    )?;
 
     // Copy the contents of the Deneb repository to a new directory
     let output_dir = prefix.join("output");
@@ -133,8 +148,9 @@ fn single_fuse_test(test_type: &TestType, chunk_size: usize) {
                         let store = sb.at_dir(store_path);
                         assert!(store.is_ok());
                         if let Ok(store) = store {
-                            assert!(check_inout(catalog, store, &dt, prefix.path(), chunk_size)
-                                        .is_ok());
+                            assert!(
+                                check_inout(catalog, store, &dt, prefix.path(), chunk_size).is_ok()
+                            );
                         }
                     }
                 }

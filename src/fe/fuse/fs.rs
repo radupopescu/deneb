@@ -1,9 +1,9 @@
-use fuse::{FileAttr, Filesystem, FileType, Request, ReplyAttr, ReplyData, ReplyDirectory,
-           ReplyEmpty, ReplyEntry, ReplyOpen};
+use fuse::{FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
+           ReplyEntry, ReplyOpen, Request};
 use fuse::consts::FOPEN_KEEP_CACHE;
-use fuse::{BackgroundSession, mount, spawn_mount};
-use nix::libc::{O_WRONLY, O_RDWR};
-use nix::libc::{EINVAL, EACCES};
+use fuse::{mount, spawn_mount, BackgroundSession};
+use nix::libc::{O_RDWR, O_WRONLY};
+use nix::libc::{EACCES, EINVAL};
 use time::Timespec;
 
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use be::catalog::Catalog;
-use be::inode::{ChunkPart, FileAttributes, FileType as FT, lookup_chunks};
+use be::inode::{lookup_chunks, ChunkPart, FileAttributes, FileType as FT};
 use be::store::Store;
 use common::errors::DenebResult;
 
@@ -28,8 +28,9 @@ pub struct Fs<C, S> {
 }
 
 impl<'a, C, S> Fs<C, S>
-    where C: 'a + Catalog + Send,
-          S: 'a + Store + Send
+where
+    C: 'a + Catalog + Send,
+    S: 'a + Store + Send,
 {
     pub fn new(catalog: C, store: S) -> Fs<C, S> {
         Fs {
@@ -44,10 +45,11 @@ impl<'a, C, S> Fs<C, S>
         mount(self, mount_point, options).map_err(|e| e.into())
     }
 
-    pub unsafe fn spawn_mount<P: AsRef<Path>>(self,
-                                              mount_point: &P,
-                                              options: &[&OsStr])
-                                              -> DenebResult<Session<'a>> {
+    pub unsafe fn spawn_mount<P: AsRef<Path>>(
+        self,
+        mount_point: &P,
+        options: &[&OsStr],
+    ) -> DenebResult<Session<'a>> {
         spawn_mount(self, mount_point, options)
             .map(Session)
             .map_err(|e| e.into())
@@ -55,15 +57,15 @@ impl<'a, C, S> Fs<C, S>
 }
 
 impl<C, S> Filesystem for Fs<C, S>
-    where C: Catalog,
-          S: Store
+where
+    C: Catalog,
+    S: Store,
 {
     // Filesystem lifetime callbacks
 
     // fn init(&mut self, _req: &Request) -> Result<(), c_int> { Ok(()) }
 
     // fn destroy(&mut self, _req: &Request) { }
-
 
     // Callbacks for read-only functionality
 
@@ -121,12 +123,14 @@ impl<C, S> Filesystem for Fs<C, S>
         }
     }
 
-    fn readdir(&mut self,
-               _req: &Request,
-               ino: u64,
-               fh: u64,
-               offset: i64,
-               mut reply: ReplyDirectory) {
+    fn readdir(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        mut reply: ReplyDirectory,
+    ) {
         debug!("readdir - ino: {}, fh: {}, offset: {}", ino, fh, offset);
         let mut index = ::std::cmp::max(offset, 0) as usize;
         match self.open_dirs.get(&fh) {
@@ -134,10 +138,12 @@ impl<C, S> Filesystem for Fs<C, S>
                 while index < entries.len() {
                     let (ref name, idx) = entries[index];
                     if let Ok(inode) = self.catalog.get_inode(idx) {
-                        if !reply.add(idx,
-                                      index as i64 + 1,
-                                      convert_fuse_file_type(inode.attributes.kind),
-                                      name) {
+                        if !reply.add(
+                            idx,
+                            index as i64 + 1,
+                            convert_fuse_file_type(inode.attributes.kind),
+                            name,
+                        ) {
                             index += 1;
                         } else {
                             break;
@@ -172,27 +178,26 @@ impl<C, S> Filesystem for Fs<C, S>
         }
     }
 
-    fn read(&mut self,
-            _req: &Request,
-            ino: u64,
-            fh: u64,
-            offset: i64,
-            size: u32,
-            reply: ReplyData) {
-        debug!("read - ino: {}, fh: {}, offset: {}, size: {}",
-               ino,
-               fh,
-               offset,
-               size);
+    fn read(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        reply: ReplyData,
+    ) {
+        debug!(
+            "read - ino: {}, fh: {}, offset: {}, size: {}",
+            ino, fh, offset, size
+        );
         let offset = ::std::cmp::max(offset, 0) as usize;
         let buffer = self.open_files
             .get(&fh)
             .and_then(|_ctx| self.catalog.get_inode(fh).ok())
             .and_then(|inode| {
                 lookup_chunks(offset, size as usize, inode.chunks.as_slice())
-                    .and_then(|chunks| {
-                        chunks_to_buffer(chunks.as_slice(), &self.store).ok()
-                    })
+                    .and_then(|chunks| chunks_to_buffer(chunks.as_slice(), &self.store).ok())
             });
         match buffer {
             Some(buffer) => {
@@ -204,14 +209,16 @@ impl<C, S> Filesystem for Fs<C, S>
         }
     }
 
-    fn release(&mut self,
-               _req: &Request,
-               ino: u64,
-               fh: u64,
-               _flags: u32,
-               _lock_owner: u64,
-               _flush: bool,
-               reply: ReplyEmpty) {
+    fn release(
+        &mut self,
+        _req: &Request,
+        ino: u64,
+        fh: u64,
+        _flags: u32,
+        _lock_owner: u64,
+        _flush: bool,
+        reply: ReplyEmpty,
+    ) {
         debug!("release - ino: {}", ino);
         self.open_files.remove(&fh);
         reply.ok();

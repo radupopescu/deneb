@@ -1,8 +1,8 @@
 use failure::ResultExt;
 
-use bincode::{serialize, deserialize, Infinite};
+use bincode::{deserialize, serialize, Infinite};
 use lmdb::{Cursor, Database, DatabaseFlags, Environment, Transaction, WriteFlags, NO_SUB_DIR};
-use lmdb_sys::{MDB_envinfo, MDB_stat, mdb_env_info, mdb_env_stat};
+use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
 
 use std::collections::BTreeMap;
 use std::cmp::max;
@@ -39,22 +39,25 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         {
             let mut writer = env.begin_rw_txn()?;
             // Write catalog format version
-            writer.put(meta, &"catalog_version",
-                       &format!("{}", CATALOG_VERSION),
-                       WriteFlags::empty())?;
+            writer.put(
+                meta,
+                &"catalog_version",
+                &format!("{}", CATALOG_VERSION),
+                WriteFlags::empty(),
+            )?;
             writer.commit()?;
         }
 
         info!("Created LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-               env: env,
-               inodes: inodes,
-               dir_entries: dir_entries,
-               _meta: meta,
-               version: CATALOG_VERSION,
-               index_generator: IndexGenerator::default(),
-           })
+            env: env,
+            inodes: inodes,
+            dir_entries: dir_entries,
+            _meta: meta,
+            version: CATALOG_VERSION,
+            index_generator: IndexGenerator::default(),
+        })
     }
 
     fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
@@ -84,12 +87,12 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         info!("Opened LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-               env: env,
-               inodes: inodes,
-               dir_entries: dir_entries,
-               _meta: meta,
-               version: ver,
-               index_generator: IndexGenerator::starting_at(starting_index)?,
+            env: env,
+            inodes: inodes,
+            dir_entries: dir_entries,
+            _meta: meta,
+            version: ver,
+            index_generator: IndexGenerator::starting_at(starting_index)?,
         })
     }
 }
@@ -100,8 +103,10 @@ impl Catalog for LmdbCatalog {
         info!("Environment information:");
         info!("  Map size: {}", env_info.me_mapsize);
         info!("  Last used page: {}", env_info.me_last_pgno);
-        info!("  Last committed transaction id: {}",
-              env_info.me_last_txnid);
+        info!(
+            "  Last committed transaction id: {}",
+            env_info.me_last_txnid
+        );
         info!("  Maximum number of readers: {}", env_info.me_maxreaders);
         info!("  Current number of readers: {}", env_info.me_numreaders);
 
@@ -123,7 +128,8 @@ impl Catalog for LmdbCatalog {
 
     fn get_inode(&self, index: u64) -> DenebResult<INode> {
         let reader = self.env.begin_ro_txn()?;
-        let buffer = reader.get(self.inodes, &format!("{}", index))
+        let buffer = reader
+            .get(self.inodes, &format!("{}", index))
             .context(CatalogError::INodeRead(index))?;
         deserialize::<INode>(buffer)
             .context(CatalogError::INodeDeserialization(index))
@@ -132,7 +138,8 @@ impl Catalog for LmdbCatalog {
 
     fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
         let reader = self.env.begin_ro_txn()?;
-        let buffer = reader.get(self.dir_entries, &format!("{}", parent))
+        let buffer = reader
+            .get(self.dir_entries, &format!("{}", parent))
             .context(CatalogError::DEntryRead(parent))?;
         let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
             .context(CatalogError::DEntryDeserialization(parent))?;
@@ -145,26 +152,36 @@ impl Catalog for LmdbCatalog {
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         let reader = self.env.begin_ro_txn()?;
-        let buffer = reader.get(self.dir_entries, &format!("{}", parent))
+        let buffer = reader
+            .get(self.dir_entries, &format!("{}", parent))
             .context(CatalogError::DEntryRead(parent))?;
         let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
             .context(CatalogError::DEntryDeserialization(parent))?;
         Ok(entries
-               .iter()
-               .map(|(name, index)| (name.to_owned(), *index))
-               .collect::<Vec<(PathBuf, u64)>>())
+            .iter()
+            .map(|(name, index)| (name.to_owned(), *index))
+            .collect::<Vec<(PathBuf, u64)>>())
     }
 
-    fn add_inode(&mut self, entry: &Path, index: u64, chunks: Vec<ChunkDescriptor>) -> DenebResult<()> {
+    fn add_inode(
+        &mut self,
+        entry: &Path,
+        index: u64,
+        chunks: Vec<ChunkDescriptor>,
+    ) -> DenebResult<()> {
         let inode = INode::new(index, entry, chunks)?;
 
-        let buffer = serialize(&inode, Infinite)
-            .context(CatalogError::INodeSerialization(index))?;
+        let buffer = serialize(&inode, Infinite).context(CatalogError::INodeSerialization(index))?;
 
         let mut writer = self.env.begin_rw_txn()?;
 
         writer
-            .put(self.inodes, &format!("{}", index), &buffer, WriteFlags::empty())
+            .put(
+                self.inodes,
+                &format!("{}", index),
+                &buffer,
+                WriteFlags::empty(),
+            )
             .context(CatalogError::INodeWrite(index))?;
 
         writer.commit()?;
@@ -188,31 +205,38 @@ impl Catalog for LmdbCatalog {
             }
 
             // Write updated dir entries to database
-            let buffer = serialize(&entries, Infinite)
-                .context(CatalogError::DEntrySerialization(parent))?;
+            let buffer =
+                serialize(&entries, Infinite).context(CatalogError::DEntrySerialization(parent))?;
             writer
-                .put(self.dir_entries, &format!("{}", parent), &buffer,
-                     WriteFlags::empty())
+                .put(
+                    self.dir_entries,
+                    &format!("{}", parent),
+                    &buffer,
+                    WriteFlags::empty(),
+                )
                 .context(CatalogError::DEntryWrite(parent))?;
 
             // Retrieve inode of index
-            let buffer =
-                {
-                    let buffer = writer.get(self.inodes, &format!("{}", index))
-                        .context(CatalogError::INodeRead(index))?;
-                    let mut inode = deserialize::<INode>(buffer)
-                        .context(CatalogError::INodeDeserialization(index))?;
+            let buffer = {
+                let buffer = writer
+                    .get(self.inodes, &format!("{}", index))
+                    .context(CatalogError::INodeRead(index))?;
+                let mut inode = deserialize::<INode>(buffer)
+                    .context(CatalogError::INodeDeserialization(index))?;
 
-                    // Update number of hardlink in inode
-                    inode.attributes.nlink += 1;
+                // Update number of hardlink in inode
+                inode.attributes.nlink += 1;
 
-                    // Write inode back to database
-                    serialize(&inode, Infinite)
-                        .context(CatalogError::INodeSerialization(index))
-                }?;
+                // Write inode back to database
+                serialize(&inode, Infinite).context(CatalogError::INodeSerialization(index))
+            }?;
             writer
-                .put(self.inodes, &format!("{}", index), &buffer,
-                     WriteFlags::empty())
+                .put(
+                    self.inodes,
+                    &format!("{}", index),
+                    &buffer,
+                    WriteFlags::empty(),
+                )
                 .context(CatalogError::INodeWrite(index))?;
         }
         writer.commit()?;
@@ -220,8 +244,9 @@ impl Catalog for LmdbCatalog {
     }
 }
 
-fn init_db<P: AsRef<Path>>(path: P) -> Result<(Environment, Database, Database, Database),
-                                              LMDBError> {
+fn init_db<P: AsRef<Path>>(
+    path: P,
+) -> Result<(Environment, Database, Database, Database), LMDBError> {
     let env = open_environment(path.as_ref())?;
 
     // Create databases

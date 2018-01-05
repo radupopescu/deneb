@@ -4,7 +4,7 @@
 
 use failure::ResultExt;
 
-use std::fs::{File, read_dir};
+use std::fs::{read_dir, File};
 use std::io::BufReader;
 use std::path::Path;
 
@@ -21,13 +21,15 @@ pub mod inode;
 pub mod manifest;
 pub mod store;
 
-pub fn populate_with_dir<C, S>(catalog: &mut C,
-                               store: &mut S,
-                               dir: &Path,
-                               chunk_size: usize)
-                               -> DenebResult<()>
-    where C: Catalog,
-          S: Store
+pub fn populate_with_dir<C, S>(
+    catalog: &mut C,
+    store: &mut S,
+    dir: &Path,
+    chunk_size: usize,
+) -> DenebResult<()>
+where
+    C: Catalog,
+    S: Store,
 {
     catalog.add_inode(dir, 1, vec![])?;
 
@@ -37,26 +39,26 @@ pub fn populate_with_dir<C, S>(catalog: &mut C,
     Ok(())
 }
 
-fn visit_dirs<C, S>(catalog: &mut C,
-                    store: &mut S,
-                    buffer: &mut [u8],
-                    dir: &Path,
-                    dir_index: u64,
-                    parent_index: u64)
-                    -> DenebResult<()>
-    where C: Catalog,
-          S: Store
+fn visit_dirs<C, S>(
+    catalog: &mut C,
+    store: &mut S,
+    buffer: &mut [u8],
+    dir: &Path,
+    dir_index: u64,
+    parent_index: u64,
+) -> DenebResult<()>
+where
+    C: Catalog,
+    S: Store,
 {
-    catalog
-        .add_dir_entry(dir_index, Path::new("."), dir_index)?;
-    catalog
-        .add_dir_entry(dir_index, Path::new(".."), parent_index)?;
+    catalog.add_dir_entry(dir_index, Path::new("."), dir_index)?;
+    catalog.add_dir_entry(dir_index, Path::new(".."), parent_index)?;
 
     for entry in read_dir(dir)? {
         let path = (entry?).path();
         let fname = Path::new(path.as_path()
-                                  .file_name()
-                                  .ok_or_else(|| DenebError::InvalidPath(path.clone()))?);
+            .file_name()
+            .ok_or_else(|| DenebError::InvalidPath(path.clone()))?);
 
         let mut chunks = Vec::new();
         if path.is_file() {
@@ -67,9 +69,9 @@ fn visit_dirs<C, S>(catalog: &mut C,
             for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
                 store.put_chunk(digest.clone(), data.as_ref())?;
                 chunks.push(ChunkDescriptor {
-                                digest: digest.clone(),
-                                size: data.len(),
-                            });
+                    digest: digest.clone(),
+                    size: data.len(),
+                });
             }
         }
 
