@@ -38,9 +38,9 @@ fn run() -> DenebResult<()> {
     // Create the file system data structure
     let cb = LmdbCatalogBuilder;
     let sb = DiskStoreBuilder;
-    let engine = Engine::new(cb,
-                             sb,
-                             params.work_dir,
+    let engine = Engine::new(&cb,
+                             &sb,
+                             &params.work_dir,
                              params.sync_dir,
                              params.chunk_size,
                              1000)?;

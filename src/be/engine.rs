@@ -175,9 +175,9 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new<CB, SB>(catalog_builder: CB,
-                       store_builder: SB,
-                       work_dir: PathBuf,
+    pub fn new<CB, SB>(catalog_builder: &CB,
+                       store_builder: &SB,
+                       work_dir: &Path,
                        sync_dir: Option<PathBuf>,
                        chunk_size: usize,
                        queue_size: usize)
@@ -187,9 +187,9 @@ impl Engine {
               SB: StoreBuilder,
               <SB as StoreBuilder>::Store: Send + 'static
     {
-        let (mut catalog, mut store) = init(&catalog_builder,
-                                            &store_builder,
-                                            &work_dir,
+        let (mut catalog, mut store) = init(catalog_builder,
+                                            store_builder,
+                                            work_dir,
                                             sync_dir,
                                             chunk_size)?;
 
@@ -214,22 +214,22 @@ impl Engine {
 
 fn init<CB, SB>(catalog_builder: &CB,
                 store_builder: &SB,
-                work_dir: &PathBuf,
+                work_dir: &Path,
                 sync_dir: Option<PathBuf>,
                 chunk_size: usize)
                 -> DenebResult<(CB::Catalog, SB::Store)>
     where CB: CatalogBuilder,
-          SB: StoreBuilder
+          SB: StoreBuilder,
 {
     // Create an object store
-    let mut store = store_builder.at_dir(work_dir.as_path())?;
+    let mut store = store_builder.at_dir(work_dir)?;
 
-    let catalog_root = work_dir.as_path().to_owned().join("scratch");
+    let catalog_root = work_dir.to_path_buf().join("scratch");
     create_dir_all(catalog_root.as_path())?;
     let catalog_path = catalog_root.join("current_catalog");
     info!("Catalog path: {:?}", catalog_path);
 
-    let manifest_path = work_dir.as_path().to_owned().join("manifest");
+    let manifest_path = work_dir.to_path_buf().join("manifest");
     info!("Manifest path: {:?}", manifest_path);
 
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
@@ -329,7 +329,7 @@ mod tests {
     fn engine_works() {
         let cb = MemCatalogBuilder;
         let sb = MemStoreBuilder;
-        if let Ok(engine) = Engine::new(cb, sb, PathBuf::new(), None, 1000, 1000) {
+        if let Ok(engine) = Engine::new(&cb, &sb, &PathBuf::new(), None, 1000, 1000) {
             let h = engine.handle();
 
             assert!(h.get_inode(0).is_err());

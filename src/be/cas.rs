@@ -40,7 +40,7 @@ pub fn read_chunks<R: BufRead>(mut reader: R,
                     // Retry if interrupted
                     continue;
                 } else {
-                    return Err(DenebError::DiskIO.into());
+                    return Err(DenebError::DiskIO);
                 }
             }
         }
