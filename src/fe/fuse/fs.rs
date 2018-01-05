@@ -74,7 +74,7 @@ where
         match self.catalog.get_inode(ino) {
             Ok(inode) => {
                 let ttl = Timespec::new(1, 0);
-                reply.attr(&ttl, &convert_fuse_fattr(&inode.attributes));
+                reply.attr(&ttl, &FileAttr::from(inode.attributes));
             }
             Err(_) => {
                 reply.error(EINVAL);
@@ -90,7 +90,7 @@ where
         match attrs {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
-                reply.entry(&ttl, &convert_fuse_fattr(&attrs), 0);
+                reply.entry(&ttl, &FileAttr::from(attrs), 0);
             }
             Err(_) => {
                 reply.error(EINVAL);
@@ -141,7 +141,7 @@ where
                         if !reply.add(
                             idx,
                             index as i64 + 1,
-                            convert_fuse_file_type(inode.attributes.kind),
+                            FileType::from(inode.attributes.kind),
                             name,
                         ) {
                             index += 1;
@@ -372,32 +372,36 @@ fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> DenebResult<Ve
     Ok(buffer)
 }
 
-fn convert_fuse_file_type(ftype: FT) -> FileType {
-    match ftype {
-        FT::NamedPipe => FileType::NamedPipe,
-        FT::CharDevice => FileType::CharDevice,
-        FT::BlockDevice => FileType::BlockDevice,
-        FT::Directory => FileType::Directory,
-        FT::RegularFile => FileType::RegularFile,
-        FT::Symlink => FileType::Symlink,
+impl From<FT> for FileType {
+    fn from(ftype: FT) -> FileType {
+        match ftype {
+            FT::NamedPipe => FileType::NamedPipe,
+            FT::CharDevice => FileType::CharDevice,
+            FT::BlockDevice => FileType::BlockDevice,
+            FT::Directory => FileType::Directory,
+            FT::RegularFile => FileType::RegularFile,
+            FT::Symlink => FileType::Symlink,
+        }
     }
 }
 
-fn convert_fuse_fattr(fattr: &FileAttributes) -> FileAttr {
-    FileAttr {
-        ino: fattr.ino,
-        size: fattr.size,
-        blocks: fattr.blocks,
-        atime: fattr.atime,
-        mtime: fattr.mtime,
-        ctime: fattr.ctime,
-        crtime: fattr.crtime,
-        kind: convert_fuse_file_type(fattr.kind),
-        perm: fattr.perm,
-        nlink: fattr.nlink,
-        uid: fattr.uid,
-        gid: fattr.gid,
-        rdev: fattr.rdev,
-        flags: fattr.flags,
+impl From<FileAttributes> for FileAttr {
+    fn from(fattr: FileAttributes) -> FileAttr {
+        FileAttr {
+            ino: fattr.ino,
+            size: fattr.size,
+            blocks: fattr.blocks,
+            atime: fattr.atime,
+            mtime: fattr.mtime,
+            ctime: fattr.ctime,
+            crtime: fattr.crtime,
+            kind: FileType::from(fattr.kind),
+            perm: fattr.perm,
+            nlink: fattr.nlink,
+            uid: fattr.uid,
+            gid: fattr.gid,
+            rdev: fattr.rdev,
+            flags: fattr.flags,
+        }
     }
 }
