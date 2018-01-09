@@ -1,58 +1,66 @@
 use futures::sync::mpsc::Sender as FutureSender;
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender as StdSender;
 
-use be::cas::Digest;
-use be::inode::{ChunkDescriptor, INode};
+use be::inode::{FileAttributes, FileType};
 use common::errors::DenebResult;
 
-pub (in be::engine) enum Request {
-    GetNextIndex,
-    GetINode {
-        index: u64,
-    },
-    GetDirEntryIndex {
-        parent: u64,
-        name: PathBuf,
-    },
-    GetDirEntryINode {
-        parent: u64,
-        name: PathBuf,
-    },
-    GetDirEntries {
-        parent: u64,
-    },
-    AddINode {
-        entry: PathBuf,
-        index: u64,
-        chunks: Vec<ChunkDescriptor>,
-    },
-    AddDirEntry {
-        parent: u64,
-        name: PathBuf,
-        index: u64,
-    },
+pub struct RequestId {
+    pub unique_id: u64,
+    pub uid: u32,
+    pub gid: u32,
+    pub pid: u32,
+}
 
-    GetChunk {
-        digest: Digest,
+pub(in be::engine) enum Request {
+    GetAttr {
+        index: u64,
     },
-    PutChunk {
-        digest: Digest,
-        contents: Vec<u8>,
+    Lookup {
+        parent: u64,
+        name: OsString,
+    },
+    OpenDir {
+        index: u64,
+        #[allow(dead_code)] flags: u32,
+    },
+    ReleaseDir {
+        index: u64,
+        #[allow(dead_code)] flags: u32,
+    },
+    ReadDir {
+        index: u64,
+        #[allow(dead_code)] offset: i64,
+    },
+    OpenFile {
+        index: u64,
+        flags: u32,
+    },
+    ReadData {
+        index: u64,
+        offset: i64,
+        size: u32,
+    },
+    ReleaseFile {
+        index: u64,
+        #[allow(dead_code)] flags: u32,
+        #[allow(dead_code)] lock_owner: u64,
+        #[allow(dead_code)] flush: bool,
     },
 }
 
-pub (in be::engine) enum Reply {
-    NextIndex(u64),
-    INode(DenebResult<INode>),
-    Index(DenebResult<u64>),
-    DirEntries(DenebResult<Vec<(PathBuf, u64)>>),
-
-    Chunk(DenebResult<Vec<u8>>),
-
-    Result(DenebResult<()>),
+pub(in be::engine) enum Reply {
+    GetAttr(DenebResult<FileAttributes>),
+    Lookup(DenebResult<FileAttributes>),
+    OpenDir(DenebResult<()>),
+    ReleaseDir(DenebResult<()>),
+    ReadDir(DenebResult<Vec<(PathBuf, u64, FileType)>>),
+    OpenFile(DenebResult<()>),
+    ReadData(DenebResult<Vec<u8>>),
+    ReleaseFile(DenebResult<()>),
 }
 
-pub (in be::engine) type ReplyChannel = StdSender<Reply>;
-pub (in be::engine) type RequestChannel = FutureSender<(Request, ReplyChannel)>;
+pub(in be::engine) type ReplyChannel = StdSender<Reply>;
+pub(in be::engine) type RequestChannel = FutureSender<(Request, ReplyChannel)>;
