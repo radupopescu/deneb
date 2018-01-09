@@ -23,7 +23,7 @@ mod common;
 use common::*;
 
 use deneb::be::catalog::{CatalogBuilder, LmdbCatalogBuilder};
-use deneb::be::engine::Engine;
+use deneb::be::engine::start_engine;
 use deneb::be::store::{DiskStoreBuilder, StoreBuilder};
 use deneb::common::errors::DenebResult;
 use deneb::fe::fuse::{Fs, Session};
@@ -83,8 +83,8 @@ where
     let work_dir = prefix.join("internal");
     let sync_dir = Some(input.to_owned());
 
-    let engine = Engine::new(cb, sb, &work_dir, sync_dir, chunk_size, 1000)?;
-    let file_system = Fs::new(engine.handle());
+    let handle = start_engine(cb, sb, &work_dir, sync_dir, chunk_size, 1000)?;
+    let file_system = Fs::new(handle);
     unsafe { file_system.spawn_mount(&mount_point, &[]) }
 }
 

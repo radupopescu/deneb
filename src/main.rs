@@ -9,7 +9,7 @@ extern crate time;
 use failure::ResultExt;
 
 use deneb::be::catalog::LmdbCatalogBuilder;
-use deneb::be::engine::Engine;
+use deneb::be::engine::start_engine;
 use deneb::be::store::DiskStoreBuilder;
 use deneb::common::{block_signals, init_logger, set_sigint_handler, AppParameters};
 use deneb::common::errors::{print_error_with_causes, DenebResult};
@@ -40,7 +40,7 @@ fn run() -> DenebResult<()> {
     // Create the file system data structure
     let cb = LmdbCatalogBuilder;
     let sb = DiskStoreBuilder;
-    let engine = Engine::new(
+    let handle = start_engine(
         &cb,
         &sb,
         &params.work_dir,
@@ -48,7 +48,7 @@ fn run() -> DenebResult<()> {
         params.chunk_size,
         1000,
     )?;
-    let file_system = Fs::new(engine.handle());
+    let file_system = Fs::new(handle);
     let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
 
     // Install a handler for Ctrl-C and wait
