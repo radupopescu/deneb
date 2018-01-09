@@ -2,43 +2,25 @@ use fuse::{FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory,
            ReplyEntry, ReplyOpen, Request};
 use fuse::consts::FOPEN_KEEP_CACHE;
 use fuse::{mount, spawn_mount, BackgroundSession};
-use nix::libc::{O_RDWR, O_WRONLY};
-use nix::libc::{EACCES, EINVAL};
+use nix::libc::EINVAL;
 use time::Timespec;
 
-use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use be::catalog::Catalog;
-use be::inode::{lookup_chunks, ChunkPart, FileAttributes, FileType as FT};
-use be::store::Store;
-use common::errors::DenebResult;
-
-struct OpenFileContext;
+use be::engine::{Handle, RequestId};
+use be::inode::{FileAttributes, FileType as FT};
+use common::errors::{print_error_with_causes, DenebResult};
 
 pub struct Session<'a>(BackgroundSession<'a>);
 
-pub struct Fs<C, S> {
-    catalog: C,
-    store: S,
-
-    open_dirs: HashMap<u64, Vec<(PathBuf, u64)>>,
-    open_files: HashMap<u64, OpenFileContext>,
+pub struct Fs {
+    engine_handle: Handle,
 }
 
-impl<'a, C, S> Fs<C, S>
-where
-    C: 'a + Catalog + Send,
-    S: 'a + Store + Send,
-{
-    pub fn new(catalog: C, store: S) -> Fs<C, S> {
-        Fs {
-            catalog: catalog,
-            store: store,
-            open_dirs: HashMap::new(),
-            open_files: HashMap::new(),
-        }
+impl<'a> Fs {
+    pub fn new(engine_handle: Handle) -> Fs {
+        Fs { engine_handle }
     }
 
     pub fn mount<P: AsRef<Path>>(self, mount_point: &P, options: &[&OsStr]) -> DenebResult<()> {
@@ -56,11 +38,7 @@ where
     }
 }
 
-impl<C, S> Filesystem for Fs<C, S>
-where
-    C: Catalog,
-    S: Store,
-{
+impl Filesystem for Fs {
     // Filesystem lifetime callbacks
 
     // fn init(&mut self, _req: &Request) -> Result<(), c_int> { Ok(()) }
@@ -69,55 +47,61 @@ where
 
     // Callbacks for read-only functionality
 
-    fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
-        debug!("getattr(ino={})", ino);
-        match self.catalog.get_inode(ino) {
-            Ok(inode) => {
+    fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
+        trace!("getattr(ino={})", ino);
+        match self.engine_handle.get_attr(&RequestId::from(req), ino) {
+            Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
-                reply.attr(&ttl, &FileAttr::from(inode.attributes));
+                reply.attr(&ttl, &FileAttr::from(attrs));
             }
-            Err(_) => {
+            Err(e) => {
+                print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
         }
     }
 
-    fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        debug!("lookup(parent={}, name={:?}", parent, name);
-        let attrs = self.catalog
-            .get_dir_entry_inode(parent, PathBuf::from(name).as_path())
-            .map(|inode| inode.attributes);
-        match attrs {
+    fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
+        trace!("lookup(parent={}, name={:?}", parent, name);
+        match self.engine_handle
+            .lookup(&RequestId::from(req), parent, name)
+        {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
                 reply.entry(&ttl, &FileAttr::from(attrs), 0);
             }
-            Err(_) => {
+            Err(e) => {
+                print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
         }
     }
 
-    fn opendir(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        debug!("opendir - ino: {}", ino);
-        match self.catalog.get_dir_entries(ino) {
-            Ok(entries) => {
-                self.open_dirs.insert(ino, entries);
+    fn opendir(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
+        trace!("opendir - ino: {}, flags: {}", ino, flags);
+        match self.engine_handle
+            .open_dir(&RequestId::from(req), ino, flags)
+        {
+            Ok(()) => {
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
             }
-            Err(_) => {
+            Err(e) => {
+                print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
         }
     }
 
-    fn releasedir(&mut self, _req: &Request, ino: u64, fh: u64, _flags: u32, reply: ReplyEmpty) {
-        debug!("releasedir - ino: {}", ino);
-        match self.open_dirs.remove(&fh) {
-            Some(_) => {
+    fn releasedir(&mut self, req: &Request, ino: u64, fh: u64, flags: u32, reply: ReplyEmpty) {
+        trace!("releasedir - ino: {}, fh: {}, flags: {}", ino, fh, flags);
+        match self.engine_handle
+            .release_dir(&RequestId::from(req), fh, flags)
+        {
+            Ok(_) => {
                 reply.ok();
             }
-            None => {
+            Err(e) => {
+                print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
         }
@@ -125,85 +109,66 @@ where
 
     fn readdir(
         &mut self,
-        _req: &Request,
+        req: &Request,
         ino: u64,
         fh: u64,
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        debug!("readdir - ino: {}, fh: {}, offset: {}", ino, fh, offset);
-        let mut index = ::std::cmp::max(offset, 0) as usize;
-        match self.open_dirs.get(&fh) {
-            Some(entries) => {
+        trace!("readdir - ino: {}, fh: {}, offset: {}", ino, fh, offset);
+        match self.engine_handle
+            .read_dir(&RequestId::from(req), fh, offset)
+        {
+            Ok(entries) => {
+                let mut index = ::std::cmp::max(offset, 0) as usize;
                 while index < entries.len() {
-                    let (ref name, idx) = entries[index];
-                    if let Ok(inode) = self.catalog.get_inode(idx) {
-                        if !reply.add(
-                            idx,
-                            index as i64 + 1,
-                            FileType::from(inode.attributes.kind),
-                            name,
-                        ) {
-                            index += 1;
-                        } else {
-                            break;
-                        }
+                    let (ref name, idx, ftype) = entries[index];
+                    if !reply.add(idx, index as i64 + 1, FileType::from(ftype), name) {
+                        index += 1;
+                    } else {
+                        break;
                     }
                 }
                 reply.ok();
             }
-            None => {
+            Err(e) => {
+                print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
         }
     }
 
-    fn open(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        let rw = (O_WRONLY | O_RDWR) as u32;
-        if (flags & rw) > 0 {
-            // If write access is requested, the function should return EACCES
-            debug!("open RW - ino: {}", ino);
-            reply.error(EACCES);
-        } else {
-            debug!("open RO - ino: {}", ino);
-            match self.catalog.get_inode(ino) {
-                Ok(_) => {
-                    self.open_files.insert(ino, OpenFileContext);
-                    reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
-                }
-                Err(_) => {
-                    reply.error(EINVAL);
-                }
+    fn open(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
+        trace!("open - ino: {}, flags: {}", ino, flags);
+        match self.engine_handle
+            .open_file(&RequestId::from(req), ino, flags)
+        {
+            Ok(_) => {
+                reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
             }
         }
     }
 
-    fn read(
-        &mut self,
-        _req: &Request,
-        ino: u64,
-        fh: u64,
-        offset: i64,
-        size: u32,
-        reply: ReplyData,
-    ) {
-        debug!(
+    fn read(&mut self, req: &Request, ino: u64, fh: u64, offset: i64, size: u32, reply: ReplyData) {
+        trace!(
             "read - ino: {}, fh: {}, offset: {}, size: {}",
-            ino, fh, offset, size
+            ino,
+            fh,
+            offset,
+            size
         );
-        let offset = ::std::cmp::max(offset, 0) as usize;
-        let buffer = self.open_files
-            .get(&fh)
-            .and_then(|_ctx| self.catalog.get_inode(fh).ok())
-            .and_then(|inode| {
-                lookup_chunks(offset, size as usize, inode.chunks.as_slice())
-                    .and_then(|chunks| chunks_to_buffer(chunks.as_slice(), &self.store).ok())
-            });
-        match buffer {
-            Some(buffer) => {
-                reply.data(buffer.as_slice());
+        match self.engine_handle
+            .read_data(&RequestId::from(req), fh, offset, size)
+        {
+            Ok(buffer) => {
+                reply.data(&buffer);
             }
-            None => {
+            Err(e) => {
+                print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
         }
@@ -211,17 +176,33 @@ where
 
     fn release(
         &mut self,
-        _req: &Request,
+        req: &Request,
         ino: u64,
         fh: u64,
-        _flags: u32,
-        _lock_owner: u64,
-        _flush: bool,
+        flags: u32,
+        lock_owner: u64,
+        flush: bool,
         reply: ReplyEmpty,
     ) {
-        debug!("release - ino: {}", ino);
-        self.open_files.remove(&fh);
-        reply.ok();
+        trace!(
+            "release - ino: {}, fh: {}, flags: {}, lock_owner: {}, flush: {}",
+            ino,
+            fh,
+            flags,
+            lock_owner,
+            flush
+        );
+        match self.engine_handle
+            .release_file(&RequestId::from(req), fh, flags, lock_owner, flush)
+        {
+            Ok(_) => {
+                reply.ok();
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
     }
 
     /*
@@ -362,16 +343,6 @@ where
      */
 }
 
-/// Fill a buffer using the list of `ChunkPart`
-fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> DenebResult<Vec<u8>> {
-    let mut buffer = Vec::new();
-    for &ChunkPart(digest, begin, end) in chunks {
-        let chunk = store.get_chunk(digest)?;
-        buffer.extend_from_slice(&chunk[begin..end]);
-    }
-    Ok(buffer)
-}
-
 impl From<FT> for FileType {
     fn from(ftype: FT) -> FileType {
         match ftype {
@@ -402,6 +373,17 @@ impl From<FileAttributes> for FileAttr {
             gid: fattr.gid,
             rdev: fattr.rdev,
             flags: fattr.flags,
+        }
+    }
+}
+
+impl<'a, 'b> From<&'b Request<'a>> for RequestId {
+    fn from(req: &Request) -> RequestId {
+        RequestId {
+            unique_id: req.unique(),
+            uid: req.uid(),
+            gid: req.gid(),
+            pid: req.pid(),
         }
     }
 }

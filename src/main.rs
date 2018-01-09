@@ -12,7 +12,7 @@ use deneb::be::catalog::LmdbCatalogBuilder;
 use deneb::be::engine::Engine;
 use deneb::be::store::DiskStoreBuilder;
 use deneb::common::{block_signals, init_logger, set_sigint_handler, AppParameters};
-use deneb::common::errors::DenebResult;
+use deneb::common::errors::{print_error_with_causes, DenebResult};
 use deneb::fe::fuse::Fs;
 
 fn run() -> DenebResult<()> {
@@ -48,7 +48,7 @@ fn run() -> DenebResult<()> {
         params.chunk_size,
         1000,
     )?;
-    let file_system = Fs::new(engine.handle(), engine.handle());
+    let file_system = Fs::new(engine.handle());
     let _session = unsafe { file_system.spawn_mount(&params.mount_point, &[])? };
 
     // Install a handler for Ctrl-C and wait
@@ -61,17 +61,7 @@ fn run() -> DenebResult<()> {
 
 fn main() {
     if let Err(ref fail) = run() {
-        error!("Error: {}", fail);
-
-        {
-            let mut fail = fail.cause();
-            error!("caused by: {}", fail);
-            while let Some(cause) = fail.cause() {
-                error!("caused by: {}", cause);
-                fail = cause;
-            }
-        }
-
+        print_error_with_causes(fail);
         error!("Backtrace: {}", fail.backtrace());
 
         ::std::process::exit(1)
