@@ -42,7 +42,7 @@ where
     SB: StoreBuilder,
     <SB as StoreBuilder>::Store: Send + 'static,
 {
-    let (mut catalog, mut store) = init(
+    let (catalog, store) = init(
         catalog_builder,
         store_builder,
         work_dir,
@@ -51,15 +51,17 @@ where
     )?;
 
     let (tx, rx) = future_channel(queue_size);
-    let engine_handle = Handle::new(tx.clone());
+    let engine_handle = Handle::new(tx);
     let _ = tspawn(|| {
         if let Ok(mut core) = Core::new() {
             let mut engine = Engine {
+                catalog,
+                store,
                 open_dirs: HashMap::new(),
                 open_files: HashMap::new(),
             };
             let handler = rx.for_each(move |(event, tx)| {
-                engine.handle_request(event, &tx, &mut catalog, &mut store);
+                engine.handle_request(event, &tx);
                 Ok(())
             });
 
@@ -133,39 +135,36 @@ where
 
 struct OpenFileContext;
 
-struct Engine {
+struct Engine<C, S> {
+    catalog: C,
+    store: S,
     open_dirs: HashMap<u64, Vec<(PathBuf, u64, FileType)>>,
     open_files: HashMap<u64, OpenFileContext>,
 }
 
-impl Engine {
-    fn handle_request<C, S>(
-        &mut self,
-        request: Request,
-        chan: &ReplyChannel,
-        catalog: &mut C,
-        store: &mut S,
-    ) where
+impl<C, S> Engine<C, S> {
+    fn handle_request(&mut self, request: Request, chan: &ReplyChannel)
+    where
         C: Catalog,
         S: Store,
     {
         match request {
             Request::GetAttr { index } => {
-                let reply = catalog.get_inode(index).map(|inode| inode.attributes);
+                let reply = self.catalog.get_inode(index).map(|inode| inode.attributes);
                 let _ = chan.send(Reply::GetAttr(reply));
             }
             Request::Lookup { parent, name } => {
-                let reply = catalog
+                let reply = self.catalog
                     .get_dir_entry_inode(parent, PathBuf::from(name).as_path())
                     .map(|inode| inode.attributes);
                 let _ = chan.send(Reply::Lookup(reply));
             }
             Request::OpenDir { index, .. } => {
-                let reply = catalog.get_dir_entries(index).map(|entries| {
+                let reply = self.catalog.get_dir_entries(index).map(|entries| {
                     let entries = entries
                         .iter()
                         .map(|&(ref name, idx)| {
-                            if let Ok(inode) = catalog.get_inode(idx) {
+                            if let Ok(inode) = self.catalog.get_inode(idx) {
                                 (name.clone(), idx, inode.attributes.kind)
                             } else {
                                 panic!("Fatal engine error. Could not retrieve inode {}", idx)
@@ -196,7 +195,7 @@ impl Engine {
                     if (flags & rw) > 0 {
                         Err(EngineError::Access(index).into())
                     } else {
-                        catalog.get_inode(index).map(|_inode| {
+                        self.catalog.get_inode(index).map(|_inode| {
                             self.open_files.insert(index, OpenFileContext);
                         })
                     }
@@ -212,11 +211,11 @@ impl Engine {
                 let reply = self.open_files
                     .get(&index)
                     .ok_or_else(|| EngineError::FileRead(index).into())
-                    .and_then(|_ctx| catalog.get_inode(index))
+                    .and_then(|_ctx| self.catalog.get_inode(index))
                     .and_then(|inode| {
                         chunks_to_buffer(
                             &lookup_chunks(offset, size as usize, inode.chunks.as_slice()),
-                            store,
+                            &self.store,
                         )
                     });
                 let _ = chan.send(Reply::ReadData(reply));
