@@ -28,6 +28,35 @@ use self::protocol::{Reply, ReplyChannel, Request};
 pub use self::protocol::RequestId;
 pub use self::handle::Handle;
 
+/// Start engine with pre-built catalog and store
+pub fn start_engine_prebuilt<C, S>(catalog: C, store: S, queue_size: usize) -> DenebResult<Handle>
+where
+    C: Catalog + Send + 'static,
+    S: Store + Send + 'static,
+{
+    let (tx, rx) = future_channel(queue_size);
+    let engine_handle = Handle::new(tx);
+    let _ = tspawn(|| {
+        if let Ok(mut core) = Core::new() {
+            let mut engine = Engine {
+                catalog,
+                store,
+                open_dirs: HashMap::new(),
+                open_files: HashMap::new(),
+            };
+            let handler = rx.for_each(move |(event, tx)| {
+                engine.handle_request(event, &tx);
+                Ok(())
+            });
+
+            let _ = core.run(handler);
+        }
+    });
+
+    Ok(engine_handle)
+}
+
+/// Start the engine using catalog and store builders
 pub fn start_engine<CB, SB>(
     catalog_builder: &CB,
     store_builder: &SB,
@@ -50,26 +79,7 @@ where
         chunk_size,
     )?;
 
-    let (tx, rx) = future_channel(queue_size);
-    let engine_handle = Handle::new(tx);
-    let _ = tspawn(|| {
-        if let Ok(mut core) = Core::new() {
-            let mut engine = Engine {
-                catalog,
-                store,
-                open_dirs: HashMap::new(),
-                open_files: HashMap::new(),
-            };
-            let handler = rx.for_each(move |(event, tx)| {
-                engine.handle_request(event, &tx);
-                Ok(())
-            });
-
-            let _ = core.run(handler);
-        }
-    });
-
-    Ok(engine_handle)
+    start_engine_prebuilt(catalog, store, queue_size)
 }
 
 fn init<CB, SB>(
