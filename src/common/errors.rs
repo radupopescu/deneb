@@ -1,3 +1,4 @@
+use failure::Error;
 use lmdb;
 use nix;
 
@@ -70,4 +71,44 @@ pub enum CatalogError {
     #[fail(display = "Dir entry {:?} not found at index: {}", _0, _1)]
     DEntryNotFound(OsString, u64),
     #[fail(display = "Invalid catalog version: {}", _0)] Version(u32),
+}
+
+// Engine errors
+
+#[derive(Debug, Fail)]
+pub enum EngineError {
+    #[fail(display = "Failed to send request to engine")] SendFailed,
+    #[fail(display = "Invalid reply received from engine")] InvalidReply,
+    #[fail(display = "Could not open directory: {}", _0)] DirOpen(u64),
+    #[fail(display = "Could not close directory: {}", _0)] DirClose(u64),
+    #[fail(display = "Could not read directory: {}", _0)] DirRead(u64),
+    #[fail(display = "Could not open file: {}", _0)] FileOpen(u64),
+    #[fail(display = "Could not close file: {}", _0)] FileClose(u64),
+    #[fail(display = "Could not read file: {}", _0)] FileRead(u64),
+    #[fail(display = "Access error for: {}", _0)] Access(u64),
+}
+
+/// Print the error description and its underlying causes
+pub fn print_error_with_causes(err: &Error) {
+    error!("Error: {}", err);
+    {
+        let mut failure = err.cause();
+        error!("caused by: {}", failure);
+        while let Some(cause) = failure.cause() {
+            error!("caused by: {}", cause);
+            failure = cause;
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_print_error() {
+        use failure::Error;
+        let f = Error::from(EngineError::SendFailed);
+        print_error_with_causes(&f);
+    }
 }
