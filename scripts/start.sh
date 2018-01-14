@@ -33,4 +33,4 @@ if [ x"$do_sync" = x"true" ]; then
     args="-s $prefix/data $args"
 fi
 
-echo cargo run --release --bin deneb -- $args
+cargo run --release --bin deneb -- $args
