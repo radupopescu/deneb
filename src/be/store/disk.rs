@@ -15,6 +15,7 @@ use super::{Store, StoreBuilder};
 
 const OBJECT_PATH: &str = "data";
 const PREFIX_SIZE: usize = 2;
+//const NUM_PREFIX: usize = 2;
 
 pub struct DiskStoreBuilder;
 
@@ -22,19 +23,11 @@ impl StoreBuilder for DiskStoreBuilder {
     type Store = DiskStore;
 
     fn at_dir<P: AsRef<Path>>(&self, dir: P) -> DenebResult<Self::Store> {
-        let root_dir = PathBuf::from(dir.as_ref());
+        let root_dir = dir.as_ref().to_owned();
         let object_dir = root_dir.join(OBJECT_PATH);
 
-        // Create object dir and its subdirectories (00, 01, 4e, 3f etc.)
-        for i in 0..16 {
-            for j in 0..16 {
-                if let (Some(i), Some(j)) = (from_digit(i, 16), from_digit(j, 16)) {
-                    let mut prefix = i.to_string();
-                    prefix.push(j);
-                    create_dir_all(object_dir.join(prefix))?;
-                }
-            }
-        }
+        // Create object dir
+        create_dir_all(&object_dir)?;
 
         Ok(Self::Store {
             _root_dir: root_dir,
@@ -59,9 +52,10 @@ pub struct DiskStore {
 
 impl Store for DiskStore {
     fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
-        let mut prefix = digest.to_string();
-        let file_name = prefix.split_off(PREFIX_SIZE);
-        let full_path = self.object_dir.join(prefix).join(file_name);
+        let mut prefix1 = digest.to_string();
+        let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
+        let file_name = prefix2.split_off(PREFIX_SIZE);
+        let full_path = self.object_dir.join(prefix1).join(prefix2).join(file_name);
         let file_stats = stat(full_path.as_path())?;
         let mut buffer = Vec::new();
         let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
@@ -76,9 +70,12 @@ impl Store for DiskStore {
 
     fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
         let hex_digest = digest.to_string();
-        let mut prefix = hex_digest.clone();
-        let file_name = prefix.split_off(PREFIX_SIZE);
-        let full_path = self.object_dir.join(prefix).join(file_name);
+        let mut prefix1 = hex_digest.clone();
+        let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
+        let file_name = prefix2.split_off(PREFIX_SIZE);
+        let full_dir = self.object_dir.join(prefix1).join(prefix2);
+        create_dir_all(&full_dir)?;
+        let full_path = full_dir.join(file_name);
         atomic_write(full_path.as_path(), contents)?;
         debug!("File written: {:?}", full_path);
         Ok(())
