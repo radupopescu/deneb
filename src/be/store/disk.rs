@@ -1,7 +1,6 @@
 use failure::ResultExt;
 use nix::sys::stat::stat;
 
-use std::char::from_digit;
 use std::fs::{create_dir_all, File};
 use std::io::Read;
 
