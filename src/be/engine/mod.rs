@@ -169,20 +169,27 @@ impl<C, S> Engine<C, S> {
                     .map(|inode| inode.attributes);
                 let _ = chan.send(Reply::Lookup(reply));
             }
-            Request::OpenDir { index, .. } => {
-                let reply = self.catalog.get_dir_entries(index).map(|entries| {
-                    let entries = entries
-                        .iter()
-                        .map(|&(ref name, idx)| {
-                            if let Ok(inode) = self.catalog.get_inode(idx) {
-                                (name.clone(), idx, inode.attributes.kind)
-                            } else {
-                                panic!("Fatal engine error. Could not retrieve inode {}", idx)
-                            }
+            Request::OpenDir { index, flags } => {
+                let rw = (O_WRONLY | O_RDWR) as u32;
+                let reply = {
+                    if (flags & rw) > 0 {
+                        Err(EngineError::Access(index).into())
+                    } else {
+                        self.catalog.get_dir_entries(index).map(|entries| {
+                            let entries = entries
+                                .iter()
+                                .map(|&(ref name, idx)| {
+                                    if let Ok(inode) = self.catalog.get_inode(idx) {
+                                        (name.clone(), idx, inode.attributes.kind)
+                                    } else {
+                                        panic!("Fatal engine error. Could not retrieve inode {}", idx)
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            self.open_dirs.insert(index, entries);
                         })
-                        .collect::<Vec<_>>();
-                    self.open_dirs.insert(index, entries);
-                });
+                    }
+                };
                 let _ = chan.send(Reply::OpenDir(reply));
             }
             Request::ReleaseDir { index, .. } => {

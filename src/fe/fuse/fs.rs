@@ -2,7 +2,7 @@ use fuse::{FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory,
            ReplyEntry, ReplyOpen, Request};
 use fuse::consts::FOPEN_KEEP_CACHE;
 use fuse::{mount, spawn_mount, BackgroundSession};
-use nix::libc::EINVAL;
+use nix::libc::{EACCES,EINVAL};
 use time::Timespec;
 
 use std::ffi::OsStr;
@@ -10,7 +10,7 @@ use std::path::Path;
 
 use be::engine::{Handle, RequestId};
 use be::inode::{FileAttributes, FileType as FT};
-use common::errors::{print_error_with_causes, DenebResult};
+use common::errors::{print_error_with_causes, DenebResult, EngineError};
 
 pub struct Session<'a>(BackgroundSession<'a>);
 
@@ -145,10 +145,19 @@ impl Filesystem for Fs {
         {
             Ok(_) => {
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
-            }
+            },
             Err(e) => {
-                print_error_with_causes(&e);
-                reply.error(EINVAL);
+                if let Some(engine_error) = e.downcast_ref::<EngineError>() {
+                    match engine_error {
+                        &EngineError::Access(_) => {
+                            reply.error(EACCES);
+                        },
+                        _ => {
+                            print_error_with_causes(&e);
+                            reply.error(EINVAL);
+                        },
+                    }
+                }
             }
         }
     }
