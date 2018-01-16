@@ -38,7 +38,7 @@ pub fn set_sigint_handler(tx: Sender<()>) -> JoinHandle<()> {
         sigs.add(Signal::SIGINT);
         if let Ok(sig) = sigs.wait() {
             if let Signal::SIGINT = sig {
-                debug!("Ctrl-C received. Exiting.");
+                info!("Ctrl-C received. Exiting.");
                 let _ = tx.send(());
             }
         }

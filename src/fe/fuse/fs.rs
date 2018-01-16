@@ -48,7 +48,6 @@ impl Filesystem for Fs {
     // Callbacks for read-only functionality
 
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
-        trace!("getattr(ino={})", ino);
         match self.engine_handle.get_attr(&RequestId::from(req), ino) {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
@@ -62,7 +61,6 @@ impl Filesystem for Fs {
     }
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        trace!("lookup(parent={}, name={:?}", parent, name);
         match self.engine_handle
             .lookup(&RequestId::from(req), parent, name)
         {
@@ -78,7 +76,6 @@ impl Filesystem for Fs {
     }
 
     fn opendir(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        trace!("opendir - ino: {}, flags: {}", ino, flags);
         match self.engine_handle
             .open_dir(&RequestId::from(req), ino, flags)
         {
@@ -93,7 +90,6 @@ impl Filesystem for Fs {
     }
 
     fn releasedir(&mut self, req: &Request, ino: u64, fh: u64, flags: u32, reply: ReplyEmpty) {
-        trace!("releasedir - ino: {}, fh: {}, flags: {}", ino, fh, flags);
         match self.engine_handle
             .release_dir(&RequestId::from(req), fh, flags)
         {
@@ -115,7 +111,6 @@ impl Filesystem for Fs {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        trace!("readdir - ino: {}, fh: {}, offset: {}", ino, fh, offset);
         match self.engine_handle
             .read_dir(&RequestId::from(req), fh, offset)
         {
@@ -139,7 +134,6 @@ impl Filesystem for Fs {
     }
 
     fn open(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        trace!("open - ino: {}, flags: {}", ino, flags);
         match self.engine_handle
             .open_file(&RequestId::from(req), ino, flags)
         {
@@ -163,13 +157,6 @@ impl Filesystem for Fs {
     }
 
     fn read(&mut self, req: &Request, ino: u64, fh: u64, offset: i64, size: u32, reply: ReplyData) {
-        trace!(
-            "read - ino: {}, fh: {}, offset: {}, size: {}",
-            ino,
-            fh,
-            offset,
-            size
-        );
         match self.engine_handle
             .read_data(&RequestId::from(req), fh, offset, size)
         {
@@ -193,14 +180,6 @@ impl Filesystem for Fs {
         flush: bool,
         reply: ReplyEmpty,
     ) {
-        trace!(
-            "release - ino: {}, fh: {}, flags: {}, lock_owner: {}, flush: {}",
-            ino,
-            fh,
-            flags,
-            lock_owner,
-            flush
-        );
         match self.engine_handle
             .release_file(&RequestId::from(req), fh, flags, lock_owner, flush)
         {

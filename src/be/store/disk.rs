@@ -60,7 +60,7 @@ impl Store for DiskStore {
         let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
         let bytes_read = f.read_to_end(&mut buffer).context(DenebError::DiskIO)?;
         if bytes_read as i64 == file_stats.st_size {
-            debug!("File read: {:?}", full_path);
+            trace!("Chunk read: {:?}", full_path);
             Ok(buffer)
         } else {
             Err(StoreError::ChunkGet(digest.to_string()).into())
@@ -76,7 +76,7 @@ impl Store for DiskStore {
         create_dir_all(&full_dir)?;
         let full_path = full_dir.join(file_name);
         atomic_write(full_path.as_path(), contents)?;
-        debug!("File written: {:?}", full_path);
+        trace!("Chunk written: {:?}", full_path);
         Ok(())
     }
 }
