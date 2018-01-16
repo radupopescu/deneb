@@ -77,6 +77,8 @@ pub enum CatalogError {
 
 #[derive(Debug, Fail)]
 pub enum EngineError {
+    #[fail(display = "Failed to retrieve file attributes for: {}", _0)] GetAttr(u64),
+    #[fail(display = "Failed lookup of entry: {:?} in parent: {}", _1, _0)] Lookup(u64, OsString),
     #[fail(display = "Failed to send request to engine")] SendFailed,
     #[fail(display = "Invalid reply received from engine")] InvalidReply,
     #[fail(display = "Could not open directory: {}", _0)] DirOpen(u64),

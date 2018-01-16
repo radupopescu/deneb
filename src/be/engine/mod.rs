@@ -160,13 +160,15 @@ impl<C, S> Engine<C, S> {
     {
         match request {
             Request::GetAttr { index } => {
-                let reply = self.catalog.get_inode(index).map(|inode| inode.attributes);
+                let reply = self.catalog.get_inode(index).map(|inode| inode.attributes)
+                    .map_err(|e| e.context(EngineError::GetAttr(index)).into());
                 let _ = chan.send(Reply::GetAttr(reply));
             }
             Request::Lookup { parent, name } => {
                 let reply = self.catalog
-                    .get_dir_entry_inode(parent, PathBuf::from(name).as_path())
-                    .map(|inode| inode.attributes);
+                    .get_dir_entry_inode(parent, PathBuf::from(&name).as_path())
+                    .map(|inode| inode.attributes)
+                    .map_err(|e| e.context(EngineError::Lookup(parent, name.clone())).into());
                 let _ = chan.send(Reply::Lookup(reply));
             }
             Request::OpenDir { index, flags } => {
@@ -187,7 +189,7 @@ impl<C, S> Engine<C, S> {
                                 })
                                 .collect::<Vec<_>>();
                             self.open_dirs.insert(index, entries);
-                        })
+                        }).map_err(|e| e.context(EngineError::DirOpen(index)).into())
                     }
                 };
                 let _ = chan.send(Reply::OpenDir(reply));
@@ -214,7 +216,7 @@ impl<C, S> Engine<C, S> {
                     } else {
                         self.catalog.get_inode(index).map(|_inode| {
                             self.open_files.insert(index, OpenFileContext);
-                        })
+                        }).map_err(|e| e.context(EngineError::FileOpen(index)).into())
                     }
                 };
                 let _ = chan.send(Reply::OpenFile(reply));
@@ -234,7 +236,7 @@ impl<C, S> Engine<C, S> {
                             &lookup_chunks(offset, size as usize, inode.chunks.as_slice()),
                             &self.store,
                         )
-                    });
+                    }).map_err(|e| e.context(EngineError::FileRead(index)).into());
                 let _ = chan.send(Reply::ReadData(reply));
             }
             Request::ReleaseFile { index, .. } => {
