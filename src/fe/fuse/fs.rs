@@ -89,7 +89,7 @@ impl Filesystem for Fs {
         }
     }
 
-    fn releasedir(&mut self, req: &Request, ino: u64, fh: u64, flags: u32, reply: ReplyEmpty) {
+    fn releasedir(&mut self, req: &Request, _ino: u64, fh: u64, flags: u32, reply: ReplyEmpty) {
         match self.engine_handle
             .release_dir(&RequestId::from(req), fh, flags)
         {
@@ -106,7 +106,7 @@ impl Filesystem for Fs {
     fn readdir(
         &mut self,
         req: &Request,
-        ino: u64,
+        _ino: u64,
         fh: u64,
         offset: i64,
         mut reply: ReplyDirectory,
@@ -156,7 +156,7 @@ impl Filesystem for Fs {
         }
     }
 
-    fn read(&mut self, req: &Request, ino: u64, fh: u64, offset: i64, size: u32, reply: ReplyData) {
+    fn read(&mut self, req: &Request, _ino: u64, fh: u64, offset: i64, size: u32, reply: ReplyData) {
         match self.engine_handle
             .read_data(&RequestId::from(req), fh, offset, size)
         {
@@ -173,7 +173,7 @@ impl Filesystem for Fs {
     fn release(
         &mut self,
         req: &Request,
-        ino: u64,
+        _ino: u64,
         fh: u64,
         flags: u32,
         lock_owner: u64,
