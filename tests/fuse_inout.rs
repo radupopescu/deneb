@@ -12,7 +12,6 @@ extern crate tempdir;
 extern crate uuid;
 
 use copy_dir::copy_dir;
-use log::LevelFilter;
 use quickcheck::{QuickCheck, StdGen};
 use tempdir::TempDir;
 
@@ -115,9 +114,6 @@ fn check_inout(
     prefix: &Path,
     chunk_size: usize,
 ) -> DenebResult<()> {
-    // Disable logging
-    log::set_max_level(LevelFilter::Off);
-
     // Create and mount the deneb repo
     let _session = init_test(test_type, dir.root.as_path(), prefix, chunk_size)?;
 
