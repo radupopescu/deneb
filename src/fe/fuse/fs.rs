@@ -2,7 +2,7 @@ use fuse::{FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory,
            ReplyEntry, ReplyOpen, Request};
 use fuse::consts::FOPEN_KEEP_CACHE;
 use fuse::{mount, spawn_mount, BackgroundSession};
-use nix::libc::{EACCES,EINVAL};
+use nix::libc::{EACCES, EINVAL, ENOENT};
 use time::Timespec;
 
 use std::ffi::OsStr;
@@ -10,7 +10,7 @@ use std::path::Path;
 
 use be::engine::{Handle, RequestId};
 use be::inode::{FileAttributes, FileType as FT};
-use common::errors::{print_error_with_causes, DenebResult, EngineError};
+use common::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
 
 pub struct Session<'a>(BackgroundSession<'a>);
 
@@ -69,6 +69,12 @@ impl Filesystem for Fs {
                 reply.entry(&ttl, &FileAttr::from(attrs), 0);
             }
             Err(e) => {
+                if let Some(engine_error) = e.root_cause().downcast_ref::<CatalogError>() {
+                    if let &CatalogError::DEntryNotFound(..) = engine_error {
+                        reply.error(ENOENT);
+                        return;
+                    }
+                }
                 print_error_with_causes(&e);
                 reply.error(EINVAL);
             }
