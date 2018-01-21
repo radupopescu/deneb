@@ -13,22 +13,6 @@ path = "src/main.rs"
 doc = false
 required-features = ["fuse_module"]
 
-[[bin]]
-name = "bincode"
-doc = false
-
-[[bin]]
-name = "lmdb"
-doc = false
-
-[[bin]]
-name = "loop"
-doc = false
-
-[[bin]]
-name = "mmap"
-doc = false
-
 [dependencies]
 bincode = "^0.9.0"
 data-encoding = "^2.1.0"
