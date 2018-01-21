@@ -13,6 +13,10 @@ extern crate time;
 extern crate tokio_core;
 extern crate toml;
 
+#[cfg(test)] extern crate quickcheck;
+#[cfg(test)] extern crate rand;
+#[cfg(test)] extern crate tempdir;
+
 extern crate deneb_common;
 
 use failure::ResultExt;

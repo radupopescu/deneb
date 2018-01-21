@@ -1,7 +1,4 @@
-#![cfg(feature = "fuse")]
-
 extern crate copy_dir;
-extern crate deneb;
 #[macro_use] extern crate failure;
 extern crate log;
 extern crate quickcheck;
@@ -11,6 +8,7 @@ extern crate uuid;
 
 extern crate deneb_common;
 extern crate deneb_core;
+extern crate deneb_fuse;
 
 use copy_dir::copy_dir;
 use quickcheck::{QuickCheck, StdGen};
@@ -28,7 +26,7 @@ use deneb_core::populate_with_dir;
 use deneb_core::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
 use deneb_core::engine::{start_engine, start_engine_prebuilt};
 use deneb_core::store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder};
-use deneb::fe::fuse::{Fs, Session};
+use deneb_fuse::fs::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
 
