@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 use std::thread::{spawn, JoinHandle};
 
-use common::errors::{DenebResult, UnixError};
+use errors::{DenebResult, UnixError};
 
 /// Atomically writes a buffer to a file
 ///

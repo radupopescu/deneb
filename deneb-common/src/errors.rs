@@ -1,5 +1,4 @@
 use failure::Error;
-use lmdb;
 use nix;
 
 use std::ffi::OsString;
@@ -18,20 +17,6 @@ pub struct UnixError {
 impl From<nix::Error> for UnixError {
     fn from(ne: nix::Error) -> UnixError {
         UnixError { inner: ne }
-    }
-}
-
-// Errors from the LMDB crate
-
-#[derive(Debug, Fail)]
-#[fail(display = "LMDB error: {}", inner)]
-pub struct LMDBError {
-    #[cause] inner: lmdb::Error,
-}
-
-impl From<lmdb::Error> for LMDBError {
-    fn from(ne: lmdb::Error) -> LMDBError {
-        LMDBError { inner: ne }
     }
 }
 
