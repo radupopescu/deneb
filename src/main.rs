@@ -10,13 +10,14 @@ extern crate deneb_core;
 use failure::ResultExt;
 
 use deneb_common::errors::{print_error_with_causes, DenebResult};
-use deneb_common::logging::init_logger;
-use deneb_common::util::{block_signals, set_sigint_handler};
 use deneb_core::catalog::LmdbCatalogBuilder;
 use deneb_core::engine::start_engine;
 use deneb_core::store::DiskStoreBuilder;
+
 use deneb::fe::fuse::Fs;
+use deneb::logging::init_logger;
 use deneb::params::AppParameters;
+use deneb::util::{block_signals, set_sigint_handler};
 
 fn run() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
@@ -54,7 +55,9 @@ fn run() -> DenebResult<()> {
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
     let _th = set_sigint_handler(tx);
-    let _ = rx.recv();
+    let _ = rx.recv()?;
+
+    info!("Ctrl-C received. Exiting.");
 
     Ok(())
 }

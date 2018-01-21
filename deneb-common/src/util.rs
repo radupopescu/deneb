@@ -1,4 +1,3 @@
-use nix::sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal};
 use nix::unistd::mkstemp;
 use time::precise_time_ns;
 
@@ -6,8 +5,6 @@ use std::fs::{remove_file, rename, File};
 use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::Sender;
-use std::thread::{spawn, JoinHandle};
 
 use errors::{DenebResult, UnixError};
 
@@ -23,26 +20,6 @@ pub fn atomic_write(file_name: &Path, bytes: &[u8]) -> DenebResult<()> {
         remove_file(temp_path)?;
     }
     Ok(())
-}
-
-pub fn block_signals() -> Result<(), UnixError> {
-    let mut sigs = SigSet::empty();
-    sigs.add(Signal::SIGINT);
-    pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&sigs), None)?;
-    Ok(())
-}
-
-pub fn set_sigint_handler(tx: Sender<()>) -> JoinHandle<()> {
-    spawn(move || {
-        let mut sigs = SigSet::empty();
-        sigs.add(Signal::SIGINT);
-        if let Ok(sig) = sigs.wait() {
-            if let Signal::SIGINT = sig {
-                info!("Ctrl-C received. Exiting.");
-                let _ = tx.send(());
-            }
-        }
-    })
 }
 
 pub fn tick() -> i64 {

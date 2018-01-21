@@ -181,8 +181,6 @@ struct TimespecDef {
 
 #[cfg(test)]
 mod tests {
-    // use quickcheck::{QuickCheck, StdGen, TestResult};
-    // use rand::{Rng, thread_rng};
     use cas::read_chunks;
 
     use super::*;

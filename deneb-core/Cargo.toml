@@ -6,7 +6,6 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 [dependencies]
 bincode = "^0.9.0"
 data-encoding = "^2.1.0"
-deneb-common = { path = "../deneb-common" }
 failure = "^0.1.0"
 futures = "^0.1.0"
 lmdb = "^0.7.0"
@@ -20,3 +19,10 @@ serde_derive = "^1.0.0"
 time = "^0.1.0"
 tokio-core = "^0.1.0"
 toml = "^0.4.0"
+
+deneb-common = { path = "../deneb-common" }
+
+[dev-dependencies]
+quickcheck = "^0.6.0"
+rand = "^0.4.0"
+tempdir = "^0.3.0"
