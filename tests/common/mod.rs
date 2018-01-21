@@ -9,8 +9,8 @@ use std::fs::{create_dir_all, remove_dir_all, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use deneb::common::atomic_write;
-use deneb::common::errors::DenebResult;
+use deneb_common::errors::DenebResult;
+use deneb_common::util::atomic_write;
 
 #[derive(Clone, Debug)]
 pub enum DirEntry {

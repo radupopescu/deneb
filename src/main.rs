@@ -6,13 +6,17 @@ extern crate log;
 extern crate rust_sodium;
 extern crate time;
 
+extern crate deneb_common;
+
 use failure::ResultExt;
 
 use deneb::be::catalog::LmdbCatalogBuilder;
 use deneb::be::engine::start_engine;
 use deneb::be::store::DiskStoreBuilder;
-use deneb::common::{block_signals, init_logger, set_sigint_handler, AppParameters};
-use deneb::common::errors::{print_error_with_causes, DenebResult};
+use deneb_common::errors::{print_error_with_causes, DenebResult};
+use deneb_common::logging::init_logger;
+use deneb_common::params::AppParameters;
+use deneb_common::util::{block_signals, set_sigint_handler};
 use deneb::fe::fuse::Fs;
 
 fn run() -> DenebResult<()> {

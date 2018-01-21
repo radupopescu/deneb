@@ -1,14 +1,15 @@
 use failure::ResultExt;
 
 use bincode::{deserialize, serialize, Infinite};
-use lmdb::{Cursor, Database, DatabaseFlags, Environment, Transaction, WriteFlags, NO_SUB_DIR};
+use lmdb::{Cursor, Database, DatabaseFlags, Environment, Error as LmdbError, Transaction,
+           WriteFlags, NO_SUB_DIR};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
 
 use std::collections::BTreeMap;
 use std::cmp::max;
 use std::str::from_utf8;
 
-use common::errors::{CatalogError, LMDBError};
+use deneb_common::errors::CatalogError;
 use super::*;
 
 const MAX_CATALOG_SIZE: usize = 100 * 1024 * 1024; // 100MB
@@ -246,7 +247,7 @@ impl Catalog for LmdbCatalog {
 
 fn init_db<P: AsRef<Path>>(
     path: P,
-) -> Result<(Environment, Database, Database, Database), LMDBError> {
+) -> Result<(Environment, Database, Database, Database), LmdbError> {
     let env = open_environment(path.as_ref())?;
 
     // Create databases
@@ -257,7 +258,7 @@ fn init_db<P: AsRef<Path>>(
     Ok((env, inodes, dir_entries, meta))
 }
 
-fn open_environment(path: &Path) -> Result<Environment, LMDBError> {
+fn open_environment(path: &Path) -> Result<Environment, LmdbError> {
     Environment::new()
         .set_flags(NO_SUB_DIR)
         .set_max_dbs(MAX_CATALOG_DBS)
@@ -267,7 +268,7 @@ fn open_environment(path: &Path) -> Result<Environment, LMDBError> {
         .map_err(|e| e.into())
 }
 
-fn try_create_db(env: &Environment, name: &str) -> Result<Database, LMDBError> {
+fn try_create_db(env: &Environment, name: &str) -> Result<Database, LmdbError> {
     env.create_db(Some(name), DatabaseFlags::empty())
         .map_err(|e| e.into())
 }

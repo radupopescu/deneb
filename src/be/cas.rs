@@ -7,7 +7,7 @@ use serde::de::{Error, Visitor};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io::BufRead;
 
-use common::errors::{DenebError, DenebResult};
+use deneb_common::errors::{DenebError, DenebResult};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);

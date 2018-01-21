@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use be::cas::Digest;
-use common::errors::{DenebResult, StoreError};
+use deneb_common::errors::{DenebResult, StoreError};
 
 use super::{Store, StoreBuilder};
 

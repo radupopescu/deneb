@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::channel as std_channel;
 
 use be::inode::{FileAttributes, FileType};
-use common::errors::{DenebResult, EngineError};
+use deneb_common::errors::{DenebResult, EngineError};
 
 use super::protocol::{Reply, Request, RequestChannel, RequestId};
 

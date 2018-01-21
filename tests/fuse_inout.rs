@@ -11,6 +11,8 @@ extern crate rust_sodium;
 extern crate tempdir;
 extern crate uuid;
 
+extern crate deneb_common;
+
 use copy_dir::copy_dir;
 use quickcheck::{QuickCheck, StdGen};
 use tempdir::TempDir;
@@ -26,7 +28,7 @@ use deneb::be::populate_with_dir;
 use deneb::be::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
 use deneb::be::engine::{start_engine, start_engine_prebuilt};
 use deneb::be::store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder};
-use deneb::common::errors::DenebResult;
+use deneb_common::errors::DenebResult;
 use deneb::fe::fuse::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;

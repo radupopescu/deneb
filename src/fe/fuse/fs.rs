@@ -10,7 +10,7 @@ use std::path::Path;
 
 use be::engine::{Handle, RequestId};
 use be::inode::{FileAttributes, FileType as FT};
-use common::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
+use deneb_common::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
 
 pub struct Session<'a>(BackgroundSession<'a>);
 

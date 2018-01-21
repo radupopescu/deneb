@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use be::cas::Digest;
-use common::errors::DenebResult;
+use deneb_common::errors::DenebResult;
 
 mod mem;
 pub use self::mem::{MemStore, MemStoreBuilder};

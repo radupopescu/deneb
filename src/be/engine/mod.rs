@@ -14,8 +14,8 @@ use be::inode::{lookup_chunks, ChunkPart, FileType};
 use be::manifest::Manifest;
 use be::populate_with_dir;
 use be::store::{Store, StoreBuilder};
-use common::errors::{DenebResult, EngineError};
-use common::atomic_write;
+use deneb_common::errors::{DenebResult, EngineError};
+use deneb_common::util::atomic_write;
 
 use std::path::{Path, PathBuf};
 use std::thread::spawn as tspawn;

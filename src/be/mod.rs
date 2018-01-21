@@ -12,7 +12,7 @@ use self::cas::read_chunks;
 use self::catalog::Catalog;
 use self::inode::ChunkDescriptor;
 use self::store::Store;
-use common::errors::{DenebError, DenebResult};
+use deneb_common::errors::{DenebError, DenebResult};
 
 pub mod cas;
 pub mod catalog;
