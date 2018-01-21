@@ -2,16 +2,15 @@
 
 extern crate copy_dir;
 extern crate deneb;
-#[macro_use]
-extern crate failure;
+#[macro_use] extern crate failure;
 extern crate log;
 extern crate quickcheck;
 extern crate rand;
-extern crate rust_sodium;
 extern crate tempdir;
 extern crate uuid;
 
 extern crate deneb_common;
+extern crate deneb_core;
 
 use copy_dir::copy_dir;
 use quickcheck::{QuickCheck, StdGen};
@@ -24,11 +23,11 @@ mod common;
 
 use common::*;
 
-use deneb::be::populate_with_dir;
-use deneb::be::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
-use deneb::be::engine::{start_engine, start_engine_prebuilt};
-use deneb::be::store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder};
 use deneb_common::errors::DenebResult;
+use deneb_core::populate_with_dir;
+use deneb_core::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
+use deneb_core::engine::{start_engine, start_engine_prebuilt};
+use deneb_core::store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder};
 use deneb::fe::fuse::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;

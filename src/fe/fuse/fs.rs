@@ -8,9 +8,9 @@ use time::Timespec;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use be::engine::{Handle, RequestId};
-use be::inode::{FileAttributes, FileType as FT};
 use deneb_common::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
+use deneb_core::engine::{Handle, RequestId};
+use deneb_core::inode::{FileAttributes, FileType as FT};
 
 pub struct Session<'a>(BackgroundSession<'a>);
 
@@ -48,10 +48,10 @@ impl Filesystem for Fs {
     // Callbacks for read-only functionality
 
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
-        match self.engine_handle.get_attr(&RequestId::from(req), ino) {
+        match self.engine_handle.get_attr(&to_request_id(req), ino) {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
-                reply.attr(&ttl, &FileAttr::from(attrs));
+                reply.attr(&ttl, &to_fuse_file_attr(attrs));
             }
             Err(e) => {
                 print_error_with_causes(&e);
@@ -62,11 +62,11 @@ impl Filesystem for Fs {
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         match self.engine_handle
-            .lookup(&RequestId::from(req), parent, name)
+            .lookup(&to_request_id(req), parent, name)
         {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
-                reply.entry(&ttl, &FileAttr::from(attrs), 0);
+                reply.entry(&ttl, &to_fuse_file_attr(attrs), 0);
             }
             Err(e) => {
                 if let Some(engine_error) = e.root_cause().downcast_ref::<CatalogError>() {
@@ -83,7 +83,7 @@ impl Filesystem for Fs {
 
     fn opendir(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
         match self.engine_handle
-            .open_dir(&RequestId::from(req), ino, flags)
+            .open_dir(&to_request_id(req), ino, flags)
         {
             Ok(()) => {
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
@@ -97,7 +97,7 @@ impl Filesystem for Fs {
 
     fn releasedir(&mut self, req: &Request, _ino: u64, fh: u64, flags: u32, reply: ReplyEmpty) {
         match self.engine_handle
-            .release_dir(&RequestId::from(req), fh, flags)
+            .release_dir(&to_request_id(req), fh, flags)
         {
             Ok(_) => {
                 reply.ok();
@@ -118,13 +118,13 @@ impl Filesystem for Fs {
         mut reply: ReplyDirectory,
     ) {
         match self.engine_handle
-            .read_dir(&RequestId::from(req), fh, offset)
+            .read_dir(&to_request_id(req), fh, offset)
         {
             Ok(entries) => {
                 let mut index = ::std::cmp::max(offset, 0) as usize;
                 while index < entries.len() {
                     let (ref name, idx, ftype) = entries[index];
-                    if !reply.add(idx, index as i64 + 1, FileType::from(ftype), name) {
+                    if !reply.add(idx, index as i64 + 1, to_fuse_file_type(ftype), name) {
                         index += 1;
                     } else {
                         break;
@@ -141,7 +141,7 @@ impl Filesystem for Fs {
 
     fn open(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
         match self.engine_handle
-            .open_file(&RequestId::from(req), ino, flags)
+            .open_file(&to_request_id(req), ino, flags)
         {
             Ok(_) => {
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
@@ -164,7 +164,7 @@ impl Filesystem for Fs {
 
     fn read(&mut self, req: &Request, _ino: u64, fh: u64, offset: i64, size: u32, reply: ReplyData) {
         match self.engine_handle
-            .read_data(&RequestId::from(req), fh, offset, size)
+            .read_data(&to_request_id(req), fh, offset, size)
         {
             Ok(buffer) => {
                 reply.data(&buffer);
@@ -187,7 +187,7 @@ impl Filesystem for Fs {
         reply: ReplyEmpty,
     ) {
         match self.engine_handle
-            .release_file(&RequestId::from(req), fh, flags, lock_owner, flush)
+            .release_file(&to_request_id(req), fh, flags, lock_owner, flush)
         {
             Ok(_) => {
                 reply.ok();
@@ -337,47 +337,42 @@ impl Filesystem for Fs {
      */
 }
 
-impl From<FT> for FileType {
-    fn from(ftype: FT) -> FileType {
-        match ftype {
-            FT::NamedPipe => FileType::NamedPipe,
-            FT::CharDevice => FileType::CharDevice,
-            FT::BlockDevice => FileType::BlockDevice,
-            FT::Directory => FileType::Directory,
-            FT::RegularFile => FileType::RegularFile,
-            FT::Symlink => FileType::Symlink,
-        }
+fn to_fuse_file_type(ftype: FT) -> FileType {
+    match ftype {
+        FT::NamedPipe => FileType::NamedPipe,
+        FT::CharDevice => FileType::CharDevice,
+        FT::BlockDevice => FileType::BlockDevice,
+        FT::Directory => FileType::Directory,
+        FT::RegularFile => FileType::RegularFile,
+        FT::Symlink => FileType::Symlink,
     }
 }
 
-impl From<FileAttributes> for FileAttr {
-    fn from(fattr: FileAttributes) -> FileAttr {
-        FileAttr {
-            ino: fattr.ino,
-            size: fattr.size,
-            blocks: fattr.blocks,
-            atime: fattr.atime,
-            mtime: fattr.mtime,
-            ctime: fattr.ctime,
-            crtime: fattr.crtime,
-            kind: FileType::from(fattr.kind),
-            perm: fattr.perm,
-            nlink: fattr.nlink,
-            uid: fattr.uid,
-            gid: fattr.gid,
-            rdev: fattr.rdev,
-            flags: fattr.flags,
-        }
+fn to_fuse_file_attr(fattr: FileAttributes) -> FileAttr {
+    FileAttr {
+        ino: fattr.ino,
+        size: fattr.size,
+        blocks: fattr.blocks,
+        atime: fattr.atime,
+        mtime: fattr.mtime,
+        ctime: fattr.ctime,
+        crtime: fattr.crtime,
+        kind: to_fuse_file_type(fattr.kind),
+        perm: fattr.perm,
+        nlink: fattr.nlink,
+        uid: fattr.uid,
+        gid: fattr.gid,
+        rdev: fattr.rdev,
+        flags: fattr.flags,
     }
 }
 
-impl<'a, 'b> From<&'b Request<'a>> for RequestId {
-    fn from(req: &Request) -> RequestId {
-        RequestId {
-            unique_id: req.unique(),
-            uid: req.uid(),
-            gid: req.gid(),
-            pid: req.pid(),
-        }
+fn to_request_id(req: &Request) -> RequestId {
+    RequestId {
+        unique_id: req.unique(),
+        uid: req.uid(),
+        gid: req.gid(),
+        pid: req.pid(),
     }
 }
+

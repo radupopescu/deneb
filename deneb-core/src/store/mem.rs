@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use be::cas::Digest;
+use cas::Digest;
 use deneb_common::errors::{DenebResult, StoreError};
 
 use super::{Store, StoreBuilder};
@@ -50,7 +50,7 @@ impl Store for MemStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use be::cas::hash;
+    use cas::hash;
 
     #[test]
     fn memstore_create_put_get() {

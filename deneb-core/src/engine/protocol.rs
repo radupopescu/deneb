@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender as StdSender;
 
-use be::inode::{FileAttributes, FileType};
+use inode::{FileAttributes, FileType};
 use deneb_common::errors::DenebResult;
 
 pub struct RequestId {
@@ -14,7 +14,7 @@ pub struct RequestId {
     pub pid: u32,
 }
 
-pub(in be::engine) enum Request {
+pub(in engine) enum Request {
     GetAttr {
         index: u64,
     },
@@ -51,7 +51,7 @@ pub(in be::engine) enum Request {
     },
 }
 
-pub(in be::engine) enum Reply {
+pub(in engine) enum Reply {
     GetAttr(DenebResult<FileAttributes>),
     Lookup(DenebResult<FileAttributes>),
     OpenDir(DenebResult<()>),
@@ -62,5 +62,5 @@ pub(in be::engine) enum Reply {
     ReleaseFile(DenebResult<()>),
 }
 
-pub(in be::engine) type ReplyChannel = StdSender<Reply>;
-pub(in be::engine) type RequestChannel = FutureSender<(Request, ReplyChannel)>;
+pub(in engine) type ReplyChannel = StdSender<Reply>;
+pub(in engine) type RequestChannel = FutureSender<(Request, ReplyChannel)>;

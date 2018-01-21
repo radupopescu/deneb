@@ -6,7 +6,7 @@ use std::io::Read;
 
 use std::path::{Path, PathBuf};
 
-use be::cas::Digest;
+use cas::Digest;
 use deneb_common::errors::{DenebError, DenebResult, StoreError};
 use deneb_common::util::atomic_write;
 
@@ -86,7 +86,7 @@ mod tests {
     use tempdir::TempDir;
 
     use super::*;
-    use be::cas::hash;
+    use cas::hash;
 
     #[test]
     fn diskstore_create_put_get() {

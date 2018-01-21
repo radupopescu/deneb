@@ -1,21 +1,20 @@
 extern crate deneb;
-#[macro_use]
 extern crate failure;
 #[macro_use]
 extern crate log;
-extern crate rust_sodium;
 extern crate time;
 
 extern crate deneb_common;
+extern crate deneb_core;
 
 use failure::ResultExt;
 
-use deneb::be::catalog::LmdbCatalogBuilder;
-use deneb::be::engine::start_engine;
-use deneb::be::store::DiskStoreBuilder;
 use deneb_common::errors::{print_error_with_causes, DenebResult};
 use deneb_common::logging::init_logger;
 use deneb_common::util::{block_signals, set_sigint_handler};
+use deneb_core::catalog::LmdbCatalogBuilder;
+use deneb_core::engine::start_engine;
+use deneb_core::store::DiskStoreBuilder;
 use deneb::fe::fuse::Fs;
 use deneb::params::AppParameters;
 
@@ -24,11 +23,8 @@ fn run() -> DenebResult<()> {
     // spawning any new threads.
     block_signals().context("Could not block signals in current thread")?;
 
-    // Initialize the rust_sodium library (needed to make all its functions thread-safe)
-    ensure!(
-        rust_sodium::init(),
-        "Could not initialize rust_sodium library. Exiting"
-    );
+    // Initialize deneb-core
+    deneb_core::init()?;
 
     let params = AppParameters::read();
 

@@ -1,8 +1,22 @@
-//! Back-end modules of the application
-//!
-//! The back-end includes storage, data and metadata management etc.
+extern crate bincode;
+extern crate data_encoding;
+#[macro_use] extern crate failure;
+extern crate futures;
+extern crate lmdb;
+extern crate lmdb_sys;
+#[macro_use] extern crate log;
+extern crate nix;
+extern crate rust_sodium;
+extern crate serde;
+#[macro_use] extern crate serde_derive;
+extern crate time;
+extern crate tokio_core;
+extern crate toml;
+
+extern crate deneb_common;
 
 use failure::ResultExt;
+
 
 use std::fs::{read_dir, File};
 use std::io::BufReader;
@@ -12,6 +26,7 @@ use self::cas::read_chunks;
 use self::catalog::Catalog;
 use self::inode::ChunkDescriptor;
 use self::store::Store;
+
 use deneb_common::errors::{DenebError, DenebResult};
 
 pub mod cas;
@@ -20,6 +35,20 @@ pub mod engine;
 pub mod inode;
 pub mod manifest;
 pub mod store;
+
+#[derive(Debug, Fail)]
+pub enum DenebCoreInitError {
+    #[fail(display = "Could not initialize the rust_sodium library")]
+    RustSodium,
+}
+
+pub fn init() -> Result<(), DenebCoreInitError> {
+    // Initialize the rust_sodium library (needed to make all its functions thread-safe)
+    if !rust_sodium::init() {
+        return Err(DenebCoreInitError::RustSodium);
+    }
+    Ok(())
+}
 
 pub fn populate_with_dir<C, S>(
     catalog: &mut C,

@@ -2,7 +2,6 @@
 
 use quickcheck::{Arbitrary, Gen};
 use rand::{thread_rng, Rng};
-use rust_sodium::crypto::hash::hash;
 use uuid::Uuid;
 
 use std::fs::{create_dir_all, remove_dir_all, File};
@@ -11,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use deneb_common::errors::DenebResult;
 use deneb_common::util::atomic_write;
+use deneb_core::cas::hash;
 
 #[derive(Clone, Debug)]
 pub enum DirEntry {

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use be::cas::Digest;
+use cas::Digest;
 use deneb_common::errors::DenebResult;
 
 mod mem;

@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
 use deneb_common::errors::{DenebError, DenebResult};
-use be::inode::{ChunkDescriptor, INode};
+use inode::{ChunkDescriptor, INode};
 
 mod mem;
 pub use self::mem::{MemCatalog, MemCatalogBuilder};

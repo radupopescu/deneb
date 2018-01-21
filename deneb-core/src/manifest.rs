@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use be::cas::Digest;
+use cas::Digest;
 use deneb_common::errors::DenebResult;
 use deneb_common::util::atomic_write;
 
@@ -85,7 +85,7 @@ mod tests {
     use time::now_utc;
     use toml;
 
-    use be::cas::hash;
+    use cas::hash;
 
     use super::*;
 

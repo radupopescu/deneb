@@ -8,12 +8,12 @@ use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::io::Read;
 
-use be::cas::hash;
-use be::catalog::{Catalog, CatalogBuilder};
-use be::inode::{lookup_chunks, ChunkPart, FileType};
-use be::manifest::Manifest;
-use be::populate_with_dir;
-use be::store::{Store, StoreBuilder};
+use cas::hash;
+use catalog::{Catalog, CatalogBuilder};
+use inode::{lookup_chunks, ChunkPart, FileType};
+use manifest::Manifest;
+use populate_with_dir;
+use store::{Store, StoreBuilder};
 use deneb_common::errors::{DenebResult, EngineError};
 use deneb_common::util::atomic_write;
 
@@ -264,8 +264,8 @@ fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> DenebResult<Ve
 /*
 #[cfg(test)]
 mod tests {
-    use be::catalog::MemCatalogBuilder;
-    use be::store::MemStoreBuilder;
+    use catalog::MemCatalogBuilder;
+    use store::MemStoreBuilder;
 
     use super::*;
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use be::inode::{ChunkDescriptor, INode};
+use inode::{ChunkDescriptor, INode};
 
 use deneb_common::errors::CatalogError;
 use super::*;

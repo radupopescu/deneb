@@ -4,7 +4,7 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::sync::mpsc::channel as std_channel;
 
-use be::inode::{FileAttributes, FileType};
+use inode::{FileAttributes, FileType};
 use deneb_common::errors::{DenebResult, EngineError};
 
 use super::protocol::{Reply, Request, RequestChannel, RequestId};
@@ -124,7 +124,7 @@ impl Handle {
     }
 
     // Private functions
-    pub(in be::engine) fn new(channel: RequestChannel) -> Handle {
+    pub(in engine) fn new(channel: RequestChannel) -> Handle {
         Handle { channel }
     }
 

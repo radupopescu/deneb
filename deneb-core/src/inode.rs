@@ -8,7 +8,7 @@ use std::u16;
 use std::path::Path;
 
 use deneb_common::errors::UnixError;
-use be::cas::Digest;
+use cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum FileType {
@@ -183,7 +183,7 @@ struct TimespecDef {
 mod tests {
     // use quickcheck::{QuickCheck, StdGen, TestResult};
     // use rand::{Rng, thread_rng};
-    use be::cas::read_chunks;
+    use cas::read_chunks;
 
     use super::*;
 
