@@ -2,10 +2,10 @@ extern crate deneb;
 extern crate failure;
 #[macro_use]
 extern crate log;
-extern crate time;
 
 extern crate deneb_common;
 extern crate deneb_core;
+extern crate deneb_fuse;
 
 use failure::ResultExt;
 
@@ -13,8 +13,8 @@ use deneb_common::errors::{print_error_with_causes, DenebResult};
 use deneb_core::catalog::LmdbCatalogBuilder;
 use deneb_core::engine::start_engine;
 use deneb_core::store::DiskStoreBuilder;
+use deneb_fuse::fs::Fs;
 
-use deneb::fe::fuse::Fs;
 use deneb::logging::init_logger;
 use deneb::params::AppParameters;
 use deneb::util::{block_signals, set_sigint_handler};
