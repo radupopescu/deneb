@@ -14,6 +14,8 @@ extern crate nix;
 extern crate rust_sodium;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
+extern crate structopt;
+#[macro_use] extern crate structopt_derive;
 #[cfg(test)] extern crate tempdir;
 extern crate time;
 extern crate tokio_core;
@@ -24,3 +26,4 @@ extern crate deneb_common;
 
 pub mod be;
 pub mod fe;
+pub mod params;

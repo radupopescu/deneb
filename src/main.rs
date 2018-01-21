@@ -15,9 +15,9 @@ use deneb::be::engine::start_engine;
 use deneb::be::store::DiskStoreBuilder;
 use deneb_common::errors::{print_error_with_causes, DenebResult};
 use deneb_common::logging::init_logger;
-use deneb_common::params::AppParameters;
 use deneb_common::util::{block_signals, set_sigint_handler};
 use deneb::fe::fuse::Fs;
+use deneb::params::AppParameters;
 
 fn run() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
