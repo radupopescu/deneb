@@ -1,0 +1,26 @@
+[package]
+name = "deneb-core"
+version = "0.1.0"
+authors = ["Radu Popescu <mail@radupopescu.net>"]
+
+[dependencies]
+bincode = "^0.9.0"
+data-encoding = "^2.1.0"
+failure = "^0.1.0"
+futures = "^0.1.0"
+lmdb = "^0.7.0"
+lmdb-sys = "^0.7.0"
+log = "^0.4.0"
+nix = "^0.9.0"
+rust_sodium = "^0.7.0"
+serde = "^1.0.0"
+serde_bytes = "^0.10.0"
+serde_derive = "^1.0.0"
+time = "^0.1.0"
+tokio-core = "^0.1.0"
+toml = "^0.4.0"
+
+[dev-dependencies]
+quickcheck = "^0.6.0"
+rand = "^0.4.0"
+tempdir = "^0.3.0"

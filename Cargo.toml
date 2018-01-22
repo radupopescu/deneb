@@ -5,7 +5,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [features]
 default = ["fuse_module"]
-fuse_module = ["fuse"]
+fuse_module = ["deneb-fuse"]
 
 [[bin]]
 name = "deneb"
@@ -13,49 +13,15 @@ path = "src/main.rs"
 doc = false
 required-features = ["fuse_module"]
 
-[[bin]]
-name = "bincode"
-doc = false
-
-[[bin]]
-name = "lmdb"
-doc = false
-
-[[bin]]
-name = "loop"
-doc = false
-
-[[bin]]
-name = "mmap"
-doc = false
-
 [dependencies]
-bincode = "^0.9.0"
-data-encoding = "^2.1.0"
+deneb-core = { path = "deneb-core" }
+deneb-fuse = { path = "deneb-fuse", optional = true }
+
 failure = "^0.1.0"
-futures = "^0.1.0"
-lmdb = "^0.7.0"
-lmdb-sys = "^0.7.0"
 log = "^0.4.0"
 log4rs = "^0.8.0"
-memmap = "^0.6.0"
 nix = "^0.9.0"
-rust_sodium = "^0.7.0"
-serde = "^1.0.0"
-serde_bytes = "^0.10.0"
-serde_derive = "^1.0.0"
 structopt = "0.1.0"
 structopt-derive = "0.1.0"
-time = "^0.1.0"
-tokio-core = "^0.1.0"
-toml = "^0.4.0"
 
-fuse = { version = "^0.3.0", optional = true}
-
-[dev-dependencies]
-copy_dir = "^0.1.0"
-quickcheck = "^0.6.0"
-rand = "^0.4.0"
-tempdir = "^0.3.0"
-uuid = { version = "^0.5.0", features = ["v4"]}
-
+[workspace]

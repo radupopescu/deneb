@@ -1,0 +1,21 @@
+[package]
+name = "deneb-fuse"
+version = "0.1.0"
+authors = ["Radu Popescu <mail@radupopescu.net>"]
+
+[dependencies]
+fuse = "^0.3.0"
+nix = "^0.9.0"
+time = "^0.1.0"
+
+deneb-core = { path = "../deneb-core" }
+
+[dev-dependencies]
+copy_dir = "^0.1.0"
+failure = "^0.1.0"
+log = "^0.4.0"
+quickcheck = "^0.6.0"
+rand = "^0.4.0"
+tempdir = "^0.3.0"
+uuid = { version = "^0.5.0", features = ["v4"]}
+

@@ -1,30 +1,30 @@
 extern crate deneb;
-#[macro_use]
 extern crate failure;
 #[macro_use]
 extern crate log;
-extern crate rust_sodium;
-extern crate time;
+
+extern crate deneb_core;
+extern crate deneb_fuse;
 
 use failure::ResultExt;
 
-use deneb::be::catalog::LmdbCatalogBuilder;
-use deneb::be::engine::start_engine;
-use deneb::be::store::DiskStoreBuilder;
-use deneb::common::{block_signals, init_logger, set_sigint_handler, AppParameters};
-use deneb::common::errors::{print_error_with_causes, DenebResult};
-use deneb::fe::fuse::Fs;
+use deneb_core::errors::{print_error_with_causes, DenebResult};
+use deneb_core::catalog::LmdbCatalogBuilder;
+use deneb_core::engine::start_engine;
+use deneb_core::store::DiskStoreBuilder;
+use deneb_fuse::fs::Fs;
+
+use deneb::logging::init_logger;
+use deneb::params::AppParameters;
+use deneb::util::{block_signals, set_sigint_handler};
 
 fn run() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
     // spawning any new threads.
     block_signals().context("Could not block signals in current thread")?;
 
-    // Initialize the rust_sodium library (needed to make all its functions thread-safe)
-    ensure!(
-        rust_sodium::init(),
-        "Could not initialize rust_sodium library. Exiting"
-    );
+    // Initialize deneb-core
+    deneb_core::init()?;
 
     let params = AppParameters::read();
 
@@ -54,7 +54,9 @@ fn run() -> DenebResult<()> {
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
     let _th = set_sigint_handler(tx);
-    let _ = rx.recv();
+    let _ = rx.recv()?;
+
+    info!("Ctrl-C received. Exiting.");
 
     Ok(())
 }
