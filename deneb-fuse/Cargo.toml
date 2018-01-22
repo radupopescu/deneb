@@ -8,7 +8,6 @@ fuse = "^0.3.0"
 nix = "^0.9.0"
 time = "^0.1.0"
 
-deneb-common = { path = "../deneb-common" }
 deneb-core = { path = "../deneb-core" }
 
 [dev-dependencies]

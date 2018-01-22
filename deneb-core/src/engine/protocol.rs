@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender as StdSender;
 
 use inode::{FileAttributes, FileType};
-use deneb_common::errors::DenebResult;
+use errors::DenebResult;
 
 pub struct RequestId {
     pub unique_id: u64,

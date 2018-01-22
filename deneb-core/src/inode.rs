@@ -7,7 +7,7 @@ use std::i32;
 use std::u16;
 use std::path::Path;
 
-use deneb_common::errors::UnixError;
+use errors::UnixError;
 use cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]

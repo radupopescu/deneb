@@ -3,13 +3,12 @@ extern crate failure;
 #[macro_use]
 extern crate log;
 
-extern crate deneb_common;
 extern crate deneb_core;
 extern crate deneb_fuse;
 
 use failure::ResultExt;
 
-use deneb_common::errors::{print_error_with_causes, DenebResult};
+use deneb_core::errors::{print_error_with_causes, DenebResult};
 use deneb_core::catalog::LmdbCatalogBuilder;
 use deneb_core::engine::start_engine;
 use deneb_core::store::DiskStoreBuilder;

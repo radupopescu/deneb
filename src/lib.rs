@@ -8,7 +8,6 @@ extern crate structopt;
 #[macro_use] extern crate structopt_derive;
 
 // Crates from the workspace
-extern crate deneb_common;
 extern crate deneb_core;
 #[cfg(feature = "fuse_module")] extern crate deneb_fuse;
 

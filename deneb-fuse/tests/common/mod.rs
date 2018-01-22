@@ -8,8 +8,8 @@ use std::fs::{create_dir_all, remove_dir_all, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use deneb_common::errors::DenebResult;
-use deneb_common::util::atomic_write;
+use deneb_core::errors::DenebResult;
+use deneb_core::util::atomic_write;
 use deneb_core::cas::hash;
 
 #[derive(Clone, Debug)]

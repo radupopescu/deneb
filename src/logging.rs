@@ -2,7 +2,7 @@ use log::LevelFilter;
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::{Appender, Config, Root};
 
-use deneb_common::errors::DenebResult;
+use deneb_core::errors::DenebResult;
 
 pub fn init_logger(log_level: LevelFilter) -> DenebResult<()> {
     let stdout = ConsoleAppender::builder().build();

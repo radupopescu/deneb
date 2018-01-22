@@ -17,10 +17,7 @@ extern crate toml;
 #[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate tempdir;
 
-extern crate deneb_common;
-
 use failure::ResultExt;
-
 
 use std::fs::{read_dir, File};
 use std::io::BufReader;
@@ -28,17 +25,19 @@ use std::path::Path;
 
 use self::cas::read_chunks;
 use self::catalog::Catalog;
+use self::errors::{DenebError, DenebResult};
 use self::inode::ChunkDescriptor;
 use self::store::Store;
 
-use deneb_common::errors::{DenebError, DenebResult};
 
 pub mod cas;
 pub mod catalog;
 pub mod engine;
+pub mod errors;
 pub mod inode;
 pub mod manifest;
 pub mod store;
+pub mod util;
 
 #[derive(Debug, Fail)]
 pub enum DenebCoreInitError {

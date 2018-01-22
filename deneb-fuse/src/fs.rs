@@ -8,7 +8,7 @@ use time::Timespec;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use deneb_common::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
+use deneb_core::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
 use deneb_core::engine::{Handle, RequestId};
 use deneb_core::inode::{FileAttributes, FileType as FT};
 

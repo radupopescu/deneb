@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::cmp::max;
 use std::str::from_utf8;
 
-use deneb_common::errors::CatalogError;
+use errors::CatalogError;
 use super::*;
 
 const MAX_CATALOG_SIZE: usize = 100 * 1024 * 1024; // 100MB

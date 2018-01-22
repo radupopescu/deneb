@@ -6,7 +6,6 @@ extern crate rand;
 extern crate tempdir;
 extern crate uuid;
 
-extern crate deneb_common;
 extern crate deneb_core;
 extern crate deneb_fuse;
 
@@ -21,7 +20,7 @@ mod common;
 
 use common::*;
 
-use deneb_common::errors::DenebResult;
+use deneb_core::errors::DenebResult;
 use deneb_core::populate_with_dir;
 use deneb_core::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
 use deneb_core::engine::{start_engine, start_engine_prebuilt};

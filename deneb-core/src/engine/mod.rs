@@ -14,8 +14,8 @@ use inode::{lookup_chunks, ChunkPart, FileType};
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
-use deneb_common::errors::{DenebResult, EngineError};
-use deneb_common::util::atomic_write;
+use errors::{DenebResult, EngineError};
+use util::atomic_write;
 
 use std::path::{Path, PathBuf};
 use std::thread::spawn as tspawn;

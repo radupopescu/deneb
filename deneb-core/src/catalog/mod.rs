@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
-use deneb_common::errors::{DenebError, DenebResult};
+use errors::{DenebError, DenebResult};
 use inode::{ChunkDescriptor, INode};
 
 mod mem;

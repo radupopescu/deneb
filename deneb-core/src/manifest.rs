@@ -6,8 +6,8 @@ use std::io::Read;
 use std::path::Path;
 
 use cas::Digest;
-use deneb_common::errors::DenebResult;
-use deneb_common::util::atomic_write;
+use errors::DenebResult;
+use util::atomic_write;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {

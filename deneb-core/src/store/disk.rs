@@ -7,8 +7,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use cas::Digest;
-use deneb_common::errors::{DenebError, DenebResult, StoreError};
-use deneb_common::util::atomic_write;
+use errors::{DenebError, DenebResult, StoreError};
+use util::atomic_write;
 
 use super::{Store, StoreBuilder};
 

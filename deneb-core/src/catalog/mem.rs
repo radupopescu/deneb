@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use inode::{ChunkDescriptor, INode};
 
-use deneb_common::errors::CatalogError;
+use errors::CatalogError;
 use super::*;
 
 pub struct MemCatalogBuilder;

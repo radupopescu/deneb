@@ -14,7 +14,6 @@ doc = false
 required-features = ["fuse_module"]
 
 [dependencies]
-deneb-common = { path = "deneb-common" }
 deneb-core = { path = "deneb-core" }
 deneb-fuse = { path = "deneb-fuse", optional = true }
 

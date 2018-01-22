@@ -3,7 +3,7 @@ use nix::sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal};
 use std::sync::mpsc::Sender;
 use std::thread::{spawn, JoinHandle};
 
-use deneb_common::errors::UnixError;
+use deneb_core::errors::UnixError;
 
 pub fn block_signals() -> Result<(), UnixError> {
     let mut sigs = SigSet::empty();

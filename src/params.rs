@@ -3,7 +3,7 @@ use structopt::StructOpt;
 
 use std::path::PathBuf;
 
-use deneb_common::errors::DenebError;
+use deneb_core::errors::DenebError;
 
 fn parse_log_level_str(s: &str) -> Result<LevelFilter, DenebError> {
     match s {
