@@ -23,4 +23,3 @@ pub fn set_sigint_handler(tx: Sender<()>) -> JoinHandle<()> {
         }
     })
 }
-

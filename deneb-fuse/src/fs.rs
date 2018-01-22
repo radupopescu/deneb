@@ -61,9 +61,7 @@ impl Filesystem for Fs {
     }
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        match self.engine_handle
-            .lookup(&to_request_id(req), parent, name)
-        {
+        match self.engine_handle.lookup(&to_request_id(req), parent, name) {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
                 reply.entry(&ttl, &to_fuse_file_attr(attrs), 0);
@@ -82,9 +80,7 @@ impl Filesystem for Fs {
     }
 
     fn opendir(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        match self.engine_handle
-            .open_dir(&to_request_id(req), ino, flags)
-        {
+        match self.engine_handle.open_dir(&to_request_id(req), ino, flags) {
             Ok(()) => {
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
             }
@@ -117,9 +113,7 @@ impl Filesystem for Fs {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        match self.engine_handle
-            .read_dir(&to_request_id(req), fh, offset)
-        {
+        match self.engine_handle.read_dir(&to_request_id(req), fh, offset) {
             Ok(entries) => {
                 let mut index = ::std::cmp::max(offset, 0) as usize;
                 while index < entries.len() {
@@ -145,24 +139,32 @@ impl Filesystem for Fs {
         {
             Ok(_) => {
                 reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
-            },
+            }
             Err(e) => {
                 if let Some(engine_error) = e.downcast_ref::<EngineError>() {
                     match *engine_error {
                         EngineError::Access(_) => {
                             reply.error(EACCES);
-                        },
+                        }
                         _ => {
                             print_error_with_causes(&e);
                             reply.error(EINVAL);
-                        },
+                        }
                     }
                 }
             }
         }
     }
 
-    fn read(&mut self, req: &Request, _ino: u64, fh: u64, offset: i64, size: u32, reply: ReplyData) {
+    fn read(
+        &mut self,
+        req: &Request,
+        _ino: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        reply: ReplyData,
+    ) {
         match self.engine_handle
             .read_data(&to_request_id(req), fh, offset, size)
         {
@@ -375,4 +377,3 @@ fn to_request_id(req: &Request) -> RequestId {
         pid: req.pid(),
     }
 }
-

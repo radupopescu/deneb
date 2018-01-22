@@ -24,15 +24,18 @@ pub(in engine) enum Request {
     },
     OpenDir {
         index: u64,
-        #[allow(dead_code)] flags: u32,
+        #[allow(dead_code)]
+        flags: u32,
     },
     ReleaseDir {
         index: u64,
-        #[allow(dead_code)] flags: u32,
+        #[allow(dead_code)]
+        flags: u32,
     },
     ReadDir {
         index: u64,
-        #[allow(dead_code)] offset: i64,
+        #[allow(dead_code)]
+        offset: i64,
     },
     OpenFile {
         index: u64,
@@ -45,9 +48,12 @@ pub(in engine) enum Request {
     },
     ReleaseFile {
         index: u64,
-        #[allow(dead_code)] flags: u32,
-        #[allow(dead_code)] lock_owner: u64,
-        #[allow(dead_code)] flush: bool,
+        #[allow(dead_code)]
+        flags: u32,
+        #[allow(dead_code)]
+        lock_owner: u64,
+        #[allow(dead_code)]
+        flush: bool,
     },
 }
 

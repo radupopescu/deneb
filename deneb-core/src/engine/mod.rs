@@ -160,7 +160,9 @@ impl<C, S> Engine<C, S> {
     {
         match request {
             Request::GetAttr { index } => {
-                let reply = self.catalog.get_inode(index).map(|inode| inode.attributes)
+                let reply = self.catalog
+                    .get_inode(index)
+                    .map(|inode| inode.attributes)
                     .map_err(|e| e.context(EngineError::GetAttr(index)).into());
                 let _ = chan.send(Reply::GetAttr(reply));
             }
@@ -177,19 +179,25 @@ impl<C, S> Engine<C, S> {
                     if (flags & rw) > 0 {
                         Err(EngineError::Access(index).into())
                     } else {
-                        self.catalog.get_dir_entries(index).map(|entries| {
-                            let entries = entries
-                                .iter()
-                                .map(|&(ref name, idx)| {
-                                    if let Ok(inode) = self.catalog.get_inode(idx) {
-                                        (name.clone(), idx, inode.attributes.kind)
-                                    } else {
-                                        panic!("Fatal engine error. Could not retrieve inode {}", idx)
-                                    }
-                                })
-                                .collect::<Vec<_>>();
-                            self.open_dirs.insert(index, entries);
-                        }).map_err(|e| e.context(EngineError::DirOpen(index)).into())
+                        self.catalog
+                            .get_dir_entries(index)
+                            .map(|entries| {
+                                let entries = entries
+                                    .iter()
+                                    .map(|&(ref name, idx)| {
+                                        if let Ok(inode) = self.catalog.get_inode(idx) {
+                                            (name.clone(), idx, inode.attributes.kind)
+                                        } else {
+                                            panic!(
+                                                "Fatal engine error. Could not retrieve inode {}",
+                                                idx
+                                            )
+                                        }
+                                    })
+                                    .collect::<Vec<_>>();
+                                self.open_dirs.insert(index, entries);
+                            })
+                            .map_err(|e| e.context(EngineError::DirOpen(index)).into())
                     }
                 };
                 let _ = chan.send(Reply::OpenDir(reply));
@@ -214,9 +222,12 @@ impl<C, S> Engine<C, S> {
                     if (flags & rw) > 0 {
                         Err(EngineError::Access(index).into())
                     } else {
-                        self.catalog.get_inode(index).map(|_inode| {
-                            self.open_files.insert(index, OpenFileContext);
-                        }).map_err(|e| e.context(EngineError::FileOpen(index)).into())
+                        self.catalog
+                            .get_inode(index)
+                            .map(|_inode| {
+                                self.open_files.insert(index, OpenFileContext);
+                            })
+                            .map_err(|e| e.context(EngineError::FileOpen(index)).into())
                     }
                 };
                 let _ = chan.send(Reply::OpenFile(reply));
@@ -236,7 +247,8 @@ impl<C, S> Engine<C, S> {
                             &lookup_chunks(offset, size as usize, inode.chunks.as_slice()),
                             &self.store,
                         )
-                    }).map_err(|e| e.context(EngineError::FileRead(index)).into());
+                    })
+                    .map_err(|e| e.context(EngineError::FileRead(index)).into());
                 let _ = chan.send(Reply::ReadData(reply));
             }
             Request::ReleaseFile { index, .. } => {

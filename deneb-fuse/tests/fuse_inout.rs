@@ -1,5 +1,6 @@
 extern crate copy_dir;
-#[macro_use] extern crate failure;
+#[macro_use]
+extern crate failure;
 extern crate log;
 extern crate quickcheck;
 extern crate rand;
@@ -88,16 +89,14 @@ fn init_test<'a>(
             populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
             start_engine_prebuilt(catalog, store, 1000)
         }
-        TestType::OnDisk => {
-            start_engine(
-                &LmdbCatalogBuilder,
-                &DiskStoreBuilder,
-                &work_dir,
-                Some(input.to_owned()),
-                chunk_size,
-                1000,
-            )
-        }
+        TestType::OnDisk => start_engine(
+            &LmdbCatalogBuilder,
+            &DiskStoreBuilder,
+            &work_dir,
+            Some(input.to_owned()),
+            chunk_size,
+            1000,
+        ),
     }?;
     let file_system = Fs::new(handle);
     unsafe { file_system.spawn_mount(&mount_point, &[]) }

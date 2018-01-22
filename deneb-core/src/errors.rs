@@ -11,7 +11,8 @@ pub type DenebResult<T> = ::std::result::Result<T, ::failure::Error>;
 #[derive(Debug, Fail)]
 #[fail(display = "Nix error: {}", inner)]
 pub struct UnixError {
-    #[cause] inner: nix::Error,
+    #[cause]
+    inner: nix::Error,
 }
 
 impl From<nix::Error> for UnixError {
