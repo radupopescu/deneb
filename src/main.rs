@@ -54,7 +54,7 @@ fn run() -> DenebResult<()> {
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
     let _th = set_sigint_handler(tx);
-    let _ = rx.recv()?;
+    rx.recv()?;
 
     info!("Ctrl-C received. Exiting.");
 

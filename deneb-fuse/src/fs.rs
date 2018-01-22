@@ -70,7 +70,7 @@ impl Filesystem for Fs {
             }
             Err(e) => {
                 if let Some(engine_error) = e.root_cause().downcast_ref::<CatalogError>() {
-                    if let &CatalogError::DEntryNotFound(..) = engine_error {
+                    if let CatalogError::DEntryNotFound(..) = *engine_error {
                         reply.error(ENOENT);
                         return;
                     }
@@ -148,8 +148,8 @@ impl Filesystem for Fs {
             },
             Err(e) => {
                 if let Some(engine_error) = e.downcast_ref::<EngineError>() {
-                    match engine_error {
-                        &EngineError::Access(_) => {
+                    match *engine_error {
+                        EngineError::Access(_) => {
                             reply.error(EACCES);
                         },
                         _ => {

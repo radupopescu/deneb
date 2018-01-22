@@ -107,7 +107,8 @@ impl DirTree {
     }
 
     pub fn clean_up(&self) -> DenebResult<()> {
-        Ok(remove_dir_all(&self.root)?)
+        remove_dir_all(&self.root)?;
+        Ok(())
     }
 
     fn visit<V>(&self, action: V) -> DenebResult<()>

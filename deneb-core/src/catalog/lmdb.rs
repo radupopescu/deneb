@@ -265,12 +265,10 @@ fn open_environment(path: &Path) -> Result<Environment, LmdbError> {
         .set_max_readers(MAX_CATALOG_READERS)
         .set_map_size(MAX_CATALOG_SIZE)
         .open_with_permissions(path, 0o600)
-        .map_err(|e| e.into())
 }
 
 fn try_create_db(env: &Environment, name: &str) -> Result<Database, LmdbError> {
     env.create_db(Some(name), DatabaseFlags::empty())
-        .map_err(|e| e.into())
 }
 
 fn get_env_info(env: &Environment) -> MDB_envinfo {

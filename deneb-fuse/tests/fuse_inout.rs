@@ -29,6 +29,7 @@ use deneb_fuse::fs::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
 
+#[derive(Clone, Copy)]
 enum TestType {
     InMemory,
     OnDisk,
