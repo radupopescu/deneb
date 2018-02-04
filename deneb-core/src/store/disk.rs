@@ -21,17 +21,14 @@ pub struct DiskStoreBuilder;
 impl StoreBuilder for DiskStoreBuilder {
     type Store = DiskStore;
 
-    fn at_dir<P: AsRef<Path>>(&self, dir: P) -> DenebResult<Self::Store> {
+    fn at_dir<P: AsRef<Path>>(&self, dir: P, chunk_size: usize) -> DenebResult<Self::Store> {
         let root_dir = dir.as_ref().to_owned();
         let object_dir = root_dir.join(OBJECT_PATH);
 
         // Create object dir
         create_dir_all(&object_dir)?;
 
-        Ok(Self::Store {
-            _root_dir: root_dir,
-            object_dir: object_dir,
-        })
+        Ok(Self::Store { chunk_size, _root_dir: root_dir, object_dir })
     }
 }
 
@@ -45,16 +42,31 @@ impl StoreBuilder for DiskStoreBuilder {
 /// The full path at which a file with the digest "abcdefg123456" is stored is:
 /// "`root_dir`/data/ab/cdefg123456"
 pub struct DiskStore {
+    chunk_size: usize,
     _root_dir: PathBuf,
     object_dir: PathBuf,
 }
 
-impl Store for DiskStore {
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
+impl DiskStore {
+    /// Given a Digest, returns the absolute file path and the directory path
+    /// corresponding to the object in the store
+    fn digest_to_path(&self, digest: &Digest) -> (PathBuf, PathBuf) {
         let mut prefix1 = digest.to_string();
         let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
         let file_name = prefix2.split_off(PREFIX_SIZE);
-        let full_path = self.object_dir.join(prefix1).join(prefix2).join(file_name);
+        let directory = self.object_dir.join(prefix1).join(prefix2);
+        let file_path = directory.join(file_name);
+        (file_path, directory)
+    }
+}
+
+impl Store for DiskStore {
+    fn chunk_size(&self) -> usize {
+        self.chunk_size
+    }
+
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
+        let (full_path, _) = self.digest_to_path(digest);
         let file_stats = stat(full_path.as_path())?;
         let mut buffer = Vec::new();
         let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
@@ -67,15 +79,10 @@ impl Store for DiskStore {
         }
     }
 
-    fn put_chunk(&mut self, digest: Digest, contents: &[u8]) -> DenebResult<()> {
-        let hex_digest = digest.to_string();
-        let mut prefix1 = hex_digest.clone();
-        let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
-        let file_name = prefix2.split_off(PREFIX_SIZE);
-        let full_dir = self.object_dir.join(prefix1).join(prefix2);
-        create_dir_all(&full_dir)?;
-        let full_path = full_dir.join(file_name);
-        atomic_write(full_path.as_path(), contents)?;
+    fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
+        let (full_path, directory) = self.digest_to_path(&digest);
+        create_dir_all(&directory)?;
+        atomic_write(full_path.as_path(), contents.as_slice())?;
         trace!("Chunk written: {:?}", full_path);
         Ok(())
     }
@@ -86,29 +93,20 @@ mod tests {
     use tempdir::TempDir;
 
     use super::*;
-    use cas::hash;
+
+    use util::run;
 
     #[test]
     fn diskstore_create_put_get() {
-        let temp_dir = TempDir::new("/tmp/deneb_test_diskstore");
-        assert!(temp_dir.is_ok());
-        let sb = DiskStoreBuilder;
-        if let Ok(temp_dir) = temp_dir {
-            let store = sb.at_dir(temp_dir.path());
-            assert!(store.is_ok());
-            if let Ok(mut store) = store {
-                let k1 = "some_key".as_ref();
-                let v1: Vec<u8> = vec![0 as u8; 1000];
-                let ret = store.put_chunk(hash(k1), v1.as_slice());
-                assert!(ret.is_ok());
-                if ret.is_ok() {
-                    let v2 = store.get_chunk(&hash(k1));
-                    assert!(v2.is_ok());
-                    if let Ok(v2) = v2 {
-                        assert_eq!(v1, v2);
-                    }
-                }
-            }
-        }
+        run(|| {
+            let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
+            let sb = DiskStoreBuilder;
+            let mut store = sb.at_dir(temp_dir.path(), 10000)?;
+            let v1: Vec<u8> = vec![0 as u8; 1000];
+            let descriptors = store.put_file_chunked(v1.as_slice())?;
+            let v2 = store.get_chunk(&descriptors[0].digest)?;
+            assert_eq!(v1, v2);
+            Ok(())
+        });
     }
 }

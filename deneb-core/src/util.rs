@@ -30,6 +30,13 @@ pub fn tock(t0: &i64) -> i64 {
     precise_time_ns() as i64 - t0
 }
 
+pub fn run<F: Fn() -> DenebResult<()>>(f: F) {
+    if let Err(e) = f() {
+        eprintln!("Error: {}", e);
+        ::std::process::exit(1);
+    }
+}
+
 // Can this be made faster? Is it worth it?
 fn create_temp_file(prefix: &Path) -> Result<(File, PathBuf), UnixError> {
     let mut template = prefix.as_os_str().to_os_string();

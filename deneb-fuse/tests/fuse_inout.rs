@@ -84,7 +84,7 @@ fn init_test<'a>(
     let handle = match test_type {
         TestType::InMemory => {
             // The paths given to the in-memory builders doesn't matter
-            let mut store = MemStoreBuilder.at_dir(&work_dir)?;
+            let mut store = MemStoreBuilder.at_dir(&work_dir, chunk_size)?;
             let mut catalog = MemCatalogBuilder.create(&work_dir)?;
             populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
             start_engine_prebuilt(catalog, store, 1000)

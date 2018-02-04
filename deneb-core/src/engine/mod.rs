@@ -6,9 +6,7 @@ use tokio_core::reactor::Core;
 
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
-use std::io::Read;
 
-use cas::hash;
 use catalog::{Catalog, CatalogBuilder};
 use inode::{lookup_chunks, ChunkPart, FileType};
 use manifest::Manifest;
@@ -94,7 +92,7 @@ where
     SB: StoreBuilder,
 {
     // Create an object store
-    let mut store = store_builder.at_dir(work_dir)?;
+    let mut store = store_builder.at_dir(work_dir, chunk_size)?;
 
     let catalog_root = work_dir.to_path_buf().join("scratch");
     create_dir_all(catalog_root.as_path())?;
@@ -117,13 +115,11 @@ where
 
         // Save the generated catalog as a content-addressed chunk in the store.
         let mut f = File::open(catalog_path.as_path())?;
-        let mut buffer = Vec::new();
-        let _ = f.read_to_end(&mut buffer);
-        let digest = hash(buffer.as_slice());
-        store.put_chunk(digest.clone(), buffer.as_slice())?;
+        let descriptors = store.put_file(&mut f)?;
 
         // Create and save the repository manifest
-        let manifest = Manifest::new(digest, None, now_utc());
+        assert_eq!(descriptors.len(), 1);
+        let manifest = Manifest::new(descriptors[0].digest, None, now_utc());
         manifest.save(manifest_path.as_path())?;
     }
 

@@ -5,18 +5,17 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, Visitor};
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::io::BufRead;
 
 use errors::{DenebError, DenebResult};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);
 
 pub fn hash(msg: &[u8]) -> Digest {
     Digest(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: BufRead>(
+pub fn read_chunks<R: ::std::io::Read>(
     mut reader: R,
     buffer: &mut [u8],
 ) -> Result<Vec<(Digest, Vec<u8>)>, DenebError> {
@@ -136,7 +135,8 @@ mod tests {
         let mut contents = vec![0 as u8; file_size];
         thread_rng().fill_bytes(contents.as_mut());
         let mut buffer = vec![0 as u8; chunk_size as usize];
-        let chunks = read_chunks(contents.as_slice(), buffer.as_mut_slice())?;
+        let chunks = read_chunks(contents.as_slice(),
+                                 buffer.as_mut_slice())?;
 
         let mut combined_chunks = Vec::new();
         for &(_, ref data) in &chunks {
