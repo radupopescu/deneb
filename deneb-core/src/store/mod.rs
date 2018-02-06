@@ -1,5 +1,6 @@
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
 
 use cas::{hash, read_chunks, Digest};
 use inode::ChunkDescriptor;
@@ -20,7 +21,7 @@ pub trait StoreBuilder {
 pub trait Store {
     fn chunk_size(&self) -> usize;
 
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>>;
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<Vec<u8>>>;
 
     fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()>;
 

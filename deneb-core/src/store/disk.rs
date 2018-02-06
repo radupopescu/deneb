@@ -1,8 +1,11 @@
 use failure::ResultExt;
 use nix::sys::stat::stat;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::io::Read;
+use std::sync::Arc;
 
 use std::path::{Path, PathBuf};
 
@@ -28,7 +31,7 @@ impl StoreBuilder for DiskStoreBuilder {
         // Create object dir
         create_dir_all(&object_dir)?;
 
-        Ok(Self::Store { chunk_size, _root_dir: root_dir, object_dir })
+        Ok(Self::Store { chunk_size, _root_dir: root_dir, object_dir, cache: RefCell::new(HashMap::new()) })
     }
 }
 
@@ -45,6 +48,7 @@ pub struct DiskStore {
     chunk_size: usize,
     _root_dir: PathBuf,
     object_dir: PathBuf,
+    cache: RefCell<HashMap<Digest, Arc<Vec<u8>>>>,
 }
 
 impl DiskStore {
@@ -65,17 +69,24 @@ impl Store for DiskStore {
         self.chunk_size
     }
 
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Vec<u8>> {
-        let (full_path, _) = self.digest_to_path(digest);
-        let file_stats = stat(full_path.as_path())?;
-        let mut buffer = Vec::new();
-        let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
-        let bytes_read = f.read_to_end(&mut buffer).context(DenebError::DiskIO)?;
-        if bytes_read as i64 == file_stats.st_size {
-            trace!("Chunk read: {:?}", full_path);
-            Ok(buffer)
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<Vec<u8>>> {
+        if self.cache.borrow().contains_key(digest) {
+            return self.cache.borrow().get(digest).map(Arc::clone).ok_or_else(|| {
+                StoreError::ChunkGet(digest.to_string()).into()
+            });
         } else {
-            Err(StoreError::ChunkGet(digest.to_string()).into())
+            let (full_path, _) = self.digest_to_path(digest);
+            let file_stats = stat(full_path.as_path())?;
+            let mut buffer = Vec::new();
+            let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
+            let bytes_read = f.read_to_end(&mut buffer).context(DenebError::DiskIO)?;
+            if bytes_read as i64 == file_stats.st_size {
+                trace!("Chunk read: {:?}", full_path);
+                let mut cache = self.cache.borrow_mut();
+                Ok(Arc::clone(cache.entry(*digest).or_insert(Arc::new(buffer))))
+            } else {
+                Err(StoreError::ChunkGet(digest.to_string()).into())
+            }
         }
     }
 
@@ -105,7 +116,7 @@ mod tests {
             let v1: Vec<u8> = vec![0 as u8; 1000];
             let descriptors = store.put_file_chunked(v1.as_slice())?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(v1, v2);
+            assert_eq!(v1, *v2);
             Ok(())
         });
     }
