@@ -1,8 +1,8 @@
 use failure::ResultExt;
+use lru::LruCache;
 use nix::sys::stat::stat;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::io::Read;
 use std::sync::Arc;
@@ -19,6 +19,8 @@ const OBJECT_PATH: &str = "data";
 const PREFIX_SIZE: usize = 2;
 //const NUM_PREFIX: usize = 2;
 
+const CACHE_MAX_OBJECTS: usize = 100;
+
 pub struct DiskStoreBuilder;
 
 impl StoreBuilder for DiskStoreBuilder {
@@ -31,7 +33,8 @@ impl StoreBuilder for DiskStoreBuilder {
         // Create object dir
         create_dir_all(&object_dir)?;
 
-        Ok(Self::Store { chunk_size, _root_dir: root_dir, object_dir, cache: RefCell::new(HashMap::new()) })
+        Ok(Self::Store { chunk_size, _root_dir: root_dir, object_dir,
+                         cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)) })
     }
 }
 
@@ -48,7 +51,7 @@ pub struct DiskStore {
     chunk_size: usize,
     _root_dir: PathBuf,
     object_dir: PathBuf,
-    cache: RefCell<HashMap<Digest, Arc<Vec<u8>>>>,
+    cache: RefCell<LruCache<Digest, Arc<Vec<u8>>>>,
 }
 
 impl DiskStore {
@@ -70,10 +73,12 @@ impl Store for DiskStore {
     }
 
     fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<Vec<u8>>> {
-        if self.cache.borrow().contains_key(digest) {
-            return self.cache.borrow().get(digest).map(Arc::clone).ok_or_else(|| {
-                StoreError::ChunkGet(digest.to_string()).into()
-            });
+        let mut cache = self.cache.borrow_mut();
+        if cache.contains(digest) {
+            cache
+                .get(digest)
+                .map(Arc::clone)
+                .ok_or_else(|| StoreError::ChunkGet(digest.to_string()).into())
         } else {
             let (full_path, _) = self.digest_to_path(digest);
             let file_stats = stat(full_path.as_path())?;
@@ -82,8 +87,11 @@ impl Store for DiskStore {
             let bytes_read = f.read_to_end(&mut buffer).context(DenebError::DiskIO)?;
             if bytes_read as i64 == file_stats.st_size {
                 trace!("Chunk read: {:?}", full_path);
-                let mut cache = self.cache.borrow_mut();
-                Ok(Arc::clone(cache.entry(*digest).or_insert(Arc::new(buffer))))
+                cache.put(*digest, Arc::new(buffer));
+                cache
+                    .get(digest)
+                    .map(Arc::clone)
+                    .ok_or_else(|| StoreError::ChunkGet(digest.to_string()).into())
             } else {
                 Err(StoreError::ChunkGet(digest.to_string()).into())
             }
