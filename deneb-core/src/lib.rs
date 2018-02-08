@@ -5,9 +5,9 @@ extern crate failure;
 extern crate futures;
 extern crate lmdb;
 extern crate lmdb_sys;
-extern crate lru;
 #[macro_use]
 extern crate log;
+extern crate lru;
 extern crate nix;
 extern crate rust_sodium;
 extern crate serde;

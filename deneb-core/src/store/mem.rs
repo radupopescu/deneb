@@ -25,7 +25,10 @@ pub struct MemStore {
 
 impl MemStore {
     pub fn new(chunk_size: usize) -> MemStore {
-        MemStore { chunk_size, objects: HashMap::new() }
+        MemStore {
+            chunk_size,
+            objects: HashMap::new(),
+        }
     }
 
     pub fn show_stats(&self) {

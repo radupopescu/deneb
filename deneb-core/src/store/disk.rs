@@ -33,8 +33,12 @@ impl StoreBuilder for DiskStoreBuilder {
         // Create object dir
         create_dir_all(&object_dir)?;
 
-        Ok(Self::Store { chunk_size, _root_dir: root_dir, object_dir,
-                         cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)) })
+        Ok(Self::Store {
+            chunk_size,
+            _root_dir: root_dir,
+            object_dir,
+            cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)),
+        })
     }
 }
 

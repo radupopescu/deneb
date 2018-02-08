@@ -135,8 +135,7 @@ mod tests {
         let mut contents = vec![0 as u8; file_size];
         thread_rng().fill_bytes(contents.as_mut());
         let mut buffer = vec![0 as u8; chunk_size as usize];
-        let chunks = read_chunks(contents.as_slice(),
-                                 buffer.as_mut_slice())?;
+        let chunks = read_chunks(contents.as_slice(), buffer.as_mut_slice())?;
 
         let mut combined_chunks = Vec::new();
         for &(_, ref data) in &chunks {

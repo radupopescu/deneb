@@ -39,7 +39,10 @@ pub trait Store {
         let mut descriptors = vec![];
         let mut buf = vec![0 as u8; self.chunk_size()];
         for (digest, obj) in read_chunks(data, buf.as_mut_slice())? {
-            descriptors.push(ChunkDescriptor { digest, size: obj.len() });
+            descriptors.push(ChunkDescriptor {
+                digest,
+                size: obj.len(),
+            });
             self.put_chunk(&digest, obj)?;
         }
         Ok(descriptors)
