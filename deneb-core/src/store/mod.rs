@@ -25,14 +25,13 @@ pub trait Store {
 
     fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()>;
 
-    fn put_file<R: Read>(&mut self, mut data: R) -> DenebResult<Vec<ChunkDescriptor>> {
-        let mut descriptors = vec![];
+    fn put_file<R: Read>(&mut self, mut data: R) -> DenebResult<ChunkDescriptor> {
         let mut buf = vec![];
         let n = data.read_to_end(&mut buf)?;
         let digest = hash(buf.as_slice());
-        descriptors.push(ChunkDescriptor { digest, size: n });
+        let descriptor = ChunkDescriptor { digest, size: n };
         self.put_chunk(&digest, buf)?;
-        Ok(descriptors)
+        Ok(descriptor)
     }
 
     fn put_file_chunked<R: Read>(&mut self, data: R) -> DenebResult<Vec<ChunkDescriptor>> {

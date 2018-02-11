@@ -117,11 +117,10 @@ where
 
         // Save the generated catalog as a content-addressed chunk in the store.
         let mut f = File::open(catalog_path.as_path())?;
-        let descriptors = store.put_file(&mut f)?;
+        let chunk_descriptor = store.put_file(&mut f)?;
 
         // Create and save the repository manifest
-        assert_eq!(descriptors.len(), 1);
-        let manifest = Manifest::new(descriptors[0].digest, None, now_utc());
+        let manifest = Manifest::new(chunk_descriptor.digest, None, now_utc());
         manifest.save(manifest_path.as_path())?;
     }
 
