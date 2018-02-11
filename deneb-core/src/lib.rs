@@ -42,7 +42,7 @@ pub mod manifest;
 pub mod store;
 pub mod util;
 
-//mod file_workspace;
+mod file_workspace;
 
 #[derive(Debug, Fail)]
 pub enum DenebCoreInitError {
