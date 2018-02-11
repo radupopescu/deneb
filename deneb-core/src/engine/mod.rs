@@ -15,7 +15,9 @@ use store::{Store, StoreBuilder};
 use errors::{DenebResult, EngineError};
 use util::atomic_write;
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::thread::spawn as tspawn;
 
 mod protocol;
@@ -38,7 +40,7 @@ where
         if let Ok(mut core) = Core::new() {
             let mut engine = Engine {
                 catalog,
-                store,
+                store: Rc::new(RefCell::new(store)),
                 open_dirs: HashMap::new(),
                 open_files: HashMap::new(),
             };
@@ -143,7 +145,7 @@ struct OpenFileContext;
 
 struct Engine<C, S> {
     catalog: C,
-    store: S,
+    store: Rc<RefCell<S>>,
     open_dirs: HashMap<u64, Vec<(PathBuf, u64, FileType)>>,
     open_files: HashMap<u64, OpenFileContext>,
 }
@@ -241,7 +243,7 @@ impl<C, S> Engine<C, S> {
                     .and_then(|inode| {
                         chunks_to_buffer(
                             &lookup_chunks(offset, size as usize, inode.chunks.as_slice()),
-                            &self.store,
+                            &*self.store.borrow(),
                         )
                     })
                     .map_err(|e| e.context(EngineError::FileRead(index)).into());
