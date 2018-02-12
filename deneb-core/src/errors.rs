@@ -90,7 +90,7 @@ pub fn print_error_with_causes(err: &Error) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
