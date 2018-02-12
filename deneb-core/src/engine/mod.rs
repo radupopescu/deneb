@@ -4,21 +4,21 @@ use nix::libc::{O_RDWR, O_WRONLY};
 use time::now_utc;
 use tokio_core::reactor::Core;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::thread::spawn as tspawn;
 
 use catalog::{Catalog, CatalogBuilder};
-use inode::{lookup_chunks, ChunkPart, FileType};
+use file_workspace::FileWorkspace;
+use inode::FileType;
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
 use errors::{DenebResult, EngineError};
 use util::atomic_write;
-
-use std::cell::RefCell;
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::thread::spawn as tspawn;
 
 mod protocol;
 mod handle;
@@ -42,7 +42,7 @@ where
                 catalog,
                 store: Rc::new(RefCell::new(store)),
                 open_dirs: HashMap::new(),
-                open_files: HashMap::new(),
+                file_workspaces: HashMap::new(),
             };
             let handler = rx.for_each(move |(event, tx)| {
                 engine.handle_request(event, &tx);
@@ -140,13 +140,11 @@ where
     Ok((catalog, store))
 }
 
-struct OpenFileContext;
-
 struct Engine<C, S> {
     catalog: C,
     store: Rc<RefCell<S>>,
     open_dirs: HashMap<u64, Vec<(PathBuf, u64, FileType)>>,
-    open_files: HashMap<u64, OpenFileContext>,
+    file_workspaces: HashMap<u64, FileWorkspace<S>>,
 }
 
 impl<C, S> Engine<C, S> {
@@ -221,8 +219,12 @@ impl<C, S> Engine<C, S> {
                     } else {
                         self.catalog
                             .get_inode(index)
-                            .map(|_inode| {
-                                self.open_files.insert(index, OpenFileContext);
+                            .map(|inode| {
+                                if !self.file_workspaces.contains_key(&index) {
+                                    self.file_workspaces.insert(index,
+                                                                FileWorkspace::new(&inode,
+                                                                                   Rc::clone(&self.store)));
+                                }
                             })
                             .map_err(|e| e.context(EngineError::FileOpen(index)).into())
                     }
@@ -235,38 +237,22 @@ impl<C, S> Engine<C, S> {
                 size,
             } => {
                 let offset = ::std::cmp::max(offset, 0) as usize;
-                let reply = self.open_files
-                    .get(&index)
+                let reply = self.file_workspaces
+                    .get_mut(&index)
                     .ok_or_else(|| EngineError::FileRead(index).into())
-                    .and_then(|_ctx| self.catalog.get_inode(index))
-                    .and_then(|inode| {
-                        chunks_to_buffer(
-                            &lookup_chunks(offset, size as usize, inode.chunks.as_slice()),
-                            &*self.store.borrow(),
-                        )
-                    })
+                    .and_then(|ws| ws.read(offset, size as usize))
                     .map_err(|e| e.context(EngineError::FileRead(index)).into());
                 let _ = chan.send(Reply::ReadData(reply));
             }
             Request::ReleaseFile { index, .. } => {
-                let reply = self.open_files
-                    .remove(&index)
-                    .map(|_| ())
-                    .ok_or_else(|| EngineError::FileClose(index).into());
+                let reply = self.file_workspaces
+                    .get_mut(&index)
+                    .ok_or_else(|| EngineError::FileClose(index).into())
+                    .and_then(|ws| { Ok(ws.unload()) });
                 let _ = chan.send(Reply::ReleaseFile(reply));
             }
         }
     }
-}
-
-/// Fill a buffer using the list of `ChunkPart`
-fn chunks_to_buffer<S: Store>(chunks: &[ChunkPart], store: &S) -> DenebResult<Vec<u8>> {
-    let mut buffer = Vec::new();
-    for &ChunkPart(digest, begin, end) in chunks {
-        let chunk = store.get_chunk(digest)?;
-        buffer.extend_from_slice(&chunk[begin..end]);
-    }
-    Ok(buffer)
 }
 
 // TODO: bring back test when Engine is fixed for in-memory catalogs and stores

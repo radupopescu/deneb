@@ -69,13 +69,6 @@ pub struct ChunkDescriptor {
     pub size: usize,
 }
 
-/// Data structure returned by the `lookup_chunks` function
-///
-/// The digest identifying a chunk and the indices which define an exclusive
-/// range of that should be read from the chunk data.
-#[derive(Debug, PartialEq)]
-pub struct ChunkPart<'a>(pub &'a Digest, pub usize, pub usize);
-
 #[derive(Clone, Deserialize, Serialize)]
 pub struct INode {
     pub attributes: FileAttributes,
@@ -127,31 +120,6 @@ impl INode {
     }
 }
 
-/// Lookup a subset of consecutive chunks corresponding to a memory slice
-///
-/// Given a list of `ChunkDescriptor`, representing consecutive chunks of a file and a segment identified by
-/// `offset` - the offset from the beginning of the file - and `size` - the size of the segment,
-/// this function returns a vector of `ChunkPart`
-pub fn lookup_chunks(offset: usize, size: usize, chunks: &[ChunkDescriptor]) -> Vec<ChunkPart> {
-    let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
-    let mut output = Vec::new();
-    let mut bytes_left = size;
-    for c in chunks[first_chunk..].iter() {
-        let read_bytes = min(bytes_left, c.size - offset_in_chunk);
-        output.push(ChunkPart(
-            &c.digest,
-            offset_in_chunk,
-            offset_in_chunk + read_bytes,
-        ));
-        offset_in_chunk = 0;
-        bytes_left -= read_bytes;
-        if bytes_left == 0 {
-            break;
-        }
-    }
-    output
-}
-
 fn mode_to_file_type(mode: mode_t) -> FileType {
     let ft = mode & S_IFMT.bits();
     if ft == S_IFDIR.bits() {
@@ -176,25 +144,6 @@ fn mode_to_permissions(mode: mode_t) -> u16 {
     #[cfg(target_os = "linux")]
     debug_assert!(mode <= u16::MAX as u32);
     (mode & !S_IFMT.bits()) as u16
-}
-
-/// Lookup the index in a list of chunks corresponding to an offset
-///
-/// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
-/// and the offset inside the chunk which correspond to the give offset
-fn chunk_idx_for_offset(offset: usize, chunks: &[ChunkDescriptor]) -> (usize, usize) {
-    let mut acc = 0;
-    let mut idx = 0;
-    let mut offset_in_chunk = 0;
-    for (i, c) in chunks.iter().enumerate() {
-        acc += c.size;
-        idx = i;
-        if acc > offset {
-            offset_in_chunk = offset + c.size - acc;
-            break;
-        }
-    }
-    (idx, offset_in_chunk)
 }
 
 #[derive(Deserialize, Serialize)]
