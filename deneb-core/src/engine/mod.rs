@@ -221,9 +221,10 @@ impl<C, S> Engine<C, S> {
                             .get_inode(index)
                             .map(|inode| {
                                 if !self.file_workspaces.contains_key(&index) {
-                                    self.file_workspaces.insert(index,
-                                                                FileWorkspace::new(&inode,
-                                                                                   Rc::clone(&self.store)));
+                                    self.file_workspaces.insert(
+                                        index,
+                                        FileWorkspace::new(&inode, Rc::clone(&self.store)),
+                                    );
                                 }
                             })
                             .map_err(|e| e.context(EngineError::FileOpen(index)).into())
@@ -248,7 +249,7 @@ impl<C, S> Engine<C, S> {
                 let reply = self.file_workspaces
                     .get_mut(&index)
                     .ok_or_else(|| EngineError::FileClose(index).into())
-                    .and_then(|ws| { Ok(ws.unload()) });
+                    .and_then(|ws| Ok(ws.unload()));
                 let _ = chan.send(Reply::ReleaseFile(reply));
             }
         }

@@ -114,7 +114,7 @@ where
 struct ChunkPart {
     index: usize,
     begin: usize,
-    end: usize
+    end: usize,
 }
 
 /// Lookup a subset of consecutive chunks corresponding to a memory slice
@@ -123,8 +123,11 @@ struct ChunkPart {
 /// of a file and a segment identified by `offset` - the offset from
 /// the beginning of the file - and `size` - the size of the segment,
 /// this function returns a vector of `ChunkPart`
-fn lookup_chunks<S: Store>(offset: usize, size: usize,
-                           chunks: &[RefCell<Chunk<S>>]) -> Vec<ChunkPart> {
+fn lookup_chunks<S: Store>(
+    offset: usize,
+    size: usize,
+    chunks: &[RefCell<Chunk<S>>],
+) -> Vec<ChunkPart> {
     let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
     let mut output = Vec::new();
     let mut bytes_left = size;
@@ -148,8 +151,7 @@ fn lookup_chunks<S: Store>(offset: usize, size: usize,
 ///
 /// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
 /// and the offset inside the chunk which correspond to the given offset
-fn chunk_idx_for_offset<S: Store>(offset: usize,
-                                  chunks: &[RefCell<Chunk<S>>]) -> (usize, usize) {
+fn chunk_idx_for_offset<S: Store>(offset: usize, chunks: &[RefCell<Chunk<S>>]) -> (usize, usize) {
     let mut acc = 0;
     let mut idx = 0;
     let mut offset_in_chunk = 0;
@@ -198,7 +200,11 @@ mod tests {
         });
     }
 
-    fn make_chunks<S: Store>(input_size: usize, chunk_size: usize, store: Rc<RefCell<S>>) -> Vec<RefCell<Chunk<S>>> {
+    fn make_chunks<S: Store>(
+        input_size: usize,
+        chunk_size: usize,
+        store: Rc<RefCell<S>>,
+    ) -> Vec<RefCell<Chunk<S>>> {
         use cas::read_chunks;
 
         let input = (0..)
@@ -212,7 +218,11 @@ mod tests {
         let mut chunks = vec![];
         if let Ok(cs) = raw_chunks {
             for (digest, data) in cs {
-                chunks.push(RefCell::new(Chunk::new(digest, data.len(), Rc::clone(&store))));
+                chunks.push(RefCell::new(Chunk::new(
+                    digest,
+                    data.len(),
+                    Rc::clone(&store),
+                )));
             }
         }
         chunks
@@ -235,8 +245,22 @@ mod tests {
 
         let output = lookup_chunks(offset, size, &chunks);
         assert_eq!(2, output.len());
-        assert_eq!(ChunkPart{ index: 1, begin: 1, end: 5 }, output[0]);
-        assert_eq!(ChunkPart{ index: 2, begin: 0, end: 3 }, output[1]);
+        assert_eq!(
+            ChunkPart {
+                index: 1,
+                begin: 1,
+                end: 5,
+            },
+            output[0]
+        );
+        assert_eq!(
+            ChunkPart {
+                index: 2,
+                begin: 0,
+                end: 3,
+            },
+            output[1]
+        );
 
         // Read 11 bytes starting at offset 2
         let offset = 2;
@@ -244,9 +268,30 @@ mod tests {
 
         let output = lookup_chunks(offset, size, &chunks);
         assert_eq!(3, output.len());
-        assert_eq!(ChunkPart{ index: 0, begin: 2, end: 5 }, output[0]);
-        assert_eq!(ChunkPart{ index: 1, begin: 0, end: 5 }, output[1]);
-        assert_eq!(ChunkPart{ index: 2, begin: 0, end: 3 }, output[2]);
+        assert_eq!(
+            ChunkPart {
+                index: 0,
+                begin: 2,
+                end: 5,
+            },
+            output[0]
+        );
+        assert_eq!(
+            ChunkPart {
+                index: 1,
+                begin: 0,
+                end: 5,
+            },
+            output[1]
+        );
+        assert_eq!(
+            ChunkPart {
+                index: 2,
+                begin: 0,
+                end: 3,
+            },
+            output[2]
+        );
 
         // Read 3 bytes starting at offset 12
         let offset = 12;
@@ -254,7 +299,14 @@ mod tests {
 
         let output = lookup_chunks(offset, size, &chunks);
         assert_eq!(1, output.len());
-        assert_eq!(ChunkPart{ index: 2, begin: 2, end: 5 }, output[0]);
+        assert_eq!(
+            ChunkPart {
+                index: 2,
+                begin: 2,
+                end: 5,
+            },
+            output[0]
+        );
 
         // Read 100 bytes starting at offset 18 (should read to the end)
         let offset = 18;
@@ -262,6 +314,13 @@ mod tests {
 
         let output = lookup_chunks(offset, size, &chunks);
         assert_eq!(1, output.len());
-        assert_eq!(ChunkPart{ index: 3, begin: 3, end: 5 }, output[0]);
+        assert_eq!(
+            ChunkPart {
+                index: 3,
+                begin: 3,
+                end: 5,
+            },
+            output[0]
+        );
     }
 }
