@@ -238,7 +238,7 @@ impl<C, S> Engine<C, S> {
             } => {
                 let offset = ::std::cmp::max(offset, 0) as usize;
                 let reply = self.file_workspaces
-                    .get_mut(&index)
+                    .get(&index)
                     .ok_or_else(|| EngineError::FileRead(index).into())
                     .and_then(|ws| ws.read(offset, size as usize))
                     .map_err(|e| e.context(EngineError::FileRead(index)).into());

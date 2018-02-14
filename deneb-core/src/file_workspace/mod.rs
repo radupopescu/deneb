@@ -26,20 +26,20 @@ where
         }
     }
 
-    pub(crate) fn read(&mut self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
+    pub(crate) fn read(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
         let chunk_parts = lookup_chunks(offset, size, self.lower.chunks.as_slice());
         let buffer = self.fill_buffer(&chunk_parts)?;
         Ok(buffer)
     }
 
-    pub(crate) fn unload(&mut self) {
+    pub(crate) fn unload(&self) {
         self.lower.unload();
     }
 
-    fn fill_buffer(&mut self, chunks: &[ChunkPart]) -> DenebResult<Vec<u8>> {
+    fn fill_buffer(&self, chunks: &[ChunkPart]) -> DenebResult<Vec<u8>> {
         let mut buffer = vec![];
         for &ChunkPart { index, begin, end } in chunks {
-            let chunk = &mut self.lower.chunks[index];
+            let mut chunk = self.lower.chunks[index].borrow_mut();
             let slice = chunk.get_slice()?;
             buffer.extend_from_slice(&slice[begin..end]);
         }
@@ -48,7 +48,7 @@ where
 }
 
 struct Lower<S> {
-    chunks: Vec<Chunk<S>>,
+    chunks: Vec<RefCell<Chunk<S>>>,
 }
 
 impl<S> Lower<S>
@@ -58,14 +58,15 @@ where
     fn new(chunk_descriptors: &[ChunkDescriptor], store: Rc<RefCell<S>>) -> Lower<S> {
         let mut chunks = vec![];
         for &ChunkDescriptor { digest, size } in chunk_descriptors {
-            chunks.push(Chunk::new(digest, size, Rc::clone(&store)));
+            chunks.push(RefCell::new(Chunk::new(digest, size, Rc::clone(&store))));
         }
         Lower { chunks }
     }
 
-    fn unload(&mut self) {
-        for c in self.chunks.iter_mut() {
-            c.unload();
+    fn unload(&self) {
+        for c in self.chunks.iter() {
+            let mut chk = c.borrow_mut();
+            chk.unload();
         }
     }
 }
@@ -90,13 +91,6 @@ where
         }
     }
 
-    fn load(&mut self) -> DenebResult<()> {
-        if self.data.is_none() {
-            self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
-        }
-        Ok(())
-    }
-
     fn unload(&mut self) {
         if self.data.is_some() {
             self.data = None;
@@ -104,7 +98,9 @@ where
     }
 
     fn get_slice(&mut self) -> DenebResult<&[u8]> {
-        self.load()?;
+        if self.data.is_none() {
+            self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
+        }
         // Note: The following unwrap should never panic
         Ok(self.data.as_ref().unwrap().as_slice())
     }
@@ -127,12 +123,13 @@ struct ChunkPart {
 /// of a file and a segment identified by `offset` - the offset from
 /// the beginning of the file - and `size` - the size of the segment,
 /// this function returns a vector of `ChunkPart`
-fn lookup_chunks<S: Store>(offset: usize, size: usize, chunks: &[Chunk<S>]) -> Vec<ChunkPart> {
+fn lookup_chunks<S: Store>(offset: usize, size: usize,
+                           chunks: &[RefCell<Chunk<S>>]) -> Vec<ChunkPart> {
     let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
     let mut output = Vec::new();
     let mut bytes_left = size;
     for (index, c) in chunks[first_chunk..].iter().enumerate() {
-        let read_bytes = min(bytes_left, c.size - offset_in_chunk);
+        let read_bytes = min(bytes_left, c.borrow().size - offset_in_chunk);
         output.push(ChunkPart {
             index: first_chunk + index,
             begin: offset_in_chunk,
@@ -151,15 +148,17 @@ fn lookup_chunks<S: Store>(offset: usize, size: usize, chunks: &[Chunk<S>]) -> V
 ///
 /// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
 /// and the offset inside the chunk which correspond to the given offset
-fn chunk_idx_for_offset<S: Store>(offset: usize, chunks: &[Chunk<S>]) -> (usize, usize) {
+fn chunk_idx_for_offset<S: Store>(offset: usize,
+                                  chunks: &[RefCell<Chunk<S>>]) -> (usize, usize) {
     let mut acc = 0;
     let mut idx = 0;
     let mut offset_in_chunk = 0;
     for (i, c) in chunks.iter().enumerate() {
-        acc += c.size;
+        let chk = c.borrow();
+        acc += chk.size;
         idx = i;
         if acc > offset {
-            offset_in_chunk = offset + c.size - acc;
+            offset_in_chunk = offset + chk.size - acc;
             break;
         }
     }
@@ -187,7 +186,7 @@ mod tests {
                 attributes: FileAttributes::default(),
                 chunks,
             };
-            let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
+            let ws = FileWorkspace::new(&inode, Rc::clone(&store));
 
             let res = ws.read(0, 17)?;
 
@@ -199,7 +198,7 @@ mod tests {
         });
     }
 
-    fn make_chunks<S: Store>(input_size: usize, chunk_size: usize, store: Rc<RefCell<S>>) -> Vec<Chunk<S>> {
+    fn make_chunks<S: Store>(input_size: usize, chunk_size: usize, store: Rc<RefCell<S>>) -> Vec<RefCell<Chunk<S>>> {
         use cas::read_chunks;
 
         let input = (0..)
@@ -213,7 +212,7 @@ mod tests {
         let mut chunks = vec![];
         if let Ok(cs) = raw_chunks {
             for (digest, data) in cs {
-                chunks.push(Chunk::new(digest, data.len(), Rc::clone(&store)));
+                chunks.push(RefCell::new(Chunk::new(digest, data.len(), Rc::clone(&store))));
             }
         }
         chunks
