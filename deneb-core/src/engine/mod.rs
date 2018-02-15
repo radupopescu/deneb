@@ -1,14 +1,12 @@
-use futures::Stream;
-use futures::sync::mpsc::channel as future_channel;
 use nix::libc::{O_RDWR, O_WRONLY};
 use time::now_utc;
-use tokio_core::reactor::Core;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::mpsc::sync_channel;
 use std::thread::spawn as tspawn;
 
 use catalog::{Catalog, CatalogBuilder};
@@ -34,22 +32,17 @@ where
     C: Catalog + Send + 'static,
     S: Store + Send + 'static,
 {
-    let (tx, rx) = future_channel(queue_size);
+    let (tx, rx) = sync_channel(queue_size);
     let engine_handle = Handle::new(tx);
-    let _ = tspawn(|| {
-        if let Ok(mut core) = Core::new() {
-            let mut engine = Engine {
-                catalog,
-                store: Rc::new(RefCell::new(store)),
-                open_dirs: HashMap::new(),
-                file_workspaces: HashMap::new(),
-            };
-            let handler = rx.for_each(move |(event, tx)| {
-                engine.handle_request(event, &tx);
-                Ok(())
-            });
-
-            let _ = core.run(handler);
+    let _ = tspawn(move || {
+        let mut engine = Engine {
+            catalog,
+            store: Rc::new(RefCell::new(store)),
+            open_dirs: HashMap::new(),
+            file_workspaces: HashMap::new(),
+        };
+        for (event, tx) in rx.iter() {
+            engine.handle_request(event, &tx);
         }
     });
 

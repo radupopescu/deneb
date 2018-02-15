@@ -2,7 +2,6 @@ extern crate bincode;
 extern crate data_encoding;
 #[macro_use]
 extern crate failure;
-extern crate futures;
 extern crate lmdb;
 extern crate lmdb_sys;
 #[macro_use]
@@ -14,7 +13,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate time;
-extern crate tokio_core;
 extern crate toml;
 
 #[cfg(test)]

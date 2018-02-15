@@ -1,8 +1,6 @@
-use futures::sync::mpsc::Sender as FutureSender;
-
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::mpsc::Sender as StdSender;
+use std::sync::mpsc::SyncSender;
 
 use inode::{FileAttributes, FileType};
 use errors::DenebResult;
@@ -62,5 +60,5 @@ pub(in engine) enum Reply {
     ReleaseFile(DenebResult<()>),
 }
 
-pub(in engine) type ReplyChannel = StdSender<Reply>;
-pub(in engine) type RequestChannel = FutureSender<(Request, ReplyChannel)>;
+pub(in engine) type ReplyChannel = SyncSender<Reply>;
+pub(in engine) type RequestChannel = SyncSender<(Request, ReplyChannel)>;
