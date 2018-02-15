@@ -25,14 +25,10 @@ pub struct FileAttributes {
     pub ino: u64,
     pub size: u64,
     pub blocks: u64,
-    #[serde(with = "TimespecDef")]
-    pub atime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub mtime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub ctime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub crtime: Timespec,
+    #[serde(with = "TimespecDef")] pub atime: Timespec,
+    #[serde(with = "TimespecDef")] pub mtime: Timespec,
+    #[serde(with = "TimespecDef")] pub ctime: Timespec,
+    #[serde(with = "TimespecDef")] pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
     pub nlink: u32,

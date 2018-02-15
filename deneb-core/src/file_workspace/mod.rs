@@ -9,8 +9,7 @@ use inode::{ChunkDescriptor, FileAttributes, INode};
 use store::Store;
 
 pub(crate) struct FileWorkspace<S> {
-    #[allow(dead_code)]
-    attributes: FileAttributes,
+    #[allow(dead_code)] attributes: FileAttributes,
     lower: Lower<S>,
 }
 
