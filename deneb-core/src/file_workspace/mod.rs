@@ -8,6 +8,17 @@ use errors::DenebResult;
 use inode::{ChunkDescriptor, FileAttributes, INode};
 use store::Store;
 
+/// A type which offers read/write operations on a file in the repository
+///
+/// A `FileWorkspace` represents a superposition of a lower layer,
+/// made up of immutable file chunks, and an upper layer storing the
+/// modifications applied to the lower layer. It is similar in concept
+/// to a union file-system such as Aufs or OverlayFS, only limited to the
+/// scope of a single file.
+///
+/// Its implementation is based on interior mutability - caching of
+/// unpackaged chunks in the lower layer is done transparently to the
+/// client of the `FileWorkspace`.
 pub(crate) struct FileWorkspace<S> {
     #[allow(dead_code)] attributes: FileAttributes,
     lower: Lower<S>,
@@ -17,6 +28,12 @@ impl<S> FileWorkspace<S>
 where
     S: Store,
 {
+    /// Create a new `FileWorkspace` for an `INode`
+    ///
+    /// Constructs a new workspace object for the file described by
+    /// `inode`. The function takes a reference-counted pointer to a
+    /// `Store` object which is used by the underlying `Chunks` making
+    /// up the lower, immutable, layer
     pub(crate) fn new(inode: &INode, store: Rc<RefCell<S>>) -> FileWorkspace<S> {
         let lower = Lower::new(inode.chunks.as_slice(), store);
         FileWorkspace {
@@ -25,12 +42,18 @@ where
         }
     }
 
+    /// Read `size` number of bytes, located at `offset`
     pub(crate) fn read(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
         let chunk_parts = lookup_chunks(offset, size, self.lower.chunks.as_slice());
         let buffer = self.fill_buffer(&chunk_parts)?;
         Ok(buffer)
     }
 
+    /// Unload the lower layer from memory
+    ///
+    /// Forces the lower layer of the workspace to be unloaded from
+    /// memory, when "closing" the workspace is desired, while
+    /// maintaining any changes recorded in the top layer.
     pub(crate) fn unload(&self) {
         self.lower.unload();
     }
@@ -46,6 +69,11 @@ where
     }
 }
 
+/// The lower, immutable, layer of a `FileWorkspace` object
+///
+/// The lower layer represents a vector of file `Chunk` objects. Each
+/// chunk is wrapped in a `RefCell`, to allow certain mutable
+/// operations on the chunks.
 struct Lower<S> {
     chunks: Vec<RefCell<Chunk<S>>>,
 }
@@ -54,6 +82,7 @@ impl<S> Lower<S>
 where
     S: Store,
 {
+    /// Construct the lower layer using a provided list of `ChunkDescriptor`
     fn new(chunk_descriptors: &[ChunkDescriptor], store: Rc<RefCell<S>>) -> Lower<S> {
         let mut chunks = vec![];
         for &ChunkDescriptor { digest, size } in chunk_descriptors {
@@ -62,6 +91,7 @@ where
         Lower { chunks }
     }
 
+    /// Unload the lower layer from memory
     fn unload(&self) {
         for c in self.chunks.iter() {
             let mut chk = c.borrow_mut();
@@ -70,6 +100,14 @@ where
     }
 }
 
+/// An interface to the file chunks stored in a repository
+///
+/// The `Chunk` type, allows reading a file chunk identified by a
+/// `Digest` from a repository. This type provides a read-only view of
+/// the chunk, but the mutable aspect of the type comes from the
+/// caching behaviour: the byte vector returned by the object store
+/// (wrapped in an `Arc`) is cached by this type. Calling `unload`
+/// will release this cached vector.
 struct Chunk<S> {
     digest: Digest,
     size: usize,
@@ -81,6 +119,11 @@ impl<S> Chunk<S>
 where
     S: Store,
 {
+    /// Construct a new `Chunk` of `size`, identified by `Digest`
+    ///
+    /// The newly constructed object maintains an pointer to a
+    /// `Store`, used to retrieve the content of the chunk only when
+    /// needed
     fn new(digest: Digest, size: usize, store: Rc<RefCell<S>>) -> Chunk<S> {
         Chunk {
             digest,
@@ -90,12 +133,23 @@ where
         }
     }
 
+    /// Discard the cached content of the chunk
+    ///
+    /// After calling this method, when the content of the chunk is
+    /// again requested, the chunk needs to be retrieved from the
+    /// `Store`, potentially involving a costly decompression and
+    /// decryption process
     fn unload(&mut self) {
         if self.data.is_some() {
             self.data = None;
         }
     }
 
+    /// Return the content of the chunk in a slice
+    ///
+    /// This method potentially involves retrieving the content of the
+    /// chunk from the `Store`. Upon retrieval, the contents are
+    /// cached in memory, so subsequent calls to this method are fast
     fn get_slice(&mut self) -> DenebResult<&[u8]> {
         if self.data.is_none() {
             self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
