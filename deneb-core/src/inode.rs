@@ -25,14 +25,10 @@ pub struct FileAttributes {
     pub ino: u64,
     pub size: u64,
     pub blocks: u64,
-    #[serde(with = "TimespecDef")]
-    pub atime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub mtime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub ctime: Timespec,
-    #[serde(with = "TimespecDef")]
-    pub crtime: Timespec,
+    #[serde(with = "TimespecDef")] pub atime: Timespec,
+    #[serde(with = "TimespecDef")] pub mtime: Timespec,
+    #[serde(with = "TimespecDef")] pub ctime: Timespec,
+    #[serde(with = "TimespecDef")] pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
     pub nlink: u32,
@@ -42,18 +38,32 @@ pub struct FileAttributes {
     pub flags: u32,
 }
 
+impl Default for FileAttributes {
+    fn default() -> FileAttributes {
+        FileAttributes {
+            ino: 0,
+            size: 0,
+            blocks: 0,
+            atime: Timespec::new(0, 0),
+            mtime: Timespec::new(0, 0),
+            ctime: Timespec::new(0, 0),
+            crtime: Timespec::new(0, 0),
+            kind: FileType::RegularFile,
+            perm: 0,
+            nlink: 0,
+            uid: 0,
+            gid: 0,
+            rdev: 0,
+            flags: 0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ChunkDescriptor {
     pub digest: Digest,
     pub size: usize,
 }
-
-/// Data structure returned by the `lookup_chunks` function
-///
-/// The digest identifying a chunk and the indices which define an exclusive
-/// range of that should be read from the chunk data.
-#[derive(Debug, PartialEq)]
-pub struct ChunkPart<'a>(pub &'a Digest, pub usize, pub usize);
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct INode {
@@ -106,31 +116,6 @@ impl INode {
     }
 }
 
-/// Lookup a subset of consecutive chunks corresponding to a memory slice
-///
-/// Given a list of `ChunkDescriptor`, representing consecutive chunks of a file and a segment identified by
-/// `offset` - the offset from the beginning of the file - and `size` - the size of the segment,
-/// this function returns a vector of `ChunkPart`
-pub fn lookup_chunks(offset: usize, size: usize, chunks: &[ChunkDescriptor]) -> Vec<ChunkPart> {
-    let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
-    let mut output = Vec::new();
-    let mut bytes_left = size;
-    for c in chunks[first_chunk..].iter() {
-        let read_bytes = min(bytes_left, c.size - offset_in_chunk);
-        output.push(ChunkPart(
-            &c.digest,
-            offset_in_chunk,
-            offset_in_chunk + read_bytes,
-        ));
-        offset_in_chunk = 0;
-        bytes_left -= read_bytes;
-        if bytes_left == 0 {
-            break;
-        }
-    }
-    output
-}
-
 fn mode_to_file_type(mode: mode_t) -> FileType {
     let ft = mode & S_IFMT.bits();
     if ft == S_IFDIR.bits() {
@@ -157,25 +142,6 @@ fn mode_to_permissions(mode: mode_t) -> u16 {
     (mode & !S_IFMT.bits()) as u16
 }
 
-/// Lookup the index in a list of chunks corresponding to an offset
-///
-/// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
-/// and the offset inside the chunk which correspond to the give offset
-fn chunk_idx_for_offset(offset: usize, chunks: &[ChunkDescriptor]) -> (usize, usize) {
-    let mut acc = 0;
-    let mut idx = 0;
-    let mut offset_in_chunk = 0;
-    for (i, c) in chunks.iter().enumerate() {
-        acc += c.size;
-        idx = i;
-        if acc > offset {
-            offset_in_chunk = offset + c.size - acc;
-            break;
-        }
-    }
-    (idx, offset_in_chunk)
-}
-
 #[derive(Deserialize, Serialize)]
 #[serde(remote = "Timespec")]
 struct TimespecDef {
@@ -185,8 +151,6 @@ struct TimespecDef {
 
 #[cfg(test)]
 mod tests {
-    use cas::read_chunks;
-
     use super::*;
 
     #[test]
@@ -204,71 +168,4 @@ mod tests {
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
     }
 
-    fn make_chunks(input_size: usize, chunk_size: usize) -> Vec<ChunkDescriptor> {
-        let input = (0..)
-            .map(|e| (e as u64 % 256) as u8)
-            .take(input_size)
-            .collect::<Vec<u8>>();
-
-        let mut buffer = vec![0 as u8; chunk_size];
-        let raw_chunks = read_chunks(input.as_slice(), &mut buffer);
-        assert!(raw_chunks.is_ok());
-        let mut chunks = Vec::new();
-        let mut blobs = Vec::new();
-        if let Ok(cs) = raw_chunks {
-            for (digest, data) in cs {
-                chunks.push(ChunkDescriptor {
-                    digest: digest,
-                    size: data.len(),
-                });
-                blobs.push(data);
-            }
-        }
-        chunks
-    }
-
-    #[test]
-    fn read_segment_from_chunks() {
-        let chunks = make_chunks(20, 5);
-
-        assert_eq!((0, 3), chunk_idx_for_offset(3, &chunks));
-        assert_eq!((1, 2), chunk_idx_for_offset(7, &chunks));
-        assert_eq!((2, 2), chunk_idx_for_offset(12, &chunks));
-        assert_eq!((3, 0), chunk_idx_for_offset(15, &chunks));
-
-        // Read 7 bytes starting at offset 6
-        let offset = 6;
-        let size = 7;
-
-        let output = lookup_chunks(offset, size, &chunks);
-        assert_eq!(2, output.len());
-        assert_eq!(ChunkPart(&chunks[1].digest, 1, 5), output[0]);
-        assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[1]);
-
-        // Read 11 bytes starting at offset 2
-        let offset = 2;
-        let size = 11;
-
-        let output = lookup_chunks(offset, size, &chunks);
-        assert_eq!(3, output.len());
-        assert_eq!(ChunkPart(&chunks[0].digest, 2, 5), output[0]);
-        assert_eq!(ChunkPart(&chunks[1].digest, 0, 5), output[1]);
-        assert_eq!(ChunkPart(&chunks[2].digest, 0, 3), output[2]);
-
-        // Read 3 bytes starting at offset 12
-        let offset = 12;
-        let size = 3;
-
-        let output = lookup_chunks(offset, size, &chunks);
-        assert_eq!(1, output.len());
-        assert_eq!(ChunkPart(&chunks[2].digest, 2, 5), output[0]);
-
-        // Read 100 bytes starting at offset 18 (should read to the end)
-        let offset = 18;
-        let size = 100;
-
-        let output = lookup_chunks(offset, size, &chunks);
-        assert_eq!(1, output.len());
-        assert_eq!(ChunkPart(&chunks[3].digest, 3, 5), output[0]);
-    }
 }

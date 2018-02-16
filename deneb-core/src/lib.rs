@@ -2,18 +2,17 @@ extern crate bincode;
 extern crate data_encoding;
 #[macro_use]
 extern crate failure;
-extern crate futures;
 extern crate lmdb;
 extern crate lmdb_sys;
 #[macro_use]
 extern crate log;
+extern crate lru;
 extern crate nix;
 extern crate rust_sodium;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate time;
-extern crate tokio_core;
 extern crate toml;
 
 #[cfg(test)]
@@ -26,13 +25,10 @@ extern crate tempdir;
 use failure::ResultExt;
 
 use std::fs::{read_dir, File};
-use std::io::BufReader;
 use std::path::Path;
 
-use self::cas::read_chunks;
 use self::catalog::Catalog;
 use self::errors::{DenebError, DenebResult};
-use self::inode::ChunkDescriptor;
 use self::store::Store;
 
 pub mod cas;
@@ -43,6 +39,8 @@ pub mod inode;
 pub mod manifest;
 pub mod store;
 pub mod util;
+
+mod file_workspace;
 
 #[derive(Debug, Fail)]
 pub enum DenebCoreInitError {
@@ -96,23 +94,16 @@ where
             .file_name()
             .ok_or_else(|| DenebError::InvalidPath(path.clone()))?);
 
-        let mut chunks = Vec::new();
+        let mut descriptors = Vec::new();
         if path.is_file() {
             let mut abs_path = dir.to_path_buf();
             abs_path.push(fname);
-            let f = File::open(abs_path)?;
-            let mut reader = BufReader::new(f);
-            for (ref digest, ref data) in read_chunks(&mut reader, buffer)? {
-                store.put_chunk(digest.clone(), data.as_ref())?;
-                chunks.push(ChunkDescriptor {
-                    digest: digest.clone(),
-                    size: data.len(),
-                });
-            }
+            let mut f = File::open(abs_path)?;
+            descriptors = store.put_file_chunked(&mut f)?;
         }
 
         let index = catalog.get_next_index();
-        catalog.add_inode(&path, index, chunks)?;
+        catalog.add_inode(&path, index, descriptors)?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {

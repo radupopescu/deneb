@@ -1,8 +1,8 @@
 #![recursion_limit = "1024"]
 
 extern crate failure;
-extern crate log;
 extern crate log4rs;
+extern crate log;
 extern crate nix;
 extern crate structopt;
 #[macro_use]

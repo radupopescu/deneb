@@ -5,18 +5,17 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error, Visitor};
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::io::BufRead;
 
 use errors::{DenebError, DenebResult};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);
 
 pub fn hash(msg: &[u8]) -> Digest {
     Digest(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: BufRead>(
+pub fn read_chunks<R: ::std::io::Read>(
     mut reader: R,
     buffer: &mut [u8],
 ) -> Result<Vec<(Digest, Vec<u8>)>, DenebError> {

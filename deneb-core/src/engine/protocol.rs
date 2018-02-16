@@ -1,8 +1,6 @@
-use futures::sync::mpsc::Sender as FutureSender;
-
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::sync::mpsc::Sender as StdSender;
+use std::sync::mpsc::SyncSender;
 
 use inode::{FileAttributes, FileType};
 use errors::DenebResult;
@@ -24,18 +22,15 @@ pub(in engine) enum Request {
     },
     OpenDir {
         index: u64,
-        #[allow(dead_code)]
-        flags: u32,
+        #[allow(dead_code)] flags: u32,
     },
     ReleaseDir {
         index: u64,
-        #[allow(dead_code)]
-        flags: u32,
+        #[allow(dead_code)] flags: u32,
     },
     ReadDir {
         index: u64,
-        #[allow(dead_code)]
-        offset: i64,
+        #[allow(dead_code)] offset: i64,
     },
     OpenFile {
         index: u64,
@@ -48,12 +43,9 @@ pub(in engine) enum Request {
     },
     ReleaseFile {
         index: u64,
-        #[allow(dead_code)]
-        flags: u32,
-        #[allow(dead_code)]
-        lock_owner: u64,
-        #[allow(dead_code)]
-        flush: bool,
+        #[allow(dead_code)] flags: u32,
+        #[allow(dead_code)] lock_owner: u64,
+        #[allow(dead_code)] flush: bool,
     },
 }
 
@@ -68,5 +60,5 @@ pub(in engine) enum Reply {
     ReleaseFile(DenebResult<()>),
 }
 
-pub(in engine) type ReplyChannel = StdSender<Reply>;
-pub(in engine) type RequestChannel = FutureSender<(Request, ReplyChannel)>;
+pub(in engine) type ReplyChannel = SyncSender<Reply>;
+pub(in engine) type RequestChannel = SyncSender<(Request, ReplyChannel)>;

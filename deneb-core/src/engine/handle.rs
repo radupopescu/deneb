@@ -1,8 +1,6 @@
-use futures::{Future, Sink};
-
 use std::ffi::OsStr;
 use std::path::PathBuf;
-use std::sync::mpsc::channel as std_channel;
+use std::sync::mpsc::sync_channel;
 
 use inode::{FileAttributes, FileType};
 use errors::{DenebResult, EngineError};
@@ -129,11 +127,10 @@ impl Handle {
     }
 
     fn make_request(&self, req: Request) -> DenebResult<Reply> {
-        let (tx, rx) = std_channel();
+        let (tx, rx) = sync_channel(0);
         self.channel
             .clone()
             .send((req, tx))
-            .wait()
             .map_err(|_| EngineError::SendFailed)?;
         rx.recv().map_err(|e| e.into())
     }
