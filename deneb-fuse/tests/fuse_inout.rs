@@ -164,7 +164,7 @@ fn multiple_chunks_per_file_disk() {
 
 #[ignore]
 #[test]
-fn prop_inout_unchanged() {
+fn prop_inout_unchanged_mem() {
     fn inout_unchanged(mut dt: DirTree) -> bool {
         let tmp = TempDir::new("/tmp/deneb_fuse_prop_inout");
         if !tmp.is_ok() {
@@ -198,7 +198,7 @@ fn prop_inout_unchanged() {
 
 #[ignore]
 #[test]
-fn prop_inout_unchanged_disk_slow() {
+fn prop_inout_unchanged_disk() {
     fn inout_unchanged(mut dt: DirTree) -> bool {
         let tmp = TempDir::new("/tmp/deneb_fuse_prop_inout");
         if !tmp.is_ok() {
