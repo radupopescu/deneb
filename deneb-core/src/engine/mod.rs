@@ -41,9 +41,11 @@ where
             open_dirs: HashMap::new(),
             file_workspaces: HashMap::new(),
         };
+        info!("Starting engine event loop");
         for (event, tx) in rx.iter() {
             engine.handle_request(event, &tx);
         }
+        info!("Engine event loop finished.");
     });
 
     Ok(engine_handle)
