@@ -1,5 +1,5 @@
 use nix::libc::mode_t;
-use nix::sys::stat::{lstat, S_IFBLK, S_IFCHR, S_IFDIR, S_IFIFO, S_IFLNK, S_IFMT, S_IFREG};
+use nix::sys::stat::{lstat, SFlag};
 use time::Timespec;
 
 use std::cmp::{max, min};
@@ -117,18 +117,18 @@ impl INode {
 }
 
 fn mode_to_file_type(mode: mode_t) -> FileType {
-    let ft = mode & S_IFMT.bits();
-    if ft == S_IFDIR.bits() {
+    let ft = mode & SFlag::S_IFMT.bits();
+    if ft == SFlag::S_IFDIR.bits() {
         FileType::Directory
-    } else if ft == S_IFCHR.bits() {
+    } else if ft == SFlag::S_IFCHR.bits() {
         FileType::CharDevice
-    } else if ft == S_IFBLK.bits() {
+    } else if ft == SFlag::S_IFBLK.bits() {
         FileType::BlockDevice
-    } else if ft == S_IFREG.bits() {
+    } else if ft == SFlag::S_IFREG.bits() {
         FileType::RegularFile
-    } else if ft == S_IFLNK.bits() {
+    } else if ft == SFlag::S_IFLNK.bits() {
         FileType::Symlink
-    } else if ft == S_IFIFO.bits() {
+    } else if ft == SFlag::S_IFIFO.bits() {
         FileType::NamedPipe
     } else {
         // S_IFSOCK???
@@ -139,7 +139,7 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
 fn mode_to_permissions(mode: mode_t) -> u16 {
     #[cfg(target_os = "linux")]
     debug_assert!(mode <= u16::MAX as u32);
-    (mode & !S_IFMT.bits()) as u16
+    (mode & !SFlag::S_IFMT.bits()) as u16
 }
 
 #[derive(Deserialize, Serialize)]

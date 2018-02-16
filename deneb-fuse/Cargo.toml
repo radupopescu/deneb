@@ -5,7 +5,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [dependencies]
 fuse = "^0.3.0"
-nix = "^0.9.0"
+nix = "^0.10.0"
 time = "^0.1.0"
 
 deneb-core = { path = "../deneb-core" }

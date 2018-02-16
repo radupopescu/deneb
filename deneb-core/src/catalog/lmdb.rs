@@ -1,6 +1,6 @@
 use failure::ResultExt;
 
-use bincode::{deserialize, serialize, Infinite};
+use bincode::{deserialize, serialize};
 use lmdb::{Cursor, Database, DatabaseFlags, Environment, Error as LmdbError, Transaction,
            WriteFlags, NO_SUB_DIR};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
@@ -172,7 +172,7 @@ impl Catalog for LmdbCatalog {
     ) -> DenebResult<()> {
         let inode = INode::new(index, entry, chunks)?;
 
-        let buffer = serialize(&inode, Infinite).context(CatalogError::INodeSerialization(index))?;
+        let buffer = serialize(&inode).context(CatalogError::INodeSerialization(index))?;
 
         let mut writer = self.env.begin_rw_txn()?;
 
@@ -207,7 +207,7 @@ impl Catalog for LmdbCatalog {
 
             // Write updated dir entries to database
             let buffer =
-                serialize(&entries, Infinite).context(CatalogError::DEntrySerialization(parent))?;
+                serialize(&entries).context(CatalogError::DEntrySerialization(parent))?;
             writer
                 .put(
                     self.dir_entries,
@@ -229,7 +229,7 @@ impl Catalog for LmdbCatalog {
                 inode.attributes.nlink += 1;
 
                 // Write inode back to database
-                serialize(&inode, Infinite).context(CatalogError::INodeSerialization(index))
+                serialize(&inode).context(CatalogError::INodeSerialization(index))
             }?;
             writer
                 .put(
