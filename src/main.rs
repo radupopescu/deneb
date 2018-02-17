@@ -36,6 +36,7 @@ fn run() -> DenebResult<()> {
     info!("Mount point: {:?}", params.mount_point);
     info!("Chunk size: {:?}", params.chunk_size);
     info!("Sync dir: {:?}", params.sync_dir);
+    info!("Force unmount: {}", params.force_unmount);
 
     // Create the file system data structure
     let cb = LmdbCatalogBuilder;

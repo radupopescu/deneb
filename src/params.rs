@@ -39,6 +39,9 @@ pub struct AppParameters {
     #[structopt(short = "s", long = "sync_dir", parse(from_os_str),
                 help = "Populate the repository with the contents of this directory")]
     pub sync_dir: Option<PathBuf>,
+    #[structopt(short = "f", long = "force_unmount",
+                help = "Force unmount the file system on exit")]
+    pub force_unmount: bool,
 }
 
 impl AppParameters {
