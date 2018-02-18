@@ -38,8 +38,7 @@ impl<'a> Session<'a> {
     #[cfg(target_os = "linux")]
     pub fn force_unmount(self) -> Result<(), UnixError> {
         drop(self.fuse_session);
-        let flags = MntFlags::MNT_FORCE;
-        umount2(self.mount_point, MntFlags::MNT_FORCE)?;
+        umount2(self.mount_point.as_path(), MntFlags::MNT_FORCE)?;
         Ok(())
     }
     #[cfg(target_os = "macos")]
