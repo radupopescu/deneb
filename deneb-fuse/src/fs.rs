@@ -1,40 +1,72 @@
 use fuse::{FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
            ReplyEntry, ReplyOpen, Request};
 use fuse::consts::FOPEN_KEEP_CACHE;
-use fuse::{mount, spawn_mount, BackgroundSession};
+use fuse::{spawn_mount, BackgroundSession};
 use nix::libc::{EACCES, EINVAL, ENOENT};
+#[cfg(target_os = "linux")]
+use nix::mount::{MntFlags, umount2};
+#[cfg(target_os = "macos")]
+use nix::libc::{unmount, MNT_FORCE};
+#[cfg(target_os = "macos")]
+use nix::NixPath;
 use time::Timespec;
 
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use deneb_core::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError};
+use deneb_core::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError,
+                         UnixError};
 use deneb_core::engine::{Handle, RequestId};
 use deneb_core::inode::{FileAttributes, FileType as FT};
 
-pub struct Session<'a>(BackgroundSession<'a>);
+pub struct Session<'a> {
+    fuse_session: BackgroundSession<'a>,
+    mount_point: PathBuf,
+}
+
+impl<'a> Session<'a> {
+    pub fn new<P: AsRef<Path>>(
+        fuse_session: BackgroundSession<'a>,
+        mount_point: &P,
+    ) -> Session<'a> {
+        Session {
+            fuse_session,
+            mount_point: mount_point.as_ref().to_owned(),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn force_unmount(self) -> Result<(), UnixError> {
+        drop(self.fuse_session);
+        umount2(self.mount_point.as_path(), MntFlags::MNT_FORCE)?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    pub fn force_unmount(self) -> Result<(), UnixError> {
+        drop(self.fuse_session);
+        let _ = self.mount_point
+            .as_path()
+            .with_nix_path(|cstr| unsafe { unmount(cstr.as_ptr(), MNT_FORCE) })?;
+        Ok(())
+    }
+}
 
 pub struct Fs {
     engine_handle: Handle,
 }
 
 impl<'a> Fs {
-    pub fn new(engine_handle: Handle) -> Fs {
-        Fs { engine_handle }
-    }
-
-    pub fn mount<P: AsRef<Path>>(self, mount_point: &P, options: &[&OsStr]) -> DenebResult<()> {
-        mount(self, mount_point, options).map_err(|e| e.into())
-    }
-
-    pub unsafe fn spawn_mount<P: AsRef<Path>>(
-        self,
+    pub fn mount<P: AsRef<Path>>(
         mount_point: &P,
+        engine_handle: Handle,
         options: &[&OsStr],
     ) -> DenebResult<Session<'a>> {
-        spawn_mount(self, mount_point, options)
-            .map(Session)
-            .map_err(|e| e.into())
+        let fs = Fs { engine_handle };
+        unsafe {
+            spawn_mount(fs, mount_point, options)
+                .map(|s| Session::new(s, mount_point))
+                .map_err(|e| e.into())
+        }
     }
 }
 
