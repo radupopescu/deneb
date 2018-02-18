@@ -98,7 +98,7 @@ fn init_test<'a>(
             1000,
         ),
     }?;
-    Fs::mount_background(&mount_point, handle, &[])
+    Fs::mount(&mount_point, handle, &[])
 }
 
 // Simple integration test
@@ -112,14 +112,18 @@ fn check_inout(
     chunk_size: usize,
 ) -> DenebResult<()> {
     // Create and mount the deneb repo
-    let _session = init_test(test_type, dir.root.as_path(), prefix, chunk_size)?;
+    let session = init_test(test_type, dir.root.as_path(), prefix, chunk_size)?;
 
     // Copy the contents of the Deneb repository to a new directory
     let output_dir = prefix.join("output");
     copy_dir(&prefix.join("mount"), output_dir.as_path())?;
 
     // Compare the input directory tree with the one copied out of the Deneb repo
-    dir.compare(output_dir.as_path())
+    dir.compare(output_dir.as_path())?;
+
+    session.force_unmount()?;
+
+    Ok(())
 }
 
 fn single_fuse_test(test_type: TestType, chunk_size: usize) {
@@ -133,7 +137,6 @@ fn single_fuse_test(test_type: TestType, chunk_size: usize) {
         }
 
         // Explicit cleanup
-        let _ = Fs::unmount(&prefix.path().join("mount"), true);
         assert!(prefix.close().is_ok());
     }
 }

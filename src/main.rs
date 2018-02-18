@@ -50,7 +50,7 @@ fn run() -> DenebResult<()> {
         1000,
     )?;
 
-    let _fs_session = Fs::mount_background(&params.mount_point, handle, &[]);
+    let session = Fs::mount(&params.mount_point, handle, &[])?;
 
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
@@ -61,11 +61,8 @@ fn run() -> DenebResult<()> {
 
     // Force unmount the file system
     if params.force_unmount {
-        // The force unmount should always be done after the unmount which is
-        // triggered in the Drop impl of the FUSE BackgroundSession
-        drop(_fs_session);
-        info!("Force unmounting file system.");
-        Fs::unmount(&params.mount_point, params.force_unmount)?;
+        info!("Force unmounting the file system.");
+        session.force_unmount()?;
     }
 
     Ok(())
