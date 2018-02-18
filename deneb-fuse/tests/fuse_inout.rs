@@ -98,8 +98,7 @@ fn init_test<'a>(
             1000,
         ),
     }?;
-    let file_system = Fs::new(handle);
-    unsafe { file_system.spawn_mount(&mount_point, &[]) }
+    Fs::mount_background(&mount_point, handle, &[])
 }
 
 // Simple integration test
@@ -134,6 +133,7 @@ fn single_fuse_test(test_type: TestType, chunk_size: usize) {
         }
 
         // Explicit cleanup
+        let _ = Fs::unmount(&prefix.path().join("mount"), true);
         assert!(prefix.close().is_ok());
     }
 }
