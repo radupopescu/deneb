@@ -22,6 +22,8 @@ use store::Store;
 pub(crate) struct FileWorkspace<S> {
     #[allow(dead_code)] attributes: FileAttributes,
     lower: Lower<S>,
+    upper: Vec<u8>,
+    piece_table: Vec<Piece>,
 }
 
 impl<S> FileWorkspace<S>
@@ -36,16 +38,31 @@ where
     /// up the lower, immutable, layer
     pub(crate) fn new(inode: &INode, store: Rc<RefCell<S>>) -> FileWorkspace<S> {
         let lower = Lower::new(inode.chunks.as_slice(), store);
+        let piece_table = lower
+            .chunks
+            .iter()
+            .enumerate()
+            .map(|(idx, ref c)| {
+                let chunk_size = c.borrow().size;
+                Piece {
+                    target: PieceTarget::Lower(idx),
+                    offset: 0,
+                    size: chunk_size,
+                }
+            })
+            .collect::<Vec<_>>();
         FileWorkspace {
             attributes: inode.attributes,
             lower,
+            upper: vec![],
+            piece_table,
         }
     }
 
     /// Read `size` number of bytes, located at `offset`
     pub(crate) fn read(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
-        let chunk_parts = lookup_chunks(offset, size, self.lower.chunks.as_slice());
-        let buffer = self.fill_buffer(&chunk_parts)?;
+        let slices = lookup_pieces(offset, size, &self.piece_table);
+        let buffer = self.fill_buffer(&slices)?;
         Ok(buffer)
     }
 
@@ -58,16 +75,59 @@ where
         self.lower.unload();
     }
 
-    fn fill_buffer(&self, chunks: &[ChunkPart]) -> DenebResult<Vec<u8>> {
+    fn fill_buffer(&self, slices: &[PieceSlice]) -> DenebResult<Vec<u8>> {
         let mut buffer = vec![];
-        for &ChunkPart { index, begin, end } in chunks {
-            let mut chunk = self.lower.chunks[index].borrow_mut();
-            let slice = chunk.get_slice()?;
-            buffer.extend_from_slice(&slice[begin..end]);
+        for &PieceSlice { index, begin, end } in slices {
+            let piece = &self.piece_table[index];
+            match piece.target {
+                PieceTarget::Lower(chunk_index) => {
+                    let mut chunk = self.lower.chunks[chunk_index].borrow_mut();
+                    let slice = chunk.get_slice()?;
+                    buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
+                }
+                PieceTarget::Upper => {
+                    buffer.extend_from_slice(
+                        &self.upper[(piece.offset + begin)..(piece.offset + end)],
+                    );
+                }
+            }
         }
         Ok(buffer)
     }
 }
+
+
+/// Target of the piece, either the lower or the upper layer of the workspace
+enum PieceTarget {
+    /// The index represents which chunk of the lower layer this piece is related to
+    Lower(usize),
+    Upper,
+}
+
+/// A piece represents a subset of either the lower or upper layers
+///
+/// If a piece points the lower layer, and index is provided whic identifies which
+/// chunk in the lower layer is referenced.
+struct Piece {
+    /// Target of piece
+    target: PieceTarget,
+    /// Offset of the beginning of the piece into the target buffer
+    offset: usize,
+    /// Size of the piece
+    size: usize,
+}
+
+/// A slice of a `Piece`
+#[derive(Debug, PartialEq)]
+struct PieceSlice {
+    /// The index of the associated `Piece` in the piece_table
+    index: usize,
+    /// Start position of the slice relative to the beginning of the piece
+    begin: usize,
+    /// End position of the slice relative to the beginning of the piece
+    end: usize,
+}
+
 
 /// The lower, immutable, layer of a `FileWorkspace` object
 ///
@@ -159,39 +219,24 @@ where
     }
 }
 
-/// Data structure returned by the `lookup_chunks` function
-///
-/// The index identifying a chunk and the indices which define an
-/// exclusive range of that should be read from the chunk data.
-#[derive(Debug, PartialEq)]
-struct ChunkPart {
-    index: usize,
-    begin: usize,
-    end: usize,
-}
 
-/// Lookup a subset of consecutive chunks corresponding to a memory slice
+/// Lookup a subset of pieces corresponding to a memory slice
 ///
-/// Given a list of `ChunkDescriptor`, representing consecutive chunks
-/// of a file and a segment identified by `offset` - the offset from
-/// the beginning of the file - and `size` - the size of the segment,
-/// this function returns a vector of `ChunkPart`
-fn lookup_chunks<S: Store>(
-    offset: usize,
-    size: usize,
-    chunks: &[RefCell<Chunk<S>>],
-) -> Vec<ChunkPart> {
-    let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
+/// Given a piece table and a segment identified by `offset` - the
+/// offset from the beginning of the file - and `size` - the size of
+/// the segment, this function returns a vector of `PieceSlice`
+fn lookup_pieces(offset: usize, size: usize, piece_table: &[Piece]) -> Vec<PieceSlice> {
+    let (first_piece, mut offset_in_piece) = piece_idx_for_offset(offset, piece_table);
     let mut output = Vec::new();
     let mut bytes_left = size;
-    for (index, c) in chunks[first_chunk..].iter().enumerate() {
-        let read_bytes = min(bytes_left, c.borrow().size - offset_in_chunk);
-        output.push(ChunkPart {
-            index: first_chunk + index,
-            begin: offset_in_chunk,
-            end: offset_in_chunk + read_bytes,
+    for (index, pc) in piece_table[first_piece..].iter().enumerate() {
+        let read_bytes = min(bytes_left, pc.size - offset_in_piece);
+        output.push(PieceSlice {
+            index: first_piece + index,
+            begin: offset_in_piece,
+            end: offset_in_piece + read_bytes,
         });
-        offset_in_chunk = 0;
+        offset_in_piece = 0;
         bytes_left -= read_bytes;
         if bytes_left == 0 {
             break;
@@ -204,21 +249,21 @@ fn lookup_chunks<S: Store>(
 ///
 /// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
 /// and the offset inside the chunk which correspond to the given offset
-fn chunk_idx_for_offset<S: Store>(offset: usize, chunks: &[RefCell<Chunk<S>>]) -> (usize, usize) {
+fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) {
     let mut acc = 0;
     let mut idx = 0;
-    let mut offset_in_chunk = 0;
-    for (i, c) in chunks.iter().enumerate() {
-        let chk = c.borrow();
-        acc += chk.size;
+    let mut offset_in_piece = 0;
+    for (i, pc) in piece_table.iter().enumerate() {
+        acc += pc.size;
         idx = i;
         if acc > offset {
-            offset_in_chunk = offset + chk.size - acc;
+            offset_in_piece = offset + pc.size - acc;
             break;
         }
     }
-    (idx, offset_in_chunk)
+    (idx, offset_in_piece)
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -228,7 +273,7 @@ mod tests {
     use util::run;
 
     #[test]
-    fn try_file_workspace() {
+    fn file_workspace_read() {
         run(|| {
             let store = Rc::new(RefCell::new(MemStore::new(10000)));
 
@@ -253,53 +298,38 @@ mod tests {
         });
     }
 
-    fn make_chunks<S: Store>(
-        input_size: usize,
-        chunk_size: usize,
-        store: Rc<RefCell<S>>,
-    ) -> Vec<RefCell<Chunk<S>>> {
-        use cas::read_chunks;
-
-        let input = (0..)
-            .map(|e| (e as u64 % 256) as u8)
-            .take(input_size)
-            .collect::<Vec<u8>>();
-
-        let mut buffer = vec![0 as u8; chunk_size];
-        let raw_chunks = read_chunks(input.as_slice(), &mut buffer);
-        assert!(raw_chunks.is_ok());
-        let mut chunks = vec![];
-        if let Ok(cs) = raw_chunks {
-            for (digest, data) in cs {
-                chunks.push(RefCell::new(Chunk::new(
-                    digest,
-                    data.len(),
-                    Rc::clone(&store),
-                )));
-            }
+    fn make_piece_table(input_size: usize, chunk_size: usize) -> Vec<Piece> {
+        let mut remaining_size = input_size;
+        let mut pieces = vec![];
+        while remaining_size > 0 {
+            let size = min(remaining_size, chunk_size);
+            remaining_size -= size;
+            pieces.push(Piece {
+                target: PieceTarget::Lower(0),
+                offset: 0,
+                size,
+            });
         }
-        chunks
+        pieces
     }
 
     #[test]
-    fn locate_slice_in_chunks() {
-        let store = Rc::new(RefCell::new(MemStore::new(10000)));
+    fn locate_slice() {
+        let piece_table = make_piece_table(20, 5);
 
-        let chunks = make_chunks(20, 5, store);
-
-        assert_eq!((0, 3), chunk_idx_for_offset(3, &chunks));
-        assert_eq!((1, 2), chunk_idx_for_offset(7, &chunks));
-        assert_eq!((2, 2), chunk_idx_for_offset(12, &chunks));
-        assert_eq!((3, 0), chunk_idx_for_offset(15, &chunks));
+        assert_eq!((0, 3), piece_idx_for_offset(3, &piece_table));
+        assert_eq!((1, 2), piece_idx_for_offset(7, &piece_table));
+        assert_eq!((2, 2), piece_idx_for_offset(12, &piece_table));
+        assert_eq!((3, 0), piece_idx_for_offset(15, &piece_table));
 
         // Read 7 bytes starting at offset 6
         let offset = 6;
         let size = 7;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(2, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 1,
                 begin: 1,
                 end: 5,
@@ -307,7 +337,7 @@ mod tests {
             output[0]
         );
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 2,
                 begin: 0,
                 end: 3,
@@ -319,10 +349,10 @@ mod tests {
         let offset = 2;
         let size = 11;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(3, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 0,
                 begin: 2,
                 end: 5,
@@ -330,7 +360,7 @@ mod tests {
             output[0]
         );
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 1,
                 begin: 0,
                 end: 5,
@@ -338,7 +368,7 @@ mod tests {
             output[1]
         );
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 2,
                 begin: 0,
                 end: 3,
@@ -350,10 +380,10 @@ mod tests {
         let offset = 12;
         let size = 3;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(1, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 2,
                 begin: 2,
                 end: 5,
@@ -365,10 +395,10 @@ mod tests {
         let offset = 18;
         let size = 100;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(1, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 3,
                 begin: 3,
                 end: 5,
