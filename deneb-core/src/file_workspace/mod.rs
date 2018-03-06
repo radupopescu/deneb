@@ -60,7 +60,7 @@ where
     }
 
     /// Read `size` number of bytes, located at `offset`
-    pub(crate) fn read(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
+    pub(crate) fn read_at(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
         let slices = lookup_pieces(offset, size, &self.piece_table);
         let buffer = self.fill_buffer(&slices)?;
         Ok(buffer)
@@ -96,7 +96,6 @@ where
     }
 }
 
-
 /// Target of the piece, either the lower or the upper layer of the workspace
 enum PieceTarget {
     /// The index represents which chunk of the lower layer this piece is related to
@@ -127,7 +126,6 @@ struct PieceSlice {
     /// End position of the slice relative to the beginning of the piece
     end: usize,
 }
-
 
 /// The lower, immutable, layer of a `FileWorkspace` object
 ///
@@ -219,7 +217,6 @@ where
     }
 }
 
-
 /// Lookup a subset of pieces corresponding to a memory slice
 ///
 /// Given a piece table and a segment identified by `offset` - the
@@ -264,7 +261,6 @@ fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) 
     (idx, offset_in_piece)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,7 +284,7 @@ mod tests {
             };
             let ws = FileWorkspace::new(&inode, Rc::clone(&store));
 
-            let res = ws.read(0, 17)?;
+            let res = ws.read_at(0, 17)?;
 
             assert_eq!(b"alabalaportocala", res.as_slice());
 
