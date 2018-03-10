@@ -347,14 +347,17 @@ mod tests {
             let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
 
             let res0 = ws.read_at(0, 17)?;
-
             assert_eq!(b"alabalaportocala", res0.as_slice());
 
             assert!(ws.write_at(2, b"written").is_ok());
 
             let res1 = ws.read_at(0, 17)?;
-
             assert_eq!(b"alwrittenrtocala", res1.as_slice());
+
+            assert!(ws.write_at(6, b"again").is_ok());
+
+            let res2 = ws.read_at(0, 17)?;
+            assert_eq!(b"alwritagainocala", res2.as_slice());
 
             ws.unload();
 
