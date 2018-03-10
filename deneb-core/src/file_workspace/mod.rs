@@ -59,11 +59,45 @@ where
         }
     }
 
-    /// Read `size` number of bytes, located at `offset`
+    /// Read `size` number of bytes, starting at `offset`
     pub(crate) fn read_at(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
         let slices = lookup_pieces(offset, size, &self.piece_table);
         let buffer = self.fill_buffer(&slices)?;
         Ok(buffer)
+    }
+
+    /// Write the contents of buffer into the workspace, starting at `offset`
+    pub(crate) fn write_at(&mut self, offset: usize, buffer: &[u8]) -> DenebResult<()> {
+        // Append buffer to the upper layer
+        let buf_size = buffer.len();
+        let offset_in_upper = self.upper.len();
+        self.upper.extend_from_slice(buffer);
+
+        // Find the piece where buffer is to be placed
+        let (first_piece_idx, offset_in_first_piece) =
+            piece_idx_for_offset(offset, &self.piece_table);
+
+        // Find the last piece touched by the buffer
+        let (last_piece_idx, offset_in_last_piece) =
+            piece_idx_for_offset(offset + buf_size, &self.piece_table);
+
+        // Truncate the first and last pieces, as needed
+        self.piece_table[first_piece_idx].size = offset_in_first_piece;
+        self.piece_table[last_piece_idx].offset += offset_in_last_piece;
+        self.piece_table[last_piece_idx].size -= offset_in_last_piece;
+
+        // Replace all the pieces between the first and the last with a new piece
+        let new_piece = Piece {
+            target: PieceTarget::Upper,
+            offset: offset_in_upper,
+            size: buf_size,
+        };
+        self.piece_table = {
+            [&self.piece_table[..first_piece_idx + 1],
+             &self.piece_table[last_piece_idx..]].join(&new_piece)
+        };
+
+        Ok(())
     }
 
     /// Unload the lower layer from memory
@@ -97,6 +131,7 @@ where
 }
 
 /// Target of the piece, either the lower or the upper layer of the workspace
+#[derive(Clone)]
 enum PieceTarget {
     /// The index represents which chunk of the lower layer this piece is related to
     Lower(usize),
@@ -107,6 +142,7 @@ enum PieceTarget {
 ///
 /// If a piece points the lower layer, and index is provided whic identifies which
 /// chunk in the lower layer is referenced.
+#[derive(Clone)]
 struct Piece {
     /// Target of piece
     target: PieceTarget,
@@ -287,6 +323,38 @@ mod tests {
             let res = ws.read_at(0, 17)?;
 
             assert_eq!(b"alabalaportocala", res.as_slice());
+
+            ws.unload();
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn file_workspace_write() {
+        run(|| {
+            let store = Rc::new(RefCell::new(MemStore::new(10000)));
+
+            let names = ["ala", "bala", "portocala"];
+            let mut chunks = vec![];
+            for n in names.iter() {
+                chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
+            }
+            let inode = INode {
+                attributes: FileAttributes::default(),
+                chunks,
+            };
+            let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
+
+            let res0 = ws.read_at(0, 17)?;
+
+            assert_eq!(b"alabalaportocala", res0.as_slice());
+
+            assert!(ws.write_at(2, b"written").is_ok());
+
+            let res1 = ws.read_at(0, 17)?;
+
+            assert_eq!(b"alwrittenrtocala", res1.as_slice());
 
             ws.unload();
 
