@@ -51,6 +51,8 @@ where
                 }
             })
             .collect::<Vec<_>>();
+        trace!("New workspace for inode {} - size: {}, num_chunks: {}",
+               inode.attributes.ino, inode.attributes.size, lower.chunks.len());
         FileWorkspace {
             attributes: inode.attributes,
             lower,
@@ -277,6 +279,7 @@ where
         if self.data.is_some() {
             self.data = None;
         }
+        trace!("Unloaded chunk {}", self.digest);
     }
 
     /// Return the content of the chunk in a slice
@@ -288,6 +291,8 @@ where
         if self.data.is_none() {
             self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
         }
+        trace!("Loaded contents of chunk {} -  size: {}",
+               self.digest, self.size);
         // Note: The following unwrap should never panic
         Ok(self.data.as_ref().unwrap().as_slice())
     }
