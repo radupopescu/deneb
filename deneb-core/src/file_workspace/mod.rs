@@ -97,6 +97,12 @@ where
              &self.piece_table[last_piece_idx..]].join(&new_piece)
         };
 
+        // If the current write extended the file, this should be reflected in the file
+        // attributes
+        if (offset + buf_size) as u64 > self.attributes.size {
+            self.attributes.size = (offset + buf_size) as u64
+        }
+
         Ok(())
     }
 
