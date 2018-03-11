@@ -236,7 +236,7 @@ impl<C, S> Engine<C, S> {
                 let reply = self.file_workspaces
                     .get(&index)
                     .ok_or_else(|| EngineError::FileRead(index).into())
-                    .and_then(|ws| ws.read(offset, size as usize))
+                    .and_then(|ws| ws.read_at(offset, size as usize))
                     .map_err(|e| e.context(EngineError::FileRead(index)).into());
                 let _ = chan.send(Reply::ReadData(reply));
             }

@@ -22,6 +22,8 @@ use store::Store;
 pub(crate) struct FileWorkspace<S> {
     #[allow(dead_code)] attributes: FileAttributes,
     lower: Lower<S>,
+    upper: Vec<u8>,
+    piece_table: Vec<Piece>,
 }
 
 impl<S> FileWorkspace<S>
@@ -36,17 +38,104 @@ where
     /// up the lower, immutable, layer
     pub(crate) fn new(inode: &INode, store: Rc<RefCell<S>>) -> FileWorkspace<S> {
         let lower = Lower::new(inode.chunks.as_slice(), store);
+        let piece_table = lower
+            .chunks
+            .iter()
+            .enumerate()
+            .map(|(idx, ref c)| {
+                let chunk_size = c.borrow().size;
+                Piece {
+                    target: PieceTarget::Lower(idx),
+                    offset: 0,
+                    size: chunk_size,
+                }
+            })
+            .collect::<Vec<_>>();
+        trace!("New workspace for inode {} - size: {}, num_chunks: {}",
+               inode.attributes.ino, inode.attributes.size, lower.chunks.len());
         FileWorkspace {
             attributes: inode.attributes,
             lower,
+            upper: vec![],
+            piece_table,
         }
     }
 
-    /// Read `size` number of bytes, located at `offset`
-    pub(crate) fn read(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
-        let chunk_parts = lookup_chunks(offset, size, self.lower.chunks.as_slice());
-        let buffer = self.fill_buffer(&chunk_parts)?;
+    /// Read `size` number of bytes, starting at `offset`
+    pub(crate) fn read_at(&self, offset: usize, size: usize) -> DenebResult<Vec<u8>> {
+        let slices = lookup_pieces(offset, size, &self.piece_table);
+        let buffer = self.fill_buffer(&slices)?;
         Ok(buffer)
+    }
+
+    /// Write the contents of buffer into the workspace, starting at `offset`
+    pub(crate) fn write_at(&mut self, offset: usize, buffer: &[u8]) -> DenebResult<()> {
+        // Append buffer to the upper layer
+        let buf_size = buffer.len();
+        let offset_in_upper = self.upper.len();
+        self.upper.extend_from_slice(buffer);
+
+        let new_piece = Piece {
+            target: PieceTarget::Upper,
+            offset: offset_in_upper,
+            size: buf_size,
+        };
+
+        // Corner cases: writing into an empty file or appending to the file
+        if self.piece_table.is_empty() || (offset as u64 >= self.attributes.size) {
+            if offset as u64 > self.attributes.size {
+                self.piece_table.push(Piece {
+                    target: PieceTarget::Zero,
+                    offset: 0,
+                    size: offset - self.attributes.size as usize,
+                });
+            }
+            self.piece_table.push(new_piece);
+            self.attributes.size = (offset + buf_size) as u64;
+            return Ok(());
+        }
+
+        // Find the piece where the buffer is to be placed
+        let (first_piece_idx, offset_in_first_piece) =
+            piece_idx_for_offset(offset, &self.piece_table);
+
+        // How many original pieces are kept in the new piece_table?
+        let keep_idx = if offset_in_first_piece == 0 {
+            first_piece_idx
+        } else {
+            first_piece_idx + 1
+        };
+        let mut new_piece_table = self.piece_table[..keep_idx].to_vec();
+        if offset_in_first_piece != 0 {
+            new_piece_table[keep_idx - 1].size = offset_in_first_piece;
+        }
+
+        // Add the new piece
+        new_piece_table.push(new_piece);
+
+        // Corner case: the buffer to be written extends to the end of the file
+        //              or beyond it
+        if (offset + buf_size) as u64 >= self.attributes.size {
+            self.attributes.size = (offset + buf_size) as u64;
+            self.piece_table = new_piece_table;
+            return Ok(());
+        }
+
+        // Find the last piece touched by the buffer
+        let (last_piece_idx, offset_in_last_piece) =
+            piece_idx_for_offset(offset + buf_size, &self.piece_table);
+
+        // Append the last relevant pieces from the original piece table and
+        // adjust the first appended piece, as needed
+        let save_idx = new_piece_table.len();
+        new_piece_table.extend_from_slice(&self.piece_table[last_piece_idx..]);
+        new_piece_table[save_idx].offset += offset_in_last_piece;
+        new_piece_table[save_idx].size -= offset_in_last_piece;
+
+        // Replace the old piece table with the new one
+        self.piece_table = new_piece_table;
+
+        Ok(())
     }
 
     /// Unload the lower layer from memory
@@ -58,15 +147,62 @@ where
         self.lower.unload();
     }
 
-    fn fill_buffer(&self, chunks: &[ChunkPart]) -> DenebResult<Vec<u8>> {
+    fn fill_buffer(&self, slices: &[PieceSlice]) -> DenebResult<Vec<u8>> {
         let mut buffer = vec![];
-        for &ChunkPart { index, begin, end } in chunks {
-            let mut chunk = self.lower.chunks[index].borrow_mut();
-            let slice = chunk.get_slice()?;
-            buffer.extend_from_slice(&slice[begin..end]);
+        for &PieceSlice { index, begin, end } in slices {
+            let piece = &self.piece_table[index];
+            match piece.target {
+                PieceTarget::Lower(chunk_index) => {
+                    let mut chunk = self.lower.chunks[chunk_index].borrow_mut();
+                    let slice = chunk.get_slice()?;
+                    buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
+                }
+                PieceTarget::Upper => {
+                    buffer.extend_from_slice(
+                        &self.upper[(piece.offset + begin)..(piece.offset + end)],
+                    );
+                }
+                PieceTarget::Zero => {
+                    buffer.append(&mut vec![0; piece.size]);
+                }
+            }
         }
         Ok(buffer)
     }
+}
+
+/// Target of the piece, either the lower or the upper layer of the workspace
+#[derive(Clone)]
+enum PieceTarget {
+    /// The index represents which chunk of the lower layer this piece is related to
+    Lower(usize),
+    Upper,
+    Zero,
+}
+
+/// A piece represents a subset of either the lower or upper layers
+///
+/// If a piece points the lower layer, and index is provided whic identifies which
+/// chunk in the lower layer is referenced.
+#[derive(Clone)]
+struct Piece {
+    /// Target of piece
+    target: PieceTarget,
+    /// Offset of the beginning of the piece into the target buffer
+    offset: usize,
+    /// Size of the piece
+    size: usize,
+}
+
+/// A slice of a `Piece`
+#[derive(Debug, PartialEq)]
+struct PieceSlice {
+    /// The index of the associated `Piece` in the piece_table
+    index: usize,
+    /// Start position of the slice relative to the beginning of the piece
+    begin: usize,
+    /// End position of the slice relative to the beginning of the piece
+    end: usize,
 }
 
 /// The lower, immutable, layer of a `FileWorkspace` object
@@ -143,6 +279,7 @@ where
         if self.data.is_some() {
             self.data = None;
         }
+        trace!("Unloaded chunk {}", self.digest);
     }
 
     /// Return the content of the chunk in a slice
@@ -154,44 +291,30 @@ where
         if self.data.is_none() {
             self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
         }
+        trace!("Loaded contents of chunk {} -  size: {}",
+               self.digest, self.size);
         // Note: The following unwrap should never panic
         Ok(self.data.as_ref().unwrap().as_slice())
     }
 }
 
-/// Data structure returned by the `lookup_chunks` function
+/// Lookup a subset of pieces corresponding to a memory slice
 ///
-/// The index identifying a chunk and the indices which define an
-/// exclusive range of that should be read from the chunk data.
-#[derive(Debug, PartialEq)]
-struct ChunkPart {
-    index: usize,
-    begin: usize,
-    end: usize,
-}
-
-/// Lookup a subset of consecutive chunks corresponding to a memory slice
-///
-/// Given a list of `ChunkDescriptor`, representing consecutive chunks
-/// of a file and a segment identified by `offset` - the offset from
-/// the beginning of the file - and `size` - the size of the segment,
-/// this function returns a vector of `ChunkPart`
-fn lookup_chunks<S: Store>(
-    offset: usize,
-    size: usize,
-    chunks: &[RefCell<Chunk<S>>],
-) -> Vec<ChunkPart> {
-    let (first_chunk, mut offset_in_chunk) = chunk_idx_for_offset(offset, chunks);
+/// Given a piece table and a segment identified by `offset` - the
+/// offset from the beginning of the file - and `size` - the size of
+/// the segment, this function returns a vector of `PieceSlice`
+fn lookup_pieces(offset: usize, size: usize, piece_table: &[Piece]) -> Vec<PieceSlice> {
+    let (first_piece, mut offset_in_piece) = piece_idx_for_offset(offset, piece_table);
     let mut output = Vec::new();
     let mut bytes_left = size;
-    for (index, c) in chunks[first_chunk..].iter().enumerate() {
-        let read_bytes = min(bytes_left, c.borrow().size - offset_in_chunk);
-        output.push(ChunkPart {
-            index: first_chunk + index,
-            begin: offset_in_chunk,
-            end: offset_in_chunk + read_bytes,
+    for (index, pc) in piece_table[first_piece..].iter().enumerate() {
+        let read_bytes = min(bytes_left, pc.size - offset_in_piece);
+        output.push(PieceSlice {
+            index: first_piece + index,
+            begin: offset_in_piece,
+            end: offset_in_piece + read_bytes,
         });
-        offset_in_chunk = 0;
+        offset_in_piece = 0;
         bytes_left -= read_bytes;
         if bytes_left == 0 {
             break;
@@ -204,20 +327,19 @@ fn lookup_chunks<S: Store>(
 ///
 /// Returns a pair of `usize` representing the index of the chunk inside the list (slice)
 /// and the offset inside the chunk which correspond to the given offset
-fn chunk_idx_for_offset<S: Store>(offset: usize, chunks: &[RefCell<Chunk<S>>]) -> (usize, usize) {
+fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) {
     let mut acc = 0;
     let mut idx = 0;
-    let mut offset_in_chunk = 0;
-    for (i, c) in chunks.iter().enumerate() {
-        let chk = c.borrow();
-        acc += chk.size;
+    let mut offset_in_piece = 0;
+    for (i, pc) in piece_table.iter().enumerate() {
+        acc += pc.size;
         idx = i;
         if acc > offset {
-            offset_in_chunk = offset + chk.size - acc;
+            offset_in_piece = offset + pc.size - acc;
             break;
         }
     }
-    (idx, offset_in_chunk)
+    (idx, offset_in_piece)
 }
 
 #[cfg(test)]
@@ -227,23 +349,26 @@ mod tests {
     use store::MemStore;
     use util::run;
 
+    fn make_test_workspace() -> DenebResult<FileWorkspace<MemStore>> {
+        let store = Rc::new(RefCell::new(MemStore::new(10000)));
+
+        let names = ["ala", "bala", "portocala"];
+        let mut chunks = vec![];
+        for n in names.iter() {
+            chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
+        }
+        let mut attributes = FileAttributes::default();
+        attributes.size = 16;
+        let inode = INode { attributes, chunks };
+        Ok(FileWorkspace::new(&inode, Rc::clone(&store)))
+    }
+
     #[test]
-    fn try_file_workspace() {
+    fn read() {
         run(|| {
-            let store = Rc::new(RefCell::new(MemStore::new(10000)));
+            let ws = make_test_workspace()?;
 
-            let names = ["ala", "bala", "portocala"];
-            let mut chunks = vec![];
-            for n in names.iter() {
-                chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
-            }
-            let inode = INode {
-                attributes: FileAttributes::default(),
-                chunks,
-            };
-            let ws = FileWorkspace::new(&inode, Rc::clone(&store));
-
-            let res = ws.read(0, 17)?;
+            let res = ws.read_at(0, ws.attributes.size as usize)?;
 
             assert_eq!(b"alabalaportocala", res.as_slice());
 
@@ -253,53 +378,177 @@ mod tests {
         });
     }
 
-    fn make_chunks<S: Store>(
-        input_size: usize,
-        chunk_size: usize,
-        store: Rc<RefCell<S>>,
-    ) -> Vec<RefCell<Chunk<S>>> {
-        use cas::read_chunks;
+    #[test]
+    fn write_into_empty() {
+        run(|| {
+            let store = Rc::new(RefCell::new(MemStore::new(10000)));
 
-        let input = (0..)
-            .map(|e| (e as u64 % 256) as u8)
-            .take(input_size)
-            .collect::<Vec<u8>>();
+            let inode = INode {
+                attributes: FileAttributes::default(),
+                chunks: vec![],
+            };
+            let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
 
-        let mut buffer = vec![0 as u8; chunk_size];
-        let raw_chunks = read_chunks(input.as_slice(), &mut buffer);
-        assert!(raw_chunks.is_ok());
-        let mut chunks = vec![];
-        if let Ok(cs) = raw_chunks {
-            for (digest, data) in cs {
-                chunks.push(RefCell::new(Chunk::new(
-                    digest,
-                    data.len(),
-                    Rc::clone(&store),
-                )));
-            }
-        }
-        chunks
+            assert!(ws.write_at(0, b"written").is_ok());
+
+            let res = ws.read_at(0, 7)?;
+            assert_eq!(b"written", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 1);
+            assert_eq!(ws.attributes.size, 7);
+
+            Ok(())
+        });
     }
 
     #[test]
-    fn locate_slice_in_chunks() {
-        let store = Rc::new(RefCell::new(MemStore::new(10000)));
+    fn successive_writes() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
 
-        let chunks = make_chunks(20, 5, store);
+            let res0 = ws.read_at(0, 16)?;
+            assert_eq!(b"alabalaportocala", res0.as_slice());
 
-        assert_eq!((0, 3), chunk_idx_for_offset(3, &chunks));
-        assert_eq!((1, 2), chunk_idx_for_offset(7, &chunks));
-        assert_eq!((2, 2), chunk_idx_for_offset(12, &chunks));
-        assert_eq!((3, 0), chunk_idx_for_offset(15, &chunks));
+            assert!(ws.write_at(2, b"written").is_ok());
+
+            let res1 = ws.read_at(0, 16)?;
+            assert_eq!(b"alwrittenrtocala", res1.as_slice());
+
+            assert!(ws.write_at(6, b"again").is_ok());
+
+            ws.unload();
+
+            let res2 = ws.read_at(0, 16)?;
+            assert_eq!(b"alwritagainocala", res2.as_slice());
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_at_beginning() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(0, b"written").is_ok());
+
+            let res = ws.read_at(0, 16)?;
+
+            assert_eq!(b"writtenportocala", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 2);
+            assert_eq!(ws.attributes.size, 16);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_at_end() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(9, b"written").is_ok());
+
+            let res = ws.read_at(0, 16)?;
+
+            assert_eq!(b"alabalapowritten", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 4);
+            assert_eq!(ws.attributes.size, 16);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_extends_the_file() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(12, b"written").is_ok());
+
+            let res = ws.read_at(0, 19)?;
+
+            assert_eq!(b"alabalaportowritten", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 4);
+            assert_eq!(ws.attributes.size, 19);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn append_to_file() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(16, b"written").is_ok());
+
+            let res = ws.read_at(0, 23)?;
+
+            assert_eq!(b"alabalaportocalawritten", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 4);
+            assert_eq!(ws.attributes.size, 23);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_beyond_end() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(20, b"written").is_ok());
+
+            let res = ws.read_at(0, 27)?;
+
+            assert_eq!(
+                [
+                    97, 108, 97, 98, 97, 108, 97, 112, 111, 114, 116, 111, 99, 97, 108, 97, 0, 0,
+                    0, 0, 119, 114, 105, 116, 116, 101, 110,
+                ],
+                res.as_slice()
+            );
+            assert_eq!(ws.piece_table.len(), 5);
+            assert_eq!(ws.attributes.size, 27);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn locate_slice() {
+        let input_size = 20;
+        let chunk_size = 5;
+        let piece_table = {
+            let mut remaining_size = input_size;
+            let mut pieces = vec![];
+            while remaining_size > 0 {
+                let size = min(remaining_size, chunk_size);
+                remaining_size -= size;
+                pieces.push(Piece {
+                    target: PieceTarget::Lower(0),
+                    offset: 0,
+                    size,
+                });
+            }
+            pieces
+        };
+
+        assert_eq!((0, 0), piece_idx_for_offset(0, &piece_table));
+        assert_eq!((3, 4), piece_idx_for_offset(19, &piece_table));
+        assert_eq!((0, 3), piece_idx_for_offset(3, &piece_table));
+        assert_eq!((1, 2), piece_idx_for_offset(7, &piece_table));
+        assert_eq!((2, 2), piece_idx_for_offset(12, &piece_table));
+        assert_eq!((3, 0), piece_idx_for_offset(15, &piece_table));
 
         // Read 7 bytes starting at offset 6
         let offset = 6;
         let size = 7;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(2, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 1,
                 begin: 1,
                 end: 5,
@@ -307,7 +556,7 @@ mod tests {
             output[0]
         );
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 2,
                 begin: 0,
                 end: 3,
@@ -319,10 +568,10 @@ mod tests {
         let offset = 2;
         let size = 11;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(3, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 0,
                 begin: 2,
                 end: 5,
@@ -330,7 +579,7 @@ mod tests {
             output[0]
         );
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 1,
                 begin: 0,
                 end: 5,
@@ -338,7 +587,7 @@ mod tests {
             output[1]
         );
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 2,
                 begin: 0,
                 end: 3,
@@ -350,10 +599,10 @@ mod tests {
         let offset = 12;
         let size = 3;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(1, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 2,
                 begin: 2,
                 end: 5,
@@ -365,10 +614,10 @@ mod tests {
         let offset = 18;
         let size = 100;
 
-        let output = lookup_chunks(offset, size, &chunks);
+        let output = lookup_pieces(offset, size, &piece_table);
         assert_eq!(1, output.len());
         assert_eq!(
-            ChunkPart {
+            PieceSlice {
                 index: 3,
                 begin: 3,
                 end: 5,
