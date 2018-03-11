@@ -73,35 +73,65 @@ where
         let offset_in_upper = self.upper.len();
         self.upper.extend_from_slice(buffer);
 
-        // Find the piece where buffer is to be placed
-        let (first_piece_idx, offset_in_first_piece) =
-            piece_idx_for_offset(offset, &self.piece_table);
-
-        // Find the last piece touched by the buffer
-        let (last_piece_idx, offset_in_last_piece) =
-            piece_idx_for_offset(offset + buf_size, &self.piece_table);
-
-        // Truncate the first and last pieces, as needed
-        self.piece_table[first_piece_idx].size = offset_in_first_piece;
-        self.piece_table[last_piece_idx].offset += offset_in_last_piece;
-        self.piece_table[last_piece_idx].size -= offset_in_last_piece;
-
-        // Replace all the pieces between the first and the last with a new piece
         let new_piece = Piece {
             target: PieceTarget::Upper,
             offset: offset_in_upper,
             size: buf_size,
         };
-        self.piece_table = {
-            [&self.piece_table[..first_piece_idx + 1],
-             &self.piece_table[last_piece_idx..]].join(&new_piece)
-        };
 
-        // If the current write extended the file, this should be reflected in the file
-        // attributes
-        if (offset + buf_size) as u64 > self.attributes.size {
-            self.attributes.size = (offset + buf_size) as u64
+        // Corner cases: writing into an empty file or appending to the file
+        if self.piece_table.is_empty() || (offset as u64 >= self.attributes.size) {
+            if offset as u64 > self.attributes.size {
+                self.piece_table.push(Piece {
+                    target: PieceTarget::Zero,
+                    offset: 0,
+                    size: offset - self.attributes.size as usize,
+                });
+            }
+            self.piece_table.push(new_piece);
+            self.attributes.size = (offset + buf_size) as u64;
+            return Ok(());
         }
+
+        // Find the piece where the buffer is to be placed
+        let (first_piece_idx, offset_in_first_piece) =
+            piece_idx_for_offset(offset, &self.piece_table);
+
+        // How many original pieces are kept in the new piece_table?
+        let keep_idx = if offset_in_first_piece == 0 {
+            first_piece_idx
+        } else {
+            first_piece_idx + 1
+        };
+        let mut new_piece_table = self.piece_table[..keep_idx].to_vec();
+        if offset_in_first_piece != 0 {
+            new_piece_table[keep_idx - 1].size = offset_in_first_piece;
+        }
+
+        // Add the new piece
+        new_piece_table.push(new_piece);
+
+        // Corner case: the buffer to be written extends to the end of the file
+        //              or beyond it
+        if (offset + buf_size) as u64 >= self.attributes.size {
+            self.attributes.size = (offset + buf_size) as u64;
+            self.piece_table = new_piece_table;
+            return Ok(());
+        }
+
+        // Find the last piece touched by the buffer
+        let (last_piece_idx, offset_in_last_piece) =
+            piece_idx_for_offset(offset + buf_size, &self.piece_table);
+
+        // Append the last relevant pieces from the original piece table and
+        // adjust the first appended piece, as needed
+        let save_idx = new_piece_table.len();
+        new_piece_table.extend_from_slice(&self.piece_table[last_piece_idx..]);
+        new_piece_table[save_idx].offset += offset_in_last_piece;
+        new_piece_table[save_idx].size -= offset_in_last_piece;
+
+        // Replace the old piece table with the new one
+        self.piece_table = new_piece_table;
 
         Ok(())
     }
@@ -130,6 +160,9 @@ where
                         &self.upper[(piece.offset + begin)..(piece.offset + end)],
                     );
                 }
+                PieceTarget::Zero => {
+                    buffer.append(&mut vec![0; piece.size]);
+                }
             }
         }
         Ok(buffer)
@@ -142,6 +175,7 @@ enum PieceTarget {
     /// The index represents which chunk of the lower layer this piece is related to
     Lower(usize),
     Upper,
+    Zero,
 }
 
 /// A piece represents a subset of either the lower or upper layers
