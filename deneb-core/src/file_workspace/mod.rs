@@ -344,23 +344,26 @@ mod tests {
     use store::MemStore;
     use util::run;
 
+    fn make_test_workspace() -> DenebResult<FileWorkspace<MemStore>> {
+        let store = Rc::new(RefCell::new(MemStore::new(10000)));
+
+        let names = ["ala", "bala", "portocala"];
+        let mut chunks = vec![];
+        for n in names.iter() {
+            chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
+        }
+        let mut attributes = FileAttributes::default();
+        attributes.size = 16;
+        let inode = INode { attributes, chunks };
+        Ok(FileWorkspace::new(&inode, Rc::clone(&store)))
+    }
+
     #[test]
-    fn file_workspace_read() {
+    fn read() {
         run(|| {
-            let store = Rc::new(RefCell::new(MemStore::new(10000)));
+            let ws = make_test_workspace()?;
 
-            let names = ["ala", "bala", "portocala"];
-            let mut chunks = vec![];
-            for n in names.iter() {
-                chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
-            }
-            let inode = INode {
-                attributes: FileAttributes::default(),
-                chunks,
-            };
-            let ws = FileWorkspace::new(&inode, Rc::clone(&store));
-
-            let res = ws.read_at(0, 17)?;
+            let res = ws.read_at(0, ws.attributes.size as usize)?;
 
             assert_eq!(b"alabalaportocala", res.as_slice());
 
@@ -371,59 +374,163 @@ mod tests {
     }
 
     #[test]
-    fn file_workspace_write() {
+    fn write_into_empty() {
         run(|| {
             let store = Rc::new(RefCell::new(MemStore::new(10000)));
 
-            let names = ["ala", "bala", "portocala"];
-            let mut chunks = vec![];
-            for n in names.iter() {
-                chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
-            }
             let inode = INode {
                 attributes: FileAttributes::default(),
-                chunks,
+                chunks: vec![],
             };
             let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
 
-            let res0 = ws.read_at(0, 17)?;
-            assert_eq!(b"alabalaportocala", res0.as_slice());
+            assert!(ws.write_at(0, b"written").is_ok());
 
-            assert!(ws.write_at(2, b"written").is_ok());
-
-            let res1 = ws.read_at(0, 17)?;
-            assert_eq!(b"alwrittenrtocala", res1.as_slice());
-
-            assert!(ws.write_at(6, b"again").is_ok());
-
-            let res2 = ws.read_at(0, 17)?;
-            assert_eq!(b"alwritagainocala", res2.as_slice());
-
-            ws.unload();
+            let res = ws.read_at(0, 7)?;
+            assert_eq!(b"written", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 1);
+            assert_eq!(ws.attributes.size, 7);
 
             Ok(())
         });
     }
 
-    fn make_piece_table(input_size: usize, chunk_size: usize) -> Vec<Piece> {
-        let mut remaining_size = input_size;
-        let mut pieces = vec![];
-        while remaining_size > 0 {
-            let size = min(remaining_size, chunk_size);
-            remaining_size -= size;
-            pieces.push(Piece {
-                target: PieceTarget::Lower(0),
-                offset: 0,
-                size,
-            });
-        }
-        pieces
+    #[test]
+    fn successive_writes() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            let res0 = ws.read_at(0, 16)?;
+            assert_eq!(b"alabalaportocala", res0.as_slice());
+
+            assert!(ws.write_at(2, b"written").is_ok());
+
+            let res1 = ws.read_at(0, 16)?;
+            assert_eq!(b"alwrittenrtocala", res1.as_slice());
+
+            assert!(ws.write_at(6, b"again").is_ok());
+
+            ws.unload();
+
+            let res2 = ws.read_at(0, 16)?;
+            assert_eq!(b"alwritagainocala", res2.as_slice());
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_at_beginning() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(0, b"written").is_ok());
+
+            let res = ws.read_at(0, 16)?;
+
+            assert_eq!(b"writtenportocala", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 2);
+            assert_eq!(ws.attributes.size, 16);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_at_end() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(9, b"written").is_ok());
+
+            let res = ws.read_at(0, 16)?;
+
+            assert_eq!(b"alabalapowritten", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 4);
+            assert_eq!(ws.attributes.size, 16);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_extends_the_file() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(12, b"written").is_ok());
+
+            let res = ws.read_at(0, 19)?;
+
+            assert_eq!(b"alabalaportowritten", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 4);
+            assert_eq!(ws.attributes.size, 19);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn append_to_file() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(16, b"written").is_ok());
+
+            let res = ws.read_at(0, 23)?;
+
+            assert_eq!(b"alabalaportocalawritten", res.as_slice());
+            assert_eq!(ws.piece_table.len(), 4);
+            assert_eq!(ws.attributes.size, 23);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn write_beyond_end() {
+        run(|| {
+            let mut ws = make_test_workspace()?;
+
+            assert!(ws.write_at(20, b"written").is_ok());
+
+            let res = ws.read_at(0, 27)?;
+
+            assert_eq!(
+                [
+                    97, 108, 97, 98, 97, 108, 97, 112, 111, 114, 116, 111, 99, 97, 108, 97, 0, 0,
+                    0, 0, 119, 114, 105, 116, 116, 101, 110,
+                ],
+                res.as_slice()
+            );
+            assert_eq!(ws.piece_table.len(), 5);
+            assert_eq!(ws.attributes.size, 27);
+
+            Ok(())
+        });
     }
 
     #[test]
     fn locate_slice() {
-        let piece_table = make_piece_table(20, 5);
+        let input_size = 20;
+        let chunk_size = 5;
+        let piece_table = {
+            let mut remaining_size = input_size;
+            let mut pieces = vec![];
+            while remaining_size > 0 {
+                let size = min(remaining_size, chunk_size);
+                remaining_size -= size;
+                pieces.push(Piece {
+                    target: PieceTarget::Lower(0),
+                    offset: 0,
+                    size,
+                });
+            }
+            pieces
+        };
 
+        assert_eq!((0, 0), piece_idx_for_offset(0, &piece_table));
+        assert_eq!((3, 4), piece_idx_for_offset(19, &piece_table));
         assert_eq!((0, 3), piece_idx_for_offset(3, &piece_table));
         assert_eq!((1, 2), piece_idx_for_offset(7, &piece_table));
         assert_eq!((2, 2), piece_idx_for_offset(12, &piece_table));
