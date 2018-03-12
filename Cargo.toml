@@ -1,7 +1,25 @@
 [package]
+
 name = "deneb"
+description = "Distributed directory syncronization"
 version = "0.1.0"
+
 authors = ["Radu Popescu <mail@radupopescu.net>"]
+
+license = "MPL-2.0"
+
+homepage = "https://github.com/radupopescu/deneb"
+repository = "https://github.com/radupopescu/deneb"
+
+readme = "README.md"
+
+keywords = ["filesystem", "merkle-tree", "fuse", "distributed-file-system", "lol-blockchain"]
+categories = ["filesystem"]
+
+[badges]
+travis-ci = { repository = "radupopescu/deneb", branch = "master" }
+
+maintenance = { status = "experimental" }
 
 [features]
 default = ["fuse_module"]
