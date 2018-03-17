@@ -1,6 +1,6 @@
-use std::ffi::OsString;
-use std::path::PathBuf;
-use std::sync::mpsc::SyncSender;
+use time::Timespec;
+
+use std::{ffi::OsString, path::PathBuf, sync::mpsc::SyncSender};
 
 use inode::{FileAttributes, FileType};
 use errors::DenebResult;
@@ -16,24 +16,41 @@ pub(in engine) enum Request {
     GetAttr {
         index: u64,
     },
+    SetAttr {
+        index: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+        #[allow(dead_code)]
+        flags: Option<u32>,
+    },
     Lookup {
         parent: u64,
         name: OsString,
     },
     OpenDir {
         index: u64,
-        #[allow(dead_code)] flags: u32,
+        #[allow(dead_code)]
+        flags: u32,
     },
     ReleaseDir {
         index: u64,
-        #[allow(dead_code)] flags: u32,
+        #[allow(dead_code)]
+        flags: u32,
     },
     ReadDir {
         index: u64,
-        #[allow(dead_code)] offset: i64,
+        #[allow(dead_code)]
+        offset: i64,
     },
     OpenFile {
         index: u64,
+        #[allow(dead_code)]
         flags: u32,
     },
     ReadData {
@@ -41,22 +58,32 @@ pub(in engine) enum Request {
         offset: i64,
         size: u32,
     },
+    WriteData {
+        index: u64,
+        offset: i64,
+        data: Vec<u8>,
+    },
     ReleaseFile {
         index: u64,
-        #[allow(dead_code)] flags: u32,
-        #[allow(dead_code)] lock_owner: u64,
-        #[allow(dead_code)] flush: bool,
+        #[allow(dead_code)]
+        flags: u32,
+        #[allow(dead_code)]
+        lock_owner: u64,
+        #[allow(dead_code)]
+        flush: bool,
     },
 }
 
 pub(in engine) enum Reply {
     GetAttr(DenebResult<FileAttributes>),
+    SetAttr(DenebResult<FileAttributes>),
     Lookup(DenebResult<FileAttributes>),
     OpenDir(DenebResult<()>),
     ReleaseDir(DenebResult<()>),
     ReadDir(DenebResult<Vec<(PathBuf, u64, FileType)>>),
     OpenFile(DenebResult<()>),
     ReadData(DenebResult<Vec<u8>>),
+    WriteData(DenebResult<u32>),
     ReleaseFile(DenebResult<()>),
 }
 

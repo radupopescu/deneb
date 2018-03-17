@@ -40,6 +40,7 @@ pub mod manifest;
 pub mod store;
 pub mod util;
 
+mod dir_workspace;
 mod file_workspace;
 
 #[derive(Debug, Fail)]

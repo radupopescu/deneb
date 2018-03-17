@@ -1,6 +1,6 @@
-use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::sync::mpsc::sync_channel;
+use time::Timespec;
+
+use std::{ffi::OsStr, path::PathBuf, sync::mpsc::sync_channel};
 
 use inode::{FileAttributes, FileType};
 use errors::{DenebResult, EngineError};
@@ -17,6 +17,39 @@ impl Handle {
     pub fn get_attr(&self, _id: &RequestId, index: u64) -> DenebResult<FileAttributes> {
         let reply = self.make_request(Request::GetAttr { index })?;
         if let Reply::GetAttr(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn set_attr(
+        &self,
+        _id: &RequestId,
+        index: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+        flags: Option<u32>,
+    ) -> DenebResult<FileAttributes> {
+        let reply = self.make_request(Request::SetAttr {
+            index,
+            mode,
+            uid,
+            gid,
+            size,
+            atime,
+            mtime,
+            crtime,
+            chgtime,
+            flags,
+        })?;
+        if let Reply::SetAttr(result) = reply {
             result
         } else {
             Err(EngineError::InvalidReply.into())
@@ -94,6 +127,25 @@ impl Handle {
             size,
         })?;
         if let Reply::ReadData(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn write_data(
+        &self,
+        _id: &RequestId,
+        index: u64,
+        offset: i64,
+        data: &[u8],
+    ) -> DenebResult<u32> {
+        let reply = self.make_request(Request::WriteData {
+            index,
+            offset,
+            data: data.to_vec(),
+        })?;
+        if let Reply::WriteData(result) = reply {
             result
         } else {
             Err(EngineError::InvalidReply.into())

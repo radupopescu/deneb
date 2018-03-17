@@ -25,10 +25,14 @@ pub struct FileAttributes {
     pub ino: u64,
     pub size: u64,
     pub blocks: u64,
-    #[serde(with = "TimespecDef")] pub atime: Timespec,
-    #[serde(with = "TimespecDef")] pub mtime: Timespec,
-    #[serde(with = "TimespecDef")] pub ctime: Timespec,
-    #[serde(with = "TimespecDef")] pub crtime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub atime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub mtime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub ctime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
     pub nlink: u32,
@@ -36,6 +40,46 @@ pub struct FileAttributes {
     pub gid: u32,
     pub rdev: u32,
     pub flags: u32,
+}
+
+impl FileAttributes {
+    pub fn update(
+        &mut self,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+    ) {
+        if let Some(mode) = mode {
+            self.kind = mode_to_file_type(mode as mode_t);
+            self.perm = mode_to_permissions(mode as mode_t);
+        }
+        if let Some(uid) = uid {
+            self.uid = uid;
+        }
+        if let Some(gid) = gid {
+            self.gid = gid;
+        }
+        if let Some(size) = size {
+            self.size = size;
+        }
+        if let Some(atime) = atime {
+            self.atime = atime;
+        }
+        if let Some(mtime) = mtime {
+            self.mtime = mtime;
+        }
+        if let Some(crtime) = crtime {
+            self.crtime = crtime;
+        }
+        if let Some(chgtime) = chgtime {
+            self.ctime = chgtime;
+        }
+    }
 }
 
 impl Default for FileAttributes {

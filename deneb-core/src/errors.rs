@@ -62,7 +62,9 @@ pub enum CatalogError {
 
 #[derive(Debug, Fail)]
 pub enum EngineError {
+    #[fail(display = "Failed to retrieve inode for: {}", _0)] GetINode(u64),
     #[fail(display = "Failed to retrieve file attributes for: {}", _0)] GetAttr(u64),
+    #[fail(display = "Failed to set file attributes for: {}", _0)] SetAttr(u64),
     #[fail(display = "Failed lookup of entry: {:?} in parent: {}", _1, _0)] Lookup(u64, OsString),
     #[fail(display = "Failed to send request to engine")] SendFailed,
     #[fail(display = "Invalid reply received from engine")] InvalidReply,
@@ -72,6 +74,7 @@ pub enum EngineError {
     #[fail(display = "Could not open file: {}", _0)] FileOpen(u64),
     #[fail(display = "Could not close file: {}", _0)] FileClose(u64),
     #[fail(display = "Could not read file: {}", _0)] FileRead(u64),
+    #[fail(display = "Could not write to file: {}", _0)] FileWrite(u64),
     #[fail(display = "Access error for: {}", _0)] Access(u64),
 }
 

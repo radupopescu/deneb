@@ -1,17 +1,13 @@
-use nix::libc::{O_RDWR, O_WRONLY};
-use time::now_utc;
+use failure::ResultExt;
+use time::{now_utc, Timespec};
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fs::{create_dir_all, File};
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::mpsc::sync_channel;
-use std::thread::spawn as tspawn;
+use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_all, File},
+          path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn};
 
 use catalog::{Catalog, CatalogBuilder};
+use dir_workspace::{DirEntry, DirWorkspace};
 use file_workspace::FileWorkspace;
-use inode::FileType;
+use inode::{FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
@@ -23,8 +19,7 @@ mod handle;
 
 use self::protocol::{Reply, ReplyChannel, Request};
 
-pub use self::protocol::RequestId;
-pub use self::handle::Handle;
+pub use self::{handle::Handle, protocol::RequestId};
 
 /// Start engine with pre-built catalog and store
 pub fn start_engine_prebuilt<C, S>(catalog: C, store: S, queue_size: usize) -> DenebResult<Handle>
@@ -38,8 +33,7 @@ where
         let mut engine = Engine {
             catalog,
             store: Rc::new(RefCell::new(store)),
-            open_dirs: HashMap::new(),
-            file_workspaces: HashMap::new(),
+            workspace: Workspace::new(),
         };
         info!("Starting engine event loop");
         for (event, tx) in rx.iter() {
@@ -135,119 +129,231 @@ where
     Ok((catalog, store))
 }
 
+struct Workspace<S> {
+    dirs: HashMap<u64, DirWorkspace>,
+    files: HashMap<u64, FileWorkspace<S>>,
+    inodes: HashMap<u64, INode>,
+}
+
+impl<S> Workspace<S> {
+    fn new() -> Workspace<S> {
+        Workspace {
+            dirs: HashMap::new(),
+            files: HashMap::new(),
+            inodes: HashMap::new(),
+        }
+    }
+}
+
 struct Engine<C, S> {
     catalog: C,
     store: Rc<RefCell<S>>,
-    open_dirs: HashMap<u64, Vec<(PathBuf, u64, FileType)>>,
-    file_workspaces: HashMap<u64, FileWorkspace<S>>,
+    workspace: Workspace<S>,
 }
 
-impl<C, S> Engine<C, S> {
-    fn handle_request(&mut self, request: Request, chan: &ReplyChannel)
-    where
-        C: Catalog,
-        S: Store,
-    {
+impl<C, S> Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle_request(&mut self, request: Request, chan: &ReplyChannel) {
         match request {
             Request::GetAttr { index } => {
-                let reply = self.catalog
-                    .get_inode(index)
-                    .map(|inode| inode.attributes)
-                    .map_err(|e| e.context(EngineError::GetAttr(index)).into());
-                let _ = chan.send(Reply::GetAttr(reply));
+                let _ = chan.send(Reply::GetAttr(self.get_attr(index)));
+            }
+            Request::SetAttr {
+                index,
+                mode,
+                uid,
+                gid,
+                size,
+                atime,
+                mtime,
+                crtime,
+                chgtime,
+                ..
+            } => {
+                let _ = chan.send(Reply::SetAttr(self.set_attr(
+                    index,
+                    mode,
+                    uid,
+                    gid,
+                    size,
+                    atime,
+                    mtime,
+                    crtime,
+                    chgtime,
+                )));
             }
             Request::Lookup { parent, name } => {
-                let reply = self.catalog
-                    .get_dir_entry_inode(parent, PathBuf::from(&name).as_path())
-                    .map(|inode| inode.attributes)
-                    .map_err(|e| e.context(EngineError::Lookup(parent, name.clone())).into());
-                let _ = chan.send(Reply::Lookup(reply));
+                let _ = chan.send(Reply::Lookup(self.lookup(parent, name)));
             }
-            Request::OpenDir { index, flags } => {
-                let rw = (O_WRONLY | O_RDWR) as u32;
-                let reply = {
-                    if (flags & rw) > 0 {
-                        Err(EngineError::Access(index).into())
-                    } else {
-                        self.catalog
-                            .get_dir_entries(index)
-                            .map(|entries| {
-                                let entries = entries
-                                    .iter()
-                                    .map(|&(ref name, idx)| {
-                                        if let Ok(inode) = self.catalog.get_inode(idx) {
-                                            (name.clone(), idx, inode.attributes.kind)
-                                        } else {
-                                            panic!(
-                                                "Fatal engine error. Could not retrieve inode {}",
-                                                idx
-                                            )
-                                        }
-                                    })
-                                    .collect::<Vec<_>>();
-                                self.open_dirs.insert(index, entries);
-                            })
-                            .map_err(|e| e.context(EngineError::DirOpen(index)).into())
-                    }
-                };
-                let _ = chan.send(Reply::OpenDir(reply));
+            Request::OpenDir { index, .. } => {
+                let _ = chan.send(Reply::OpenDir(self.open_dir(index)));
             }
             Request::ReleaseDir { index, .. } => {
-                let reply = self.open_dirs
-                    .remove(&index)
-                    .map(|_| ())
-                    .ok_or_else(|| EngineError::DirClose(index).into());
-                let _ = chan.send(Reply::ReleaseDir(reply));
+                let _ = chan.send(Reply::ReleaseDir(self.release_dir(index)));
             }
             Request::ReadDir { index, .. } => {
-                let reply = self.open_dirs
-                    .get(&index)
-                    .cloned()
-                    .ok_or_else(|| EngineError::DirRead(index).into());
-                let _ = chan.send(Reply::ReadDir(reply));
+                let _ = chan.send(Reply::ReadDir(self.read_dir(index)));
             }
             Request::OpenFile { index, flags } => {
-                let rw = (O_WRONLY | O_RDWR) as u32;
-                let reply = {
-                    if (flags & rw) > 0 {
-                        Err(EngineError::Access(index).into())
-                    } else {
-                        self.catalog
-                            .get_inode(index)
-                            .map(|inode| {
-                                if !self.file_workspaces.contains_key(&index) {
-                                    self.file_workspaces.insert(
-                                        index,
-                                        FileWorkspace::new(&inode, Rc::clone(&self.store)),
-                                    );
-                                }
-                            })
-                            .map_err(|e| e.context(EngineError::FileOpen(index)).into())
-                    }
-                };
-                let _ = chan.send(Reply::OpenFile(reply));
+                let _ = chan.send(Reply::OpenFile(self.open_file(index, flags)));
             }
             Request::ReadData {
                 index,
                 offset,
                 size,
             } => {
-                let offset = ::std::cmp::max(offset, 0) as usize;
-                let reply = self.file_workspaces
-                    .get(&index)
-                    .ok_or_else(|| EngineError::FileRead(index).into())
-                    .and_then(|ws| ws.read_at(offset, size as usize))
-                    .map_err(|e| e.context(EngineError::FileRead(index)).into());
-                let _ = chan.send(Reply::ReadData(reply));
+                let _ = chan.send(Reply::ReadData(self.read_data(index, offset, size)));
+            }
+            Request::WriteData {
+                index,
+                offset,
+                data,
+            } => {
+                let _ = chan.send(Reply::WriteData(self.write_data(index, offset, data)));
             }
             Request::ReleaseFile { index, .. } => {
-                let reply = self.file_workspaces
-                    .get_mut(&index)
-                    .ok_or_else(|| EngineError::FileClose(index).into())
-                    .and_then(|ws| Ok(ws.unload()));
-                let _ = chan.send(Reply::ReleaseFile(reply));
+                let _ = chan.send(Reply::ReleaseFile(self.release_file(index)));
             }
         }
+    }
+
+    fn get_inode(&mut self, index: u64) -> DenebResult<INode> {
+        if !self.workspace.inodes.contains_key(&index) {
+            let inode = self.catalog
+                .get_inode(index)
+                .context(EngineError::GetINode(index))?;
+            self.workspace.inodes.insert(index, inode);
+        }
+        self.workspace
+            .inodes
+            .get(&index)
+            .cloned()
+            .ok_or_else(|| EngineError::GetINode(index).into())
+    }
+
+    fn update_inode(&mut self, index: u64, inode: &INode) -> DenebResult<()> {
+        self.workspace.inodes.insert(index, inode.clone());
+        Ok(())
+    }
+
+    fn get_attr(&mut self, index: u64) -> DenebResult<FileAttributes> {
+        let inode = self.get_inode(index).context(EngineError::GetAttr(index))?;
+        Ok(inode.attributes)
+    }
+
+    fn set_attr(
+        &mut self,
+        index: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+    ) -> DenebResult<FileAttributes> {
+        let mut inode = self.get_inode(index).context(EngineError::SetAttr(index))?;
+        inode
+            .attributes
+            .update(mode, uid, gid, size, atime, mtime, crtime, chgtime);
+        let attrs = inode.attributes;
+        self.update_inode(index, &inode)
+            .context(EngineError::SetAttr(index))?;
+        Ok(attrs)
+    }
+
+    fn lookup(&mut self, parent: u64, name: OsString) -> DenebResult<FileAttributes> {
+        let index = self.catalog
+            .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())
+            .context(EngineError::Lookup(parent, name.clone()))?;
+
+        let attrs = self.get_attr(index)
+            .context(EngineError::Lookup(parent, name))?;
+        Ok(attrs)
+    }
+
+    fn open_dir(&mut self, index: u64) -> DenebResult<()> {
+        if !self.workspace.dirs.contains_key(&index) {
+            let entries = self.catalog
+                .get_dir_entries(index)
+                .context(EngineError::DirOpen(index))?
+                .iter()
+                .map(|&(ref name, idx)| {
+                    if let Ok(inode) = self.get_inode(idx) {
+                        DirEntry::new(idx, name.clone(), inode.attributes.kind)
+                    } else {
+                        panic!("Fatal engine error. Could not retrieve inode {}", idx)
+                    }
+                })
+                .collect::<Vec<_>>();
+            self.workspace
+                .dirs
+                .insert(index, DirWorkspace::new(&entries));
+        }
+        Ok(())
+    }
+
+    fn release_dir(&mut self, _index: u64) -> DenebResult<()> {
+        // Nothing needs to be done here.
+        Ok(())
+    }
+
+    fn read_dir(&self, index: u64) -> DenebResult<Vec<(PathBuf, u64, FileType)>> {
+        self.workspace
+            .dirs
+            .get(&index)
+            .map(DirWorkspace::get_entries_tuple)
+            .ok_or_else(|| EngineError::DirRead(index).into())
+    }
+
+    fn open_file(&mut self, index: u64, _flags: u32) -> DenebResult<()> {
+        if !self.workspace.files.contains_key(&index) {
+            let inode = self.get_inode(index).context(EngineError::FileOpen(index))?;
+            self.workspace
+                .files
+                .insert(index, FileWorkspace::new(&inode, Rc::clone(&self.store)));
+        }
+        Ok(())
+    }
+
+    fn read_data(&self, index: u64, offset: i64, size: u32) -> DenebResult<Vec<u8>> {
+        let offset = ::std::cmp::max(offset, 0) as usize;
+        let ws = self.workspace
+            .files
+            .get(&index)
+            .ok_or_else(|| EngineError::FileRead(index))?;
+        ws.read_at(offset, size as usize)
+    }
+
+    fn write_data(&mut self, index: u64, offset: i64, data: Vec<u8>) -> DenebResult<u32> {
+        let offset = ::std::cmp::max(offset, 0) as usize;
+        let (written, new_size) = {
+            let ws = self.workspace
+                .files
+                .get_mut(&index)
+                .ok_or_else(|| EngineError::FileWrite(index))?;
+            ws.write_at(offset, data.as_slice())
+        };
+        let mut inode = self.get_inode(index)
+            .context(EngineError::FileWrite(index))?;
+        if inode.attributes.size != new_size {
+            inode.attributes.size = new_size;
+            self.update_inode(index, &inode)
+                .context(EngineError::FileWrite(index))?;
+        }
+        Ok(written)
+    }
+
+    fn release_file(&mut self, index: u64) -> DenebResult<()> {
+        let ws = self.workspace
+            .files
+            .get_mut(&index)
+            .ok_or_else(|| EngineError::FileClose(index))?;
+        Ok(ws.unload())
     }
 }
 

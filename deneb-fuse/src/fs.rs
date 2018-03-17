@@ -1,7 +1,6 @@
-use fuse::{FileAttr, FileType, Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty,
-           ReplyEntry, ReplyOpen, Request};
-use fuse::consts::FOPEN_KEEP_CACHE;
-use fuse::{spawn_mount, BackgroundSession};
+use fuse::{spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyData,
+           ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
+           consts::FOPEN_KEEP_CACHE};
 use nix::libc::{EACCES, EINVAL, ENOENT};
 #[cfg(target_os = "linux")]
 use nix::mount::{MntFlags, umount2};
@@ -9,13 +8,12 @@ use nix::mount::{MntFlags, umount2};
 use nix::{NixPath, libc::{unmount, MNT_FORCE}};
 use time::Timespec;
 
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::{ffi::OsStr, path::{Path, PathBuf}};
 
-use deneb_core::errors::{print_error_with_causes, CatalogError, DenebResult, EngineError,
-                         UnixError};
-use deneb_core::engine::{Handle, RequestId};
-use deneb_core::inode::{FileAttributes, FileType as FT};
+use deneb_core::{engine::{Handle, RequestId},
+                 errors::{print_error_with_causes, CatalogError, DenebResult, EngineError,
+                          UnixError},
+                 inode::{FileAttributes, FileType as FT}};
 
 pub struct Session<'a> {
     fuse_session: BackgroundSession<'a>,
@@ -69,16 +67,49 @@ impl<'a> Fs {
 }
 
 impl Filesystem for Fs {
-    // Filesystem lifetime callbacks
-
-    // fn init(&mut self, _req: &Request) -> Result<(), c_int> { Ok(()) }
-
-    // fn destroy(&mut self, _req: &Request) { }
-
-    // Callbacks for read-only functionality
-
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
         match self.engine_handle.get_attr(&to_request_id(req), ino) {
+            Ok(attrs) => {
+                let ttl = Timespec::new(1, 0);
+                reply.attr(&ttl, &to_fuse_file_attr(attrs));
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
+    }
+
+    fn setattr(
+        &mut self,
+        req: &Request,
+        ino: u64,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        _fh: Option<u64>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+        _bkuptime: Option<Timespec>,
+        flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        match self.engine_handle.set_attr(
+            &to_request_id(req),
+            ino,
+            mode,
+            uid,
+            gid,
+            size,
+            atime,
+            mtime,
+            crtime,
+            chgtime,
+            flags,
+        ) {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
                 reply.attr(&ttl, &to_fuse_file_attr(attrs));
@@ -208,6 +239,29 @@ impl Filesystem for Fs {
         }
     }
 
+    fn write(
+        &mut self,
+        req: &Request,
+        _ino: u64,
+        fh: u64,
+        offset: i64,
+        data: &[u8],
+        _flags: u32,
+        reply: ReplyWrite,
+    ) {
+        match self.engine_handle
+            .write_data(&to_request_id(req), fh, offset, data)
+        {
+            Ok(num_bytes_written) => {
+                reply.written(num_bytes_written);
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
+    }
+
     fn release(
         &mut self,
         req: &Request,
@@ -234,48 +288,8 @@ impl Filesystem for Fs {
     /*
     fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {}
 
-    fn access(&mut self, _req: &Request, _ino: u64, _mask: u32, reply: ReplyEmpty) {}
-
     fn statfs(&mut self, _req: &Request, _ino: u64, reply: ReplyStatfs) {}
 
-    fn getxattr(&mut self,
-                _req: &Request,
-                _ino: u64,
-                _name: &OsStr,
-                _size: u32,
-                reply: ReplyXattr) {
-    }
-    fn listxattr(&mut self, _req: &Request, _ino: u64, _size: u32, reply: ReplyXattr) {}
-    fn getlk(&mut self,
-             _req: &Request,
-             _ino: u64,
-             _fh: u64,
-             _lock_owner: u64,
-             _start: u64,
-             _end: u64,
-             _typ: u32,
-             _pid: u32,
-             reply: ReplyLock) {
-    }
-
-    // Callbacks for write functionality
-    fn forget(&mut self, _req: &Request, _ino: u64, _nlookup: u64) {}
-    fn setattr(&mut self,
-               _req: &Request,
-               _ino: u64,
-               _mode: Option<u32>,
-               _uid: Option<u32>,
-               _gid: Option<u32>,
-               _size: Option<u64>,
-               _atime: Option<Timespec>,
-               _mtime: Option<Timespec>,
-               _fh: Option<u64>,
-               _crtime: Option<Timespec>,
-               _chgtime: Option<Timespec>,
-               _bkuptime: Option<Timespec>,
-               _flags: Option<u32>,
-               reply: ReplyAttr) {
-    }
     fn mknod(&mut self,
              _req: &Request,
              _parent: u64,
@@ -291,6 +305,7 @@ impl Filesystem for Fs {
              _mode: u32,
              reply: ReplyEntry) {
     }
+
     fn unlink(&mut self, _req: &Request, _parent: u64, _name: &OsStr, reply: ReplyEmpty) {}
     fn rmdir(&mut self, _req: &Request, _parent: u64, _name: &OsStr, reply: ReplyEmpty) {}
     fn symlink(&mut self,
@@ -308,31 +323,32 @@ impl Filesystem for Fs {
               _newname: &OsStr,
               reply: ReplyEmpty) {
     }
-    fn link(&mut self,
-            _req: &Request,
-            _ino: u64,
-            _newparent: u64,
-            _newname: &OsStr,
-            reply: ReplyEntry) {
+    fn create(&mut self,
+              _req: &Request,
+              _parent: u64,
+              _name: &OsStr,
+              _mode: u32,
+              _flags: u32,
+              reply: ReplyCreate) {
     }
-    fn write(&mut self,
-             _req: &Request,
-             _ino: u64,
-             _fh: u64,
-             _offset: u64,
-             _data: &[u8],
-             _flags: u32,
-             reply: ReplyWrite) {
-    }
-    fn flush(&mut self, _req: &Request, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {}
-    fn fsync(&mut self, _req: &Request, _ino: u64, _fh: u64, _datasync: bool, reply: ReplyEmpty) {}
-    fn fsyncdir(&mut self,
+    */
+
+    /*
+    // Other callbacks
+
+    fn init(&mut self, _req: &Request) -> Result<(), c_int> { Ok(()) }
+    fn destroy(&mut self, _req: &Request) { }
+
+    fn access(&mut self, _req: &Request, _ino: u64, _mask: u32, reply: ReplyEmpty) {}
+
+    fn getxattr(&mut self,
                 _req: &Request,
                 _ino: u64,
-                _fh: u64,
-                _datasync: bool,
-                reply: ReplyEmpty) {
+                _name: &OsStr,
+                _size: u32,
+                reply: ReplyXattr) {
     }
+    fn listxattr(&mut self, _req: &Request, _ino: u64, _size: u32, reply: ReplyXattr) {}
     fn setxattr(&mut self,
                 _req: &Request,
                 _ino: u64,
@@ -343,13 +359,17 @@ impl Filesystem for Fs {
                 reply: ReplyEmpty) {
     }
     fn removexattr(&mut self, _req: &Request, _ino: u64, _name: &OsStr, reply: ReplyEmpty) {}
-    fn create(&mut self,
-              _req: &Request,
-              _parent: u64,
-              _name: &OsStr,
-              _mode: u32,
-              _flags: u32,
-              reply: ReplyCreate) {
+
+    fn getlk(&mut self,
+             _req: &Request,
+             _ino: u64,
+             _fh: u64,
+             _lock_owner: u64,
+             _start: u64,
+             _end: u64,
+             _typ: u32,
+             _pid: u32,
+             reply: ReplyLock) {
     }
     fn setlk(&mut self,
              _req: &Request,
@@ -364,7 +384,26 @@ impl Filesystem for Fs {
              reply: ReplyEmpty) {
     }
 
-    // Other callbacks
+    fn forget(&mut self, _req: &Request, _ino: u64, _nlookup: u64) {}
+
+    fn link(&mut self,
+            _req: &Request,
+            _ino: u64,
+            _newparent: u64,
+            _newname: &OsStr,
+            reply: ReplyEntry) {
+    }
+
+    fn flush(&mut self, _req: &Request, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {}
+    fn fsync(&mut self, _req: &Request, _ino: u64, _fh: u64, _datasync: bool, reply: ReplyEmpty) {}
+    fn fsyncdir(&mut self,
+                _req: &Request,
+                _ino: u64,
+                _fh: u64,
+                _datasync: bool,
+                reply: ReplyEmpty) {
+    }
+
     fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {}
      */
 }
