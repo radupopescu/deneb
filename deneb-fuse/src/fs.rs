@@ -5,10 +5,8 @@ use fuse::{spawn_mount, BackgroundSession};
 use nix::libc::{EACCES, EINVAL, ENOENT};
 #[cfg(target_os = "linux")]
 use nix::mount::{MntFlags, umount2};
-#[cfg(target_os = "macos")]
-use nix::libc::{unmount, MNT_FORCE};
-#[cfg(target_os = "macos")]
-use nix::NixPath;
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
+use nix::{NixPath, libc::{unmount, MNT_FORCE}};
 use time::Timespec;
 
 use std::ffi::OsStr;
@@ -41,7 +39,7 @@ impl<'a> Session<'a> {
         umount2(self.mount_point.as_path(), MntFlags::MNT_FORCE)?;
         Ok(())
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "freebsd"))]
     pub fn force_unmount(self) -> Result<(), UnixError> {
         drop(self.fuse_session);
         let _ = self.mount_point
