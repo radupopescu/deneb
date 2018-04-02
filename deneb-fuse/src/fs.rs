@@ -97,8 +97,8 @@ impl Filesystem for Fs {
                 reply.entry(&ttl, &to_fuse_file_attr(attrs), 0);
             }
             Err(e) => {
-                if let Some(engine_error) = e.root_cause().downcast_ref::<CatalogError>() {
-                    if let CatalogError::DEntryNotFound(..) = *engine_error {
+                if let Some(catalog_error) = e.root_cause().downcast_ref::<CatalogError>() {
+                    if let CatalogError::DEntryNotFound(..) = *catalog_error {
                         reply.error(ENOENT);
                         return;
                     }

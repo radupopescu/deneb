@@ -8,15 +8,13 @@ extern crate deneb_fuse;
 
 use failure::ResultExt;
 
-use deneb_core::errors::{print_error_with_causes, DenebResult};
-use deneb_core::catalog::LmdbCatalogBuilder;
-use deneb_core::engine::start_engine;
-use deneb_core::store::DiskStoreBuilder;
+use std::ffi::OsStr;
+
+use deneb_core::{catalog::LmdbCatalogBuilder, engine::start_engine,
+                 errors::{print_error_with_causes, DenebResult}, store::DiskStoreBuilder};
 use deneb_fuse::fs::Fs;
 
-use deneb::logging::init_logger;
-use deneb::params::AppParameters;
-use deneb::util::{block_signals, set_sigint_handler};
+use deneb::{logging::init_logger, params::AppParameters, util::{block_signals, set_sigint_handler}};
 
 fn run() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
@@ -50,7 +48,11 @@ fn run() -> DenebResult<()> {
         1000,
     )?;
 
-    let session = Fs::mount(&params.mount_point, handle, &[])?;
+    let options = ["-o", "negative_vncache"]
+        .iter()
+        .map(|o| o.as_ref())
+        .collect::<Vec<&OsStr>>();
+    let session = Fs::mount(&params.mount_point, handle, &options)?;
 
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
