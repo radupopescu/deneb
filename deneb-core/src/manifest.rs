@@ -23,7 +23,7 @@ impl Manifest {
         Manifest {
             root_hash: hash,
             previous_root_hash: previous_hash,
-            timestamp: timestamp,
+            timestamp,
         }
     }
 

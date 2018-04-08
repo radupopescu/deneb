@@ -1,5 +1,5 @@
 use failure::ResultExt;
-use time::{now_utc, Timespec};
+use time::now_utc;
 
 use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_all, File},
           path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn};
@@ -7,7 +7,7 @@ use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_al
 use catalog::{Catalog, CatalogBuilder};
 use dir_workspace::{DirEntry, DirWorkspace};
 use file_workspace::FileWorkspace;
-use inode::{FileAttributes, FileType, INode};
+use inode::{FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
@@ -161,29 +161,8 @@ where
             Request::GetAttr { index } => {
                 let _ = chan.send(Reply::GetAttr(self.get_attr(index)));
             }
-            Request::SetAttr {
-                index,
-                mode,
-                uid,
-                gid,
-                size,
-                atime,
-                mtime,
-                crtime,
-                chgtime,
-                ..
-            } => {
-                let _ = chan.send(Reply::SetAttr(self.set_attr(
-                    index,
-                    mode,
-                    uid,
-                    gid,
-                    size,
-                    atime,
-                    mtime,
-                    crtime,
-                    chgtime,
-                )));
+            Request::SetAttr { index, changes } => {
+                let _ = chan.send(Reply::SetAttr(self.set_attr(index, &changes)));
             }
             Request::Lookup { parent, name } => {
                 let _ = chan.send(Reply::Lookup(self.lookup(parent, name)));
@@ -212,7 +191,7 @@ where
                 offset,
                 data,
             } => {
-                let _ = chan.send(Reply::WriteData(self.write_data(index, offset, data)));
+                let _ = chan.send(Reply::WriteData(self.write_data(index, offset, &data)));
             }
             Request::ReleaseFile { index, .. } => {
                 let _ = chan.send(Reply::ReleaseFile(self.release_file(index)));
@@ -220,6 +199,9 @@ where
         }
     }
 
+    // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
+    //       and can't be used inside Entry::or_insert_with
+    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn get_inode(&mut self, index: u64) -> DenebResult<INode> {
         if !self.workspace.inodes.contains_key(&index) {
             let inode = self.catalog
@@ -247,27 +229,16 @@ where
     fn set_attr(
         &mut self,
         index: u64,
-        mode: Option<u32>,
-        uid: Option<u32>,
-        gid: Option<u32>,
-        size: Option<u64>,
-        atime: Option<Timespec>,
-        mtime: Option<Timespec>,
-        crtime: Option<Timespec>,
-        chgtime: Option<Timespec>,
+        changes: &FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        //debug!("set_attr - index: {}, mode: {:?}, uid: {:?}, gid: {:?}, size: {:?}, atime: {:?}, mtime; {:?}, crtime: {:?}, chgtime: {:?}", index, mode, uid, gid, size, atime, mtime, crtime, chgtime);
         let mut inode = self.get_inode(index).context(EngineError::SetAttr(index))?;
-        inode
-            .attributes
-            .update(mode, uid, gid, size, atime, mtime, crtime, chgtime);
+        inode.attributes.update(changes);
         let attrs = inode.attributes;
         self.update_inode(index, &inode)
             .context(EngineError::SetAttr(index))?;
 
-        if let Some(new_size) = size {
+        if let Some(new_size) = changes.size {
             if let Some(ref mut ws) = self.workspace.files.get_mut(&index) {
-                debug!("set_attr - index: {}, truncate to {}", index, new_size);
                 ws.truncate(new_size);
             }
         }
@@ -284,6 +255,9 @@ where
         Ok(attrs)
     }
 
+    // Note: We perform inefficient double lookups since Catalog::get_dir_entries returns
+    //       a Result and can't be used inside Entry::or_insert_with
+    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
             let entries = self.catalog
@@ -318,12 +292,15 @@ where
             .ok_or_else(|| EngineError::DirRead(index).into())
     }
 
+    // Note: We perform inefficient double lookups since Catalog::get_inode returns
+    //       a Result and can't be used inside Entry::or_insert_with
+    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_file(&mut self, index: u64, _flags: u32) -> DenebResult<()> {
         if !self.workspace.files.contains_key(&index) {
             let inode = self.get_inode(index).context(EngineError::FileOpen(index))?;
             self.workspace
                 .files
-                .insert(index, FileWorkspace::new(&inode, Rc::clone(&self.store)));
+                .insert(index, FileWorkspace::new(&inode, &Rc::clone(&self.store)));
         }
         Ok(())
     }
@@ -337,14 +314,14 @@ where
         ws.read_at(offset, size as usize)
     }
 
-    fn write_data(&mut self, index: u64, offset: i64, data: Vec<u8>) -> DenebResult<u32> {
+    fn write_data(&mut self, index: u64, offset: i64, data: &[u8]) -> DenebResult<u32> {
         let offset = ::std::cmp::max(offset, 0) as usize;
         let (written, new_size) = {
             let ws = self.workspace
                 .files
                 .get_mut(&index)
                 .ok_or_else(|| EngineError::FileWrite(index))?;
-            ws.write_at(offset, data.as_slice())
+            ws.write_at(offset, data)
         };
         let mut inode = self.get_inode(index)
             .context(EngineError::FileWrite(index))?;
@@ -361,7 +338,8 @@ where
             .files
             .get_mut(&index)
             .ok_or_else(|| EngineError::FileClose(index))?;
-        Ok(ws.unload())
+        ws.unload();
+        Ok(())
     }
 }
 

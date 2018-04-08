@@ -43,40 +43,30 @@ pub struct FileAttributes {
 }
 
 impl FileAttributes {
-    pub fn update(
-        &mut self,
-        mode: Option<u32>,
-        uid: Option<u32>,
-        gid: Option<u32>,
-        size: Option<u64>,
-        atime: Option<Timespec>,
-        mtime: Option<Timespec>,
-        crtime: Option<Timespec>,
-        chgtime: Option<Timespec>,
-    ) {
-        if let Some(mode) = mode {
+    pub fn update(&mut self, changes: &FileAttributeChanges) {
+        if let Some(mode) = changes.mode {
             self.kind = mode_to_file_type(mode as mode_t);
             self.perm = mode_to_permissions(mode as mode_t);
         }
-        if let Some(uid) = uid {
+        if let Some(uid) = changes.uid {
             self.uid = uid;
         }
-        if let Some(gid) = gid {
+        if let Some(gid) = changes.gid {
             self.gid = gid;
         }
-        if let Some(size) = size {
+        if let Some(size) = changes.size {
             self.size = size;
         }
-        if let Some(atime) = atime {
+        if let Some(atime) = changes.atime {
             self.atime = atime;
         }
-        if let Some(mtime) = mtime {
+        if let Some(mtime) = changes.mtime {
             self.mtime = mtime;
         }
-        if let Some(crtime) = crtime {
+        if let Some(crtime) = changes.crtime {
             self.crtime = crtime;
         }
-        if let Some(chgtime) = chgtime {
+        if let Some(chgtime) = changes.chgtime {
             self.ctime = chgtime;
         }
     }
@@ -99,6 +89,46 @@ impl Default for FileAttributes {
             gid: 0,
             rdev: 0,
             flags: 0,
+        }
+    }
+}
+
+pub struct FileAttributeChanges {
+    mode: Option<u32>,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    pub size: Option<u64>,
+    atime: Option<Timespec>,
+    mtime: Option<Timespec>,
+    crtime: Option<Timespec>,
+    chgtime: Option<Timespec>,
+    #[allow(dead_code)]
+    flags: Option<u32>,
+}
+
+impl FileAttributeChanges {
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    pub fn new(
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+        flags: Option<u32>,
+    ) -> FileAttributeChanges {
+        FileAttributeChanges {
+            mode,
+            uid,
+            gid,
+            size,
+            atime,
+            mtime,
+            crtime,
+            chgtime,
+            flags,
         }
     }
 }
@@ -155,7 +185,7 @@ impl INode {
 
         Ok(INode {
             attributes: _attributes,
-            chunks: chunks,
+            chunks,
         })
     }
 }

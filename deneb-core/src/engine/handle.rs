@@ -1,8 +1,6 @@
-use time::Timespec;
-
 use std::{ffi::OsStr, path::PathBuf, sync::mpsc::sync_channel};
 
-use inode::{FileAttributes, FileType};
+use inode::{FileAttributeChanges, FileAttributes, FileType};
 use errors::{DenebResult, EngineError};
 
 use super::protocol::{Reply, Request, RequestChannel, RequestId};
@@ -27,28 +25,9 @@ impl Handle {
         &self,
         _id: &RequestId,
         index: u64,
-        mode: Option<u32>,
-        uid: Option<u32>,
-        gid: Option<u32>,
-        size: Option<u64>,
-        atime: Option<Timespec>,
-        mtime: Option<Timespec>,
-        crtime: Option<Timespec>,
-        chgtime: Option<Timespec>,
-        flags: Option<u32>,
+        changes: FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        let reply = self.make_request(Request::SetAttr {
-            index,
-            mode,
-            uid,
-            gid,
-            size,
-            atime,
-            mtime,
-            crtime,
-            chgtime,
-            flags,
-        })?;
+        let reply = self.make_request(Request::SetAttr { index, changes })?;
         if let Reply::SetAttr(result) = reply {
             result
         } else {
@@ -63,7 +42,7 @@ impl Handle {
         name: &OsStr,
     ) -> DenebResult<FileAttributes> {
         let reply = self.make_request(Request::Lookup {
-            parent: parent,
+            parent,
             name: name.to_os_string(),
         })?;
         if let Reply::Lookup(result) = reply {

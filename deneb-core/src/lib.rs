@@ -96,13 +96,14 @@ where
             .file_name()
             .ok_or_else(|| DenebError::InvalidPath(path.clone()))?);
 
-        let mut descriptors = Vec::new();
-        if path.is_file() {
+        let mut descriptors = if path.is_file() {
             let mut abs_path = dir.to_path_buf();
             abs_path.push(fname);
             let mut f = File::open(abs_path)?;
-            descriptors = store.put_file_chunked(&mut f)?;
-        }
+            store.put_file_chunked(&mut f)?
+        } else {
+            Vec::new()
+        };
 
         let index = catalog.get_next_index();
         catalog.add_inode(&path, index, descriptors)?;

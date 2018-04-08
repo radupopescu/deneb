@@ -33,8 +33,8 @@ where
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(inode: &INode, store: Rc<RefCell<S>>) -> FileWorkspace<S> {
-        let lower = Lower::new(inode.chunks.as_slice(), store);
+    pub(crate) fn new(inode: &INode, store: &Rc<RefCell<S>>) -> FileWorkspace<S> {
+        let lower = Lower::new(inode.chunks.as_slice(), &store);
         let piece_table = lower
             .chunks
             .iter()
@@ -76,7 +76,7 @@ where
         }
 
         if new_size == 0 {
-            self.size == 0;
+            self.size = 0;
             self.piece_table.clear();
             self.upper.clear();
             return;
@@ -168,7 +168,7 @@ where
         // Replace the old piece table with the new one
         self.piece_table = new_piece_table;
 
-        return (buf_size as u32, self.size);
+        (buf_size as u32, self.size)
     }
 
     /// Unload the lower layer from memory
@@ -252,7 +252,7 @@ where
     S: Store,
 {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(chunk_descriptors: &[ChunkDescriptor], store: Rc<RefCell<S>>) -> Lower<S> {
+    fn new(chunk_descriptors: &[ChunkDescriptor], store: &Rc<RefCell<S>>) -> Lower<S> {
         let mut chunks = vec![];
         for &ChunkDescriptor { digest, size } in chunk_descriptors {
             chunks.push(RefCell::new(Chunk::new(digest, size, Rc::clone(&store))));
@@ -262,7 +262,7 @@ where
 
     /// Unload the lower layer from memory
     fn unload(&self) {
-        for c in self.chunks.iter() {
+        for c in &self.chunks {
             let mut chk = c.borrow_mut();
             chk.unload();
         }
@@ -397,7 +397,7 @@ mod tests {
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        Ok(FileWorkspace::new(&inode, Rc::clone(&store)))
+        Ok(FileWorkspace::new(&inode, &Rc::clone(&store)))
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod tests {
                 attributes: FileAttributes::default(),
                 chunks: vec![],
             };
-            let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
+            let mut ws = FileWorkspace::new(&inode, &Rc::clone(&store));
 
             assert_eq!(ws.write_at(0, b"written"), (7, 7));
 

@@ -12,7 +12,7 @@ use std::{ffi::OsStr, path::{Path, PathBuf}};
 use deneb_core::{engine::{Handle, RequestId},
                  errors::{print_error_with_causes, CatalogError, DenebResult, EngineError,
                           UnixError},
-                 inode::{FileAttributes, FileType as FT}};
+                 inode::{FileAttributeChanges, FileAttributes, FileType as FT}};
 
 pub struct Session<'a> {
     fuse_session: BackgroundSession<'a>,
@@ -96,19 +96,11 @@ impl Filesystem for Fs {
         flags: Option<u32>,
         reply: ReplyAttr,
     ) {
-        match self.engine_handle.set_attr(
-            &to_request_id(req),
-            ino,
-            mode,
-            uid,
-            gid,
-            size,
-            atime,
-            mtime,
-            crtime,
-            chgtime,
-            flags,
-        ) {
+        let changes =
+            FileAttributeChanges::new(mode, uid, gid, size, atime, mtime, crtime, chgtime, flags);
+        match self.engine_handle
+            .set_attr(&to_request_id(req), ino, changes)
+        {
             Ok(attrs) => {
                 let ttl = Timespec::new(1, 0);
                 reply.attr(&ttl, &to_fuse_file_attr(attrs));

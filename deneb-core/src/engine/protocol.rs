@@ -1,8 +1,6 @@
-use time::Timespec;
-
 use std::{ffi::OsString, path::PathBuf, sync::mpsc::SyncSender};
 
-use inode::{FileAttributes, FileType};
+use inode::{FileAttributeChanges, FileAttributes, FileType};
 use errors::DenebResult;
 
 pub struct RequestId {
@@ -18,16 +16,7 @@ pub(in engine) enum Request {
     },
     SetAttr {
         index: u64,
-        mode: Option<u32>,
-        uid: Option<u32>,
-        gid: Option<u32>,
-        size: Option<u64>,
-        atime: Option<Timespec>,
-        mtime: Option<Timespec>,
-        crtime: Option<Timespec>,
-        chgtime: Option<Timespec>,
-        #[allow(dead_code)]
-        flags: Option<u32>,
+        changes: FileAttributeChanges,
     },
     Lookup {
         parent: u64,

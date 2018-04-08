@@ -52,9 +52,9 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         info!("Created LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-            env: env,
-            inodes: inodes,
-            dir_entries: dir_entries,
+            env,
+            inodes,
+            dir_entries,
             _meta: meta,
             version: CATALOG_VERSION,
             index_generator: IndexGenerator::default(),
@@ -88,9 +88,9 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         info!("Opened LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-            env: env,
-            inodes: inodes,
-            dir_entries: dir_entries,
+            env,
+            inodes,
+            dir_entries,
             _meta: meta,
             version: ver,
             index_generator: IndexGenerator::starting_at(starting_index)?,
