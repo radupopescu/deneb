@@ -45,7 +45,8 @@ mod file_workspace;
 
 #[derive(Debug, Fail)]
 pub enum DenebCoreInitError {
-    #[fail(display = "Could not initialize the rust_sodium library")] RustSodium,
+    #[fail(display = "Could not initialize the rust_sodium library")]
+    RustSodium,
 }
 
 pub fn init() -> Result<(), DenebCoreInitError> {

@@ -71,7 +71,7 @@ where
 
     /// Truncate the workspace to a new size
     pub(crate) fn truncate(&mut self, new_size: u64) {
-        if new_size == self.size{
+        if new_size == self.size {
             return;
         }
 

@@ -14,7 +14,8 @@ pub struct Manifest {
     pub root_hash: Digest,
     // Note: may need to be changed to previous_manifest (store old manifests as CA chunks)
     pub previous_root_hash: Option<Digest>,
-    #[serde(with = "serde_tm")] pub timestamp: Tm,
+    #[serde(with = "serde_tm")]
+    pub timestamp: Tm,
 }
 
 impl Manifest {
