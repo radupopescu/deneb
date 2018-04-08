@@ -23,7 +23,8 @@ use common::*;
 use deneb_core::{populate_with_dir,
                  catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder},
                  engine::{start_engine, start_engine_prebuilt}, errors::DenebResult,
-                 fs::{Fs, Session}, store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder}};
+                 store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder}};
+use deneb_fuse::fs::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
 
