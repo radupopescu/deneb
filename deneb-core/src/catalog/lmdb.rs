@@ -1,8 +1,8 @@
 use failure::ResultExt;
 
 use bincode::{deserialize, serialize};
-use lmdb::{Cursor, Database, DatabaseFlags, Environment, Error as LmdbError, Transaction,
-           WriteFlags, NO_SUB_DIR};
+use lmdb::{Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError,
+           Transaction, WriteFlags};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
 
 use std::collections::BTreeMap;
@@ -206,8 +206,7 @@ impl Catalog for LmdbCatalog {
             }
 
             // Write updated dir entries to database
-            let buffer =
-                serialize(&entries).context(CatalogError::DEntrySerialization(parent))?;
+            let buffer = serialize(&entries).context(CatalogError::DEntrySerialization(parent))?;
             writer
                 .put(
                     self.dir_entries,
@@ -260,7 +259,7 @@ fn init_db<P: AsRef<Path>>(
 
 fn open_environment(path: &Path) -> Result<Environment, LmdbError> {
     Environment::new()
-        .set_flags(NO_SUB_DIR)
+        .set_flags(EnvironmentFlags::NO_SUB_DIR)
         .set_max_dbs(MAX_CATALOG_DBS)
         .set_max_readers(MAX_CATALOG_READERS)
         .set_map_size(MAX_CATALOG_SIZE)
