@@ -1,6 +1,5 @@
 use fuse::{spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyData,
-           ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
-           consts::FOPEN_KEEP_CACHE};
+           ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request};
 use nix::libc::{EACCES, EINVAL, ENOENT};
 #[cfg(target_os = "linux")]
 use nix::mount::{MntFlags, umount2};
@@ -143,7 +142,7 @@ impl Filesystem for Fs {
     fn opendir(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
         match self.engine_handle.open_dir(&to_request_id(req), ino, flags) {
             Ok(()) => {
-                reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
+                reply.opened(ino, 0);
             }
             Err(e) => {
                 print_error_with_causes(&e);
@@ -199,7 +198,7 @@ impl Filesystem for Fs {
             .open_file(&to_request_id(req), ino, flags)
         {
             Ok(_) => {
-                reply.opened(ino, flags & !FOPEN_KEEP_CACHE);
+                reply.opened(ino, 0);
             }
             Err(e) => {
                 if let Some(engine_error) = e.downcast_ref::<EngineError>() {
