@@ -69,10 +69,39 @@ where
         Ok(buffer)
     }
 
+    /// Truncate the workspace to a new size
+    pub(crate) fn truncate(&mut self, new_size: u64) {
+        if new_size == self.size{
+            return;
+        }
+
+        if new_size == 0 {
+            self.size == 0;
+            self.piece_table.clear();
+            self.upper.clear();
+            return;
+        }
+
+        if new_size < self.size {
+            let (piece_idx, offset_in_piece) =
+                piece_idx_for_offset(new_size as usize, &self.piece_table);
+            self.piece_table.truncate(piece_idx + 1);
+            self.piece_table[piece_idx].size = offset_in_piece;
+        } else {
+            let extra_size = (new_size - self.size) as usize;
+            self.piece_table.push(Piece {
+                target: PieceTarget::Zero,
+                offset: 0,
+                size: extra_size,
+            });
+        }
+        self.size = new_size;
+    }
+
     /// Write the contents of buffer into the workspace, starting at `offset`
     ///
     /// Write the buffer into the workspace at `offset`, returning a tuple with the number of bytes
-    ///written and the new file size
+    /// written and the new file size
     pub(crate) fn write_at(&mut self, offset: usize, buffer: &[u8]) -> (u32, u64) {
         // Append buffer to the upper layer
         let buf_size = buffer.len();

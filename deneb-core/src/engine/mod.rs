@@ -256,6 +256,7 @@ where
         crtime: Option<Timespec>,
         chgtime: Option<Timespec>,
     ) -> DenebResult<FileAttributes> {
+        //debug!("set_attr - index: {}, mode: {:?}, uid: {:?}, gid: {:?}, size: {:?}, atime: {:?}, mtime; {:?}, crtime: {:?}, chgtime: {:?}", index, mode, uid, gid, size, atime, mtime, crtime, chgtime);
         let mut inode = self.get_inode(index).context(EngineError::SetAttr(index))?;
         inode
             .attributes
@@ -263,6 +264,13 @@ where
         let attrs = inode.attributes;
         self.update_inode(index, &inode)
             .context(EngineError::SetAttr(index))?;
+
+        if let Some(new_size) = size {
+            if let Some(ref mut ws) = self.workspace.files.get_mut(&index) {
+                debug!("set_attr - index: {}, truncate to {}", index, new_size);
+                ws.truncate(new_size);
+            }
+        }
         Ok(attrs)
     }
 
