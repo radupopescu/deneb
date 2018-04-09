@@ -1,13 +1,11 @@
 use nix::libc::mode_t;
-use nix::sys::stat::{lstat, SFlag};
+use nix::sys::stat::{FileStat, SFlag};
 use time::Timespec;
 
 use std::cmp::{max, min};
 use std::i32;
 use std::u16;
-use std::path::Path;
 
-use errors::UnixError;
 use cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -146,8 +144,7 @@ pub struct INode {
 }
 
 impl INode {
-    pub fn new(index: u64, path: &Path, chunks: Vec<ChunkDescriptor>) -> Result<INode, UnixError> {
-        let stats = lstat(path)?;
+    pub fn new(index: u64, stats: FileStat, chunks: Vec<ChunkDescriptor>) -> INode {
         // Note: we prefix `attributes` with an underscore to avoid triggering an
         //       "unused_mut" warning on Linux.
         let mut _attributes = FileAttributes {
@@ -183,10 +180,10 @@ impl INode {
             };
         }
 
-        Ok(INode {
+        INode {
             attributes: _attributes,
             chunks,
-        })
+        }
     }
 }
 
@@ -225,6 +222,8 @@ struct TimespecDef {
 
 #[cfg(test)]
 mod tests {
+    use nix::sys::stat::lstat;
+
     use super::*;
 
     #[test]

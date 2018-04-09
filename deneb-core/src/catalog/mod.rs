@@ -1,3 +1,5 @@
+use nix::sys::stat::FileStat;
+
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
@@ -39,7 +41,7 @@ pub trait Catalog {
 
     fn add_inode(
         &mut self,
-        entry: &Path,
+        stats: FileStat,
         index: u64,
         chunks: Vec<ChunkDescriptor>,
     ) -> DenebResult<()>;

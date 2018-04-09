@@ -1,3 +1,5 @@
+use nix::sys::stat::FileStat;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -77,11 +79,11 @@ impl Catalog for MemCatalog {
 
     fn add_inode(
         &mut self,
-        entry: &Path,
+        stats: FileStat,
         index: u64,
         chunks: Vec<ChunkDescriptor>,
     ) -> DenebResult<()> {
-        let inode = INode::new(index, entry, chunks)?;
+        let inode = INode::new(index, stats, chunks);
         self.inodes.insert(index, inode);
         Ok(())
     }

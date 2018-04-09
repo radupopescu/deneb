@@ -24,6 +24,8 @@ extern crate tempdir;
 
 use failure::ResultExt;
 
+use nix::sys::stat::lstat;
+
 use std::fs::{read_dir, File};
 use std::path::Path;
 
@@ -67,7 +69,8 @@ where
     C: Catalog,
     S: Store,
 {
-    catalog.add_inode(dir, 1, vec![])?;
+    let stats = lstat(dir)?;
+    catalog.add_inode(stats, 1, vec![])?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
     visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)?;
@@ -106,7 +109,8 @@ where
         };
 
         let index = catalog.get_next_index();
-        catalog.add_inode(&path, index, descriptors)?;
+        let stats = lstat(&path)?;
+        catalog.add_inode(stats, index, descriptors)?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {

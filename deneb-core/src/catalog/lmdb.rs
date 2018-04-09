@@ -1,9 +1,9 @@
 use failure::ResultExt;
-
 use bincode::{deserialize, serialize};
 use lmdb::{Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError,
            Transaction, WriteFlags};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
+use nix::sys::stat::FileStat;
 
 use std::collections::BTreeMap;
 use std::cmp::max;
@@ -166,11 +166,11 @@ impl Catalog for LmdbCatalog {
 
     fn add_inode(
         &mut self,
-        entry: &Path,
+        stats: FileStat,
         index: u64,
         chunks: Vec<ChunkDescriptor>,
     ) -> DenebResult<()> {
-        let inode = INode::new(index, entry, chunks)?;
+        let inode = INode::new(index, stats, chunks);
 
         let buffer = serialize(&inode).context(CatalogError::INodeSerialization(index))?;
 
@@ -290,6 +290,7 @@ fn get_env_stat(env: &Environment) -> MDB_stat {
 
 #[cfg(test)]
 mod tests {
+    use nix::sys::stat::lstat;
     use tempdir::TempDir;
 
     use super::*;
@@ -306,8 +307,15 @@ mod tests {
                 assert!(catalog.is_ok());
                 if let Ok(mut catalog) = catalog {
                     catalog.show_stats();
-                    assert!(catalog.add_inode(Path::new("/tmp/"), 2, vec![]).is_ok());
-                    assert!(catalog.add_inode(Path::new("/usr/"), 3, vec![]).is_ok());
+
+                    let file_stats1 = lstat(Path::new("/tmp/"));
+                    assert!(file_stats1.is_ok());
+                    let file_stats2 = lstat(Path::new("/usr/"));
+                    assert!(file_stats2.is_ok());
+                    if let (Ok(file_stats1), Ok(file_stats2)) = (file_stats1, file_stats2) {
+                        assert!(catalog.add_inode(file_stats1, 2, vec![]).is_ok());
+                        assert!(catalog.add_inode(file_stats2, 3, vec![]).is_ok());
+                    }
                 }
             }
             {
