@@ -152,6 +152,27 @@ impl Handle {
         }
     }
 
+    pub fn create_file(
+        &self,
+        _id: &RequestId,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+        flags: u32,
+    ) -> DenebResult<(u64, FileAttributes)> {
+        let reply = self.make_request(Request::CreateFile {
+            parent,
+            name: name.to_owned(),
+            mode,
+            flags,
+        })?;
+        if let Reply::CreateFile(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     // Private functions
     pub(in engine) fn new(channel: RequestChannel) -> Handle {
         Handle { channel }

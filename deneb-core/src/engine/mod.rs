@@ -196,6 +196,19 @@ where
             Request::ReleaseFile { index, .. } => {
                 let _ = chan.send(Reply::ReleaseFile(self.release_file(index)));
             }
+            Request::CreateFile {
+                parent,
+                name,
+                mode,
+                flags,
+            } => {
+                let _ = chan.send(Reply::CreateFile(self.create_file(
+                    parent,
+                    name,
+                    mode,
+                    flags,
+                )));
+            }
         }
     }
 
@@ -340,6 +353,19 @@ where
             .ok_or_else(|| EngineError::FileClose(index))?;
         ws.unload();
         Ok(())
+    }
+
+    fn create_file(
+        &mut self,
+        parent: u64,
+        name: OsString,
+        mode: u32,
+        flags: u32,
+    ) -> DenebResult<(u64, FileAttributes)> {
+        debug!("create_file - parent: {}, name: {:?}, mode: {}, flags: {}",
+               parent, name, mode, flags);
+
+        Ok((0, FileAttributes::default()))
     }
 }
 

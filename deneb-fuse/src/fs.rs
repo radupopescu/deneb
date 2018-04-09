@@ -1,5 +1,5 @@
-use fuse::{spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyData,
-           ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request};
+use fuse::{spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate,
+           ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request};
 use nix::libc::{EACCES, EINVAL, ENOENT};
 #[cfg(target_os = "linux")]
 use nix::mount::{MntFlags, umount2};
@@ -276,6 +276,29 @@ impl Filesystem for Fs {
         }
     }
 
+    fn create(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+        flags: u32,
+        reply: ReplyCreate,
+    ) {
+        match self.engine_handle
+            .create_file(&to_request_id(req), parent, name, mode, flags)
+        {
+            Ok((ino, attr)) => {
+                let ttl = Timespec::new(1, 0);
+                reply.created(&ttl, &to_fuse_file_attr(attr), 0, ino, 0);
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
+    }
+
     /*
     fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {}
 
@@ -313,14 +336,6 @@ impl Filesystem for Fs {
               _newparent: u64,
               _newname: &OsStr,
               reply: ReplyEmpty) {
-    }
-    fn create(&mut self,
-              _req: &Request,
-              _parent: u64,
-              _name: &OsStr,
-              _mode: u32,
-              _flags: u32,
-              reply: ReplyCreate) {
     }
     */
 

@@ -61,6 +61,12 @@ pub(in engine) enum Request {
         #[allow(dead_code)]
         flush: bool,
     },
+    CreateFile {
+        parent: u64,
+        name: OsString,
+        mode: u32,
+        flags: u32,
+    },
 }
 
 pub(in engine) enum Reply {
@@ -74,6 +80,7 @@ pub(in engine) enum Reply {
     ReadData(DenebResult<Vec<u8>>),
     WriteData(DenebResult<u32>),
     ReleaseFile(DenebResult<()>),
+    CreateFile(DenebResult<(u64, FileAttributes)>),
 }
 
 pub(in engine) type ReplyChannel = SyncSender<Reply>;
