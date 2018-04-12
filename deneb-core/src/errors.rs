@@ -105,6 +105,8 @@ pub enum EngineError {
     FileRead(u64),
     #[fail(display = "Could not write to file: {}", _0)]
     FileWrite(u64),
+    #[fail(display = "Could not create file {:?} at {}", _1, _0)]
+    FileCreate(u64, OsString),
     #[fail(display = "Access error for: {}", _0)]
     Access(u64),
 }

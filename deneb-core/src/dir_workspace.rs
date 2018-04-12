@@ -19,6 +19,11 @@ impl DirWorkspace {
             .map(|e| (e.name.clone(), e.index, e.entry_type))
             .collect::<Vec<_>>()
     }
+
+    pub(crate) fn add_entry(&mut self, index: u64, name: PathBuf, entry_type: FileType) {
+        self.entries.push(DirEntry { index, name, entry_type });
+        self.entries.sort_by_key(|de| de.index);
+    }
 }
 
 #[derive(Clone)]

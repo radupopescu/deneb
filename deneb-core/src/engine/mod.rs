@@ -1,4 +1,5 @@
 use failure::ResultExt;
+use nix::libc::mode_t;
 use time::now_utc;
 
 use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_all, File},
@@ -7,7 +8,7 @@ use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_al
 use catalog::{Catalog, CatalogBuilder};
 use dir_workspace::{DirEntry, DirWorkspace};
 use file_workspace::FileWorkspace;
-use inode::{FileAttributeChanges, FileAttributes, FileType, INode};
+use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
@@ -360,12 +361,35 @@ where
         parent: u64,
         name: OsString,
         mode: u32,
-        flags: u32,
+        _flags: u32,
     ) -> DenebResult<(u64, FileAttributes)> {
-        debug!("create_file - parent: {}, name: {:?}, mode: {}, flags: {}",
-               parent, name, mode, flags);
+        let index = self.catalog.get_next_index();
 
-        Ok((0, FileAttributes::default()))
+        // Create new inode
+        let mut attributes = FileAttributes::default();
+        attributes.index = index;
+        let ts = now_utc().to_timespec();
+        attributes.atime = ts;
+        attributes.mtime = ts;
+        attributes.ctime = ts;
+        attributes.crtime = ts;
+        attributes.perm = mode_to_permissions(mode as mode_t);
+        let inode = INode::new(attributes, vec![]);
+        self.workspace.inodes.insert(index, inode.clone());
+
+        // Create new file workspace
+        let ws = FileWorkspace::new(&inode, &Rc::clone(&self.store));
+        self.workspace.files.insert(index, ws);
+
+        // Update the parent directory workspace
+        self.open_dir(parent)
+            .context(EngineError::FileCreate(parent, name.clone()))?;
+
+        if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
+            ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
+        }
+
+        Ok((index, attributes))
     }
 }
 
