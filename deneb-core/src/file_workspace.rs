@@ -50,7 +50,7 @@ where
             .collect::<Vec<_>>();
         trace!(
             "New workspace for inode {} - size: {}, num_chunks: {}",
-            inode.attributes.ino,
+            inode.attributes.index,
             inode.attributes.size,
             lower.chunks.len()
         );

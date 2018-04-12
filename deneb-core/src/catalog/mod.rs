@@ -1,10 +1,8 @@
-use nix::sys::stat::FileStat;
-
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
 use errors::{DenebError, DenebResult};
-use inode::{ChunkDescriptor, INode};
+use inode::INode;
 
 mod mem;
 pub use self::mem::{MemCatalog, MemCatalogBuilder};
@@ -41,9 +39,7 @@ pub trait Catalog {
 
     fn add_inode(
         &mut self,
-        stats: FileStat,
-        index: u64,
-        chunks: Vec<ChunkDescriptor>,
+        inode: INode
     ) -> DenebResult<()>;
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()>;

@@ -20,7 +20,7 @@ pub enum FileType {
 
 #[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct FileAttributes {
-    pub ino: u64,
+    pub index: u64,
     pub size: u64,
     pub blocks: u64,
     #[serde(with = "TimespecDef")]
@@ -41,6 +41,12 @@ pub struct FileAttributes {
 }
 
 impl FileAttributes {
+    pub fn with_stats(stats: FileStat, index: u64) -> FileAttributes {
+        let mut attrs = FileAttributes::from(stats);
+        attrs.index = index;
+        attrs
+    }
+
     pub fn update(&mut self, changes: &FileAttributeChanges) {
         if let Some(mode) = changes.mode {
             self.kind = mode_to_file_type(mode as mode_t);
@@ -73,7 +79,7 @@ impl FileAttributes {
 impl Default for FileAttributes {
     fn default() -> FileAttributes {
         FileAttributes {
-            ino: 0,
+            index: 0,
             size: 0,
             blocks: 0,
             atime: Timespec::new(0, 0),
@@ -88,6 +94,46 @@ impl Default for FileAttributes {
             rdev: 0,
             flags: 0,
         }
+    }
+}
+
+impl From<FileStat> for FileAttributes {
+    fn from(stats: FileStat) -> FileAttributes {
+        // Note: we prefix `attributes` with an underscore to avoid triggering an
+        //       "unused_mut" warning on Linux.
+        let mut _attributes = FileAttributes {
+            index: stats.st_ino,
+            size: max::<i64>(stats.st_size, 0) as u64,
+            blocks: max::<i64>(stats.st_blocks, 0) as u64,
+            atime: Timespec {
+                sec: stats.st_atime,
+                nsec: min::<i64>(stats.st_atime_nsec, i64::from(i32::MAX)) as i32,
+            },
+            mtime: Timespec {
+                sec: stats.st_mtime,
+                nsec: min::<i64>(stats.st_mtime_nsec, i64::from(i32::MAX)) as i32,
+            },
+            ctime: Timespec {
+                sec: stats.st_ctime,
+                nsec: min::<i64>(stats.st_ctime_nsec, i64::from(i32::MAX)) as i32,
+            },
+            crtime: Timespec { sec: 0, nsec: 0 },
+            kind: mode_to_file_type(stats.st_mode),
+            perm: mode_to_permissions(stats.st_mode),
+            nlink: 0,
+            uid: stats.st_uid,
+            gid: stats.st_gid,
+            rdev: 0,
+            flags: 0,
+        };
+        #[cfg(target_os = "macos")]
+        {
+            _attributes.crtime = Timespec {
+                sec: stats.st_birthtime,
+                nsec: min::<i64>(stats.st_birthtime_nsec, i64::from(i32::MAX)) as i32,
+            };
+        }
+        _attributes
     }
 }
 
@@ -144,50 +190,12 @@ pub struct INode {
 }
 
 impl INode {
-    pub fn new(index: u64, stats: FileStat, chunks: Vec<ChunkDescriptor>) -> INode {
-        // Note: we prefix `attributes` with an underscore to avoid triggering an
-        //       "unused_mut" warning on Linux.
-        let mut _attributes = FileAttributes {
-            ino: index,
-            size: max::<i64>(stats.st_size, 0) as u64,
-            blocks: max::<i64>(stats.st_blocks, 0) as u64,
-            atime: Timespec {
-                sec: stats.st_atime,
-                nsec: min::<i64>(stats.st_atime_nsec, i64::from(i32::MAX)) as i32,
-            },
-            mtime: Timespec {
-                sec: stats.st_mtime,
-                nsec: min::<i64>(stats.st_mtime_nsec, i64::from(i32::MAX)) as i32,
-            },
-            ctime: Timespec {
-                sec: stats.st_ctime,
-                nsec: min::<i64>(stats.st_ctime_nsec, i64::from(i32::MAX)) as i32,
-            },
-            crtime: Timespec { sec: 0, nsec: 0 },
-            kind: mode_to_file_type(stats.st_mode),
-            perm: mode_to_permissions(stats.st_mode),
-            nlink: 0,
-            uid: stats.st_uid,
-            gid: stats.st_gid,
-            rdev: 0,
-            flags: 0,
-        };
-        #[cfg(target_os = "macos")]
-        {
-            _attributes.crtime = Timespec {
-                sec: stats.st_birthtime,
-                nsec: min::<i64>(stats.st_birthtime_nsec, i64::from(i32::MAX)) as i32,
-            };
-        }
-
-        INode {
-            attributes: _attributes,
-            chunks,
-        }
+    pub fn new(attributes: FileAttributes, chunks: Vec<ChunkDescriptor>) -> INode {
+        INode { attributes, chunks }
     }
 }
 
-fn mode_to_file_type(mode: mode_t) -> FileType {
+pub(crate) fn mode_to_file_type(mode: mode_t) -> FileType {
     let ft = mode & SFlag::S_IFMT.bits();
     if ft == SFlag::S_IFDIR.bits() {
         FileType::Directory
@@ -207,7 +215,7 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
     }
 }
 
-fn mode_to_permissions(mode: mode_t) -> u16 {
+pub(crate) fn mode_to_permissions(mode: mode_t) -> u16 {
     #[cfg(target_os = "linux")]
     debug_assert!(mode <= u16::MAX as u32);
     (mode & !SFlag::S_IFMT.bits()) as u16

@@ -3,7 +3,6 @@ use bincode::{deserialize, serialize};
 use lmdb::{Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError,
            Transaction, WriteFlags};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
-use nix::sys::stat::FileStat;
 
 use std::collections::BTreeMap;
 use std::cmp::max;
@@ -164,15 +163,10 @@ impl Catalog for LmdbCatalog {
             .collect::<Vec<(PathBuf, u64)>>())
     }
 
-    fn add_inode(
-        &mut self,
-        stats: FileStat,
-        index: u64,
-        chunks: Vec<ChunkDescriptor>,
-    ) -> DenebResult<()> {
-        let inode = INode::new(index, stats, chunks);
-
-        let buffer = serialize(&inode).context(CatalogError::INodeSerialization(index))?;
+    fn add_inode(&mut self, inode: INode) -> DenebResult<()> {
+        let index = inode.attributes.index;
+        let buffer =
+            serialize(&inode).context(CatalogError::INodeSerialization(index))?;
 
         let mut writer = self.env.begin_rw_txn()?;
 
@@ -295,6 +289,8 @@ mod tests {
 
     use super::*;
 
+    use inode::FileAttributes;
+
     #[test]
     fn lmdb_catalog_create_then_reopen() {
         let tmp = TempDir::new("/tmp/deneb_lmdb_test");
@@ -308,13 +304,17 @@ mod tests {
                 if let Ok(mut catalog) = catalog {
                     catalog.show_stats();
 
-                    let file_stats1 = lstat(Path::new("/tmp/"));
-                    assert!(file_stats1.is_ok());
-                    let file_stats2 = lstat(Path::new("/usr/"));
-                    assert!(file_stats2.is_ok());
-                    if let (Ok(file_stats1), Ok(file_stats2)) = (file_stats1, file_stats2) {
-                        assert!(catalog.add_inode(file_stats1, 2, vec![]).is_ok());
-                        assert!(catalog.add_inode(file_stats2, 3, vec![]).is_ok());
+                    let stats1 = lstat(Path::new("/tmp/"));
+                    let stats2 = lstat(Path::new("/usr/"));
+                    assert!(stats1.is_ok());
+                    assert!(stats2.is_ok());
+                    if let (Ok(stats1), Ok(stats2)) = (stats1, stats2) {
+                        let attrs1 = FileAttributes::with_stats(stats1, 2);
+                        let attrs2 = FileAttributes::with_stats(stats2, 3);
+                        let inode1 = INode::new(attrs1, vec![]);
+                        let inode2 = INode::new(attrs2, vec![]);
+                        assert!(catalog.add_inode(inode1).is_ok());
+                        assert!(catalog.add_inode(inode2).is_ok());
                     }
                 }
             }

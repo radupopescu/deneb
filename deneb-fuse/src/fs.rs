@@ -427,7 +427,7 @@ fn to_fuse_file_type(ftype: FT) -> FileType {
 
 fn to_fuse_file_attr(fattr: FileAttributes) -> FileAttr {
     FileAttr {
-        ino: fattr.ino,
+        ino: fattr.index,
         size: fattr.size,
         blocks: fattr.blocks,
         atime: fattr.atime,

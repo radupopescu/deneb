@@ -31,6 +31,7 @@ use std::path::Path;
 
 use self::catalog::Catalog;
 use self::errors::{DenebError, DenebResult};
+use self::inode::{FileAttributes, INode};
 use self::store::Store;
 
 pub mod cas;
@@ -69,8 +70,8 @@ where
     C: Catalog,
     S: Store,
 {
-    let stats = lstat(dir)?;
-    catalog.add_inode(stats, 1, vec![])?;
+    let attrs = FileAttributes::with_stats(lstat(dir)?, 1);
+    catalog.add_inode(INode::new(attrs, vec![]))?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
     visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)?;
@@ -109,8 +110,8 @@ where
         };
 
         let index = catalog.get_next_index();
-        let stats = lstat(&path)?;
-        catalog.add_inode(stats, index, descriptors)?;
+        let attrs = FileAttributes::with_stats(lstat(&path)?, index);
+        catalog.add_inode(INode::new(attrs, descriptors))?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {
