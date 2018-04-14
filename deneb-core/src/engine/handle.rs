@@ -173,6 +173,25 @@ impl Handle {
         }
     }
 
+    pub fn create_dir(
+        &self,
+        _id: &RequestId,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+    ) -> DenebResult<FileAttributes> {
+        let reply = self.make_request(Request::CreateDir {
+            parent,
+            name: name.to_owned(),
+            mode,
+        })?;
+        if let Reply::CreateDir(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     // Private functions
     pub(in engine) fn new(channel: RequestChannel) -> Handle {
         Handle { channel }

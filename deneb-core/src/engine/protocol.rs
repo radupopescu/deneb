@@ -67,6 +67,11 @@ pub(in engine) enum Request {
         mode: u32,
         flags: u32,
     },
+    CreateDir {
+        parent: u64,
+        name: OsString,
+        mode: u32,
+    },
 }
 
 pub(in engine) enum Reply {
@@ -81,6 +86,7 @@ pub(in engine) enum Reply {
     WriteData(DenebResult<u32>),
     ReleaseFile(DenebResult<()>),
     CreateFile(DenebResult<(u64, FileAttributes)>),
+    CreateDir(DenebResult<FileAttributes>),
 }
 
 pub(in engine) type ReplyChannel = SyncSender<Reply>;

@@ -299,6 +299,21 @@ impl Filesystem for Fs {
         }
     }
 
+    fn mkdir(&mut self, req: &Request, parent: u64, name: &OsStr, mode: u32, reply: ReplyEntry) {
+        match self.engine_handle
+            .create_dir(&to_request_id(req), parent, name, mode)
+        {
+            Ok(attr) => {
+                let ttl = Timespec::new(1, 0);
+                reply.entry(&ttl, &to_fuse_file_attr(attr), 0);
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
+    }
+
     /*
     fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {}
 
@@ -310,13 +325,6 @@ impl Filesystem for Fs {
              _name: &OsStr,
              _mode: u32,
              _rdev: u32,
-             reply: ReplyEntry) {
-    }
-    fn mkdir(&mut self,
-             _req: &Request,
-             _parent: u64,
-             _name: &OsStr,
-             _mode: u32,
              reply: ReplyEntry) {
     }
 
@@ -411,7 +419,7 @@ impl Filesystem for Fs {
     }
 
     fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {}
-     */
+    */
 }
 
 fn to_fuse_file_type(ftype: FT) -> FileType {

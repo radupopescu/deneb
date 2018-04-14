@@ -13,7 +13,7 @@ use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
 use errors::{DenebResult, EngineError};
-use util::atomic_write;
+use util::{atomic_write, get_egid, get_euid};
 
 mod protocol;
 mod handle;
@@ -210,6 +210,9 @@ where
                     flags,
                 )));
             }
+            Request::CreateDir { parent, name, mode } => {
+                let _ = chan.send(Reply::CreateDir(self.create_dir(parent, name, mode)));
+            }
         }
     }
 
@@ -374,6 +377,8 @@ where
         attributes.ctime = ts;
         attributes.crtime = ts;
         attributes.perm = mode_to_permissions(mode as mode_t);
+        attributes.uid = get_euid();
+        attributes.gid = get_egid();
         let inode = INode::new(attributes, vec![]);
         self.workspace.inodes.insert(index, inode.clone());
 
@@ -390,6 +395,44 @@ where
         }
 
         Ok((index, attributes))
+    }
+
+    fn create_dir(
+        &mut self,
+        parent: u64,
+        name: OsString,
+        mode: u32,
+    ) -> DenebResult<FileAttributes> {
+        let index = self.catalog.get_next_index();
+
+        // Create new inode
+        let mut attributes = FileAttributes::default();
+        attributes.index = index;
+        let ts = now_utc().to_timespec();
+        attributes.atime = ts;
+        attributes.mtime = ts;
+        attributes.ctime = ts;
+        attributes.crtime = ts;
+        attributes.kind = FileType::Directory;
+        attributes.perm = mode_to_permissions(mode as mode_t);
+        attributes.uid = get_euid();
+        attributes.gid = get_egid();
+        let inode = INode::new(attributes, vec![]);
+        self.workspace.inodes.insert(index, inode.clone());
+
+        // Create new dir workspace
+        let ws = DirWorkspace::new(&[]);
+        self.workspace.dirs.insert(index, ws);
+
+        // Update the parent directory workspace
+        self.open_dir(parent)
+            .context(EngineError::DirCreate(parent, name.clone()))?;
+
+        if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
+            ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
+        }
+
+        Ok(attributes)
     }
 }
 

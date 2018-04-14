@@ -107,6 +107,8 @@ pub enum EngineError {
     FileWrite(u64),
     #[fail(display = "Could not create file {:?} at {}", _1, _0)]
     FileCreate(u64, OsString),
+    #[fail(display = "Could not create dir {:?} at {}", _1, _0)]
+    DirCreate(u64, OsString),
     #[fail(display = "Access error for: {}", _0)]
     Access(u64),
 }
