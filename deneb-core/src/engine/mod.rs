@@ -5,7 +5,7 @@ use time::now_utc;
 use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_all, File},
           path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn};
 
-use catalog::{Catalog, CatalogBuilder};
+use catalog::{Catalog, CatalogBuilder, IndexGenerator};
 use dir_workspace::{DirEntry, DirWorkspace};
 use file_workspace::FileWorkspace;
 use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
@@ -29,12 +29,14 @@ where
     S: Store + Send + 'static,
 {
     let (tx, rx) = sync_channel(queue_size);
+    let index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
     let engine_handle = Handle::new(tx);
     let _ = tspawn(move || {
         let mut engine = Engine {
             catalog,
             store: Rc::new(RefCell::new(store)),
             workspace: Workspace::new(),
+            index_generator,
         };
         info!("Starting engine event loop");
         for (event, tx) in rx.iter() {
@@ -150,6 +152,7 @@ struct Engine<C, S> {
     catalog: C,
     store: Rc<RefCell<S>>,
     workspace: Workspace<S>,
+    index_generator: IndexGenerator,
 }
 
 impl<C, S> Engine<C, S>
@@ -366,7 +369,7 @@ where
         mode: u32,
         _flags: u32,
     ) -> DenebResult<(u64, FileAttributes)> {
-        let index = self.catalog.get_next_index();
+        let index = self.index_generator.get_next();
 
         // Create new inode
         let mut attributes = FileAttributes::default();
@@ -403,7 +406,7 @@ where
         name: OsString,
         mode: u32,
     ) -> DenebResult<FileAttributes> {
-        let index = self.catalog.get_next_index();
+        let index = self.index_generator.get_next();
 
         // Create new inode
         let mut attributes = FileAttributes::default();

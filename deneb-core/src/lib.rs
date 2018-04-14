@@ -29,7 +29,7 @@ use nix::sys::stat::lstat;
 use std::fs::{read_dir, File};
 use std::path::Path;
 
-use self::catalog::Catalog;
+use self::catalog::{Catalog, IndexGenerator};
 use self::errors::{DenebError, DenebResult};
 use self::inode::{FileAttributes, INode};
 use self::store::Store;
@@ -74,7 +74,16 @@ where
     catalog.add_inode(INode::new(attrs, vec![]))?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
-    visit_dirs(catalog, store, buffer.as_mut_slice(), dir, 1, 1)?;
+    let mut index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
+    visit_dirs(
+        catalog,
+        store,
+        &mut index_generator,
+        buffer.as_mut_slice(),
+        dir,
+        1,
+        1,
+    )?;
 
     Ok(())
 }
@@ -82,6 +91,7 @@ where
 fn visit_dirs<C, S>(
     catalog: &mut C,
     store: &mut S,
+    index_generator: &mut IndexGenerator,
     buffer: &mut [u8],
     dir: &Path,
     dir_index: u64,
@@ -109,14 +119,21 @@ where
             Vec::new()
         };
 
-        let index = catalog.get_next_index();
+        let index = index_generator.get_next();
         let attrs = FileAttributes::with_stats(lstat(&path)?, index);
         catalog.add_inode(INode::new(attrs, descriptors))?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {
-            visit_dirs(catalog, store, buffer, &path, index, dir_index)
-                .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
+            visit_dirs(
+                catalog,
+                store,
+                index_generator,
+                buffer,
+                &path,
+                index,
+                dir_index,
+            ).context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
         }
     }
     Ok(())

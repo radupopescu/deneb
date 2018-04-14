@@ -73,6 +73,8 @@ pub enum CatalogError {
     DEntryNotFound(OsString, u64),
     #[fail(display = "Invalid catalog version: {}", _0)]
     Version(u32),
+    #[fail(display = "Could not update max index")]
+    MaxIndexUpdate,
 }
 
 // Engine errors

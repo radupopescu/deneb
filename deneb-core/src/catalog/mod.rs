@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::path::{Path, PathBuf};
 
 use errors::{DenebError, DenebResult};
@@ -24,7 +23,7 @@ pub trait CatalogBuilder {
 pub trait Catalog {
     fn show_stats(&self) {}
 
-    fn get_next_index(&self) -> u64;
+    fn get_max_index(&self) -> u64;
 
     fn get_inode(&self, index: u64) -> DenebResult<INode>;
 
@@ -45,32 +44,32 @@ pub trait Catalog {
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()>;
 }
 
-struct IndexGenerator {
-    current_index: Cell<u64>,
+#[derive(Copy, Clone)]
+pub struct IndexGenerator {
+    current_index: u64,
 }
 
 impl Default for IndexGenerator {
     fn default() -> IndexGenerator {
         IndexGenerator {
-            current_index: Cell::new(1),
+            current_index: 1,
         }
     }
 }
 
 impl IndexGenerator {
-    fn starting_at(i0: u64) -> Result<IndexGenerator, DenebError> {
+    pub fn starting_at(i0: u64) -> Result<IndexGenerator, DenebError> {
         if i0 > 0 {
             Ok(IndexGenerator {
-                current_index: Cell::new(i0),
+                current_index: i0,
             })
         } else {
             Err(DenebError::IndexGenerator)
         }
     }
 
-    fn get_next(&self) -> u64 {
-        let idx = self.current_index.get() + 1;
-        self.current_index.replace(idx);
-        idx
+    pub fn get_next(&mut self) -> u64 {
+        self.current_index += 1;
+        self.current_index
     }
 }

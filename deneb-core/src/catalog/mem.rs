@@ -24,7 +24,7 @@ impl CatalogBuilder for MemCatalogBuilder {
 pub struct MemCatalog {
     inodes: HashMap<u64, INode>,
     dir_entries: HashMap<u64, HashMap<PathBuf, u64>>,
-    index_generator: IndexGenerator,
+    max_index: u64,
 }
 
 impl MemCatalog {
@@ -44,8 +44,8 @@ impl MemCatalog {
 }
 
 impl Catalog for MemCatalog {
-    fn get_next_index(&self) -> u64 {
-        self.index_generator.get_next()
+    fn get_max_index(&self) -> u64 {
+        self.max_index
     }
 
     fn get_inode(&self, index: u64) -> DenebResult<INode> {
@@ -79,7 +79,11 @@ impl Catalog for MemCatalog {
         &mut self,
         inode: INode,
     ) -> DenebResult<()> {
-        self.inodes.insert(inode.attributes.index, inode);
+        let index = inode.attributes.index;
+        self.inodes.insert(index, inode);
+        if index > self.max_index {
+            self.max_index = index;
+        }
         Ok(())
     }
 
