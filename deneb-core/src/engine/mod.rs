@@ -380,6 +380,7 @@ where
         attributes.ctime = ts;
         attributes.crtime = ts;
         attributes.perm = mode_to_permissions(mode as mode_t);
+        attributes.nlink = 1;
         attributes.uid = get_euid();
         attributes.gid = get_egid();
         let inode = INode::new(attributes, vec![]);
@@ -418,6 +419,7 @@ where
         attributes.crtime = ts;
         attributes.kind = FileType::Directory;
         attributes.perm = mode_to_permissions(mode as mode_t);
+        attributes.nlink = 1;
         attributes.uid = get_euid();
         attributes.gid = get_egid();
         let inode = INode::new(attributes, vec![]);
