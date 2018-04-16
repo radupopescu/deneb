@@ -10,8 +10,7 @@ use time::Timespec;
 use std::{ffi::OsStr, path::{Path, PathBuf}};
 
 use deneb_core::{engine::{Handle, RequestId},
-                 errors::{print_error_with_causes, CatalogError, DenebResult, EngineError,
-                          UnixError},
+                 errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
                  inode::{FileAttributeChanges, FileAttributes, FileType as FT}};
 
 pub struct Session<'a> {
@@ -114,17 +113,15 @@ impl Filesystem for Fs {
 
     fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         match self.engine_handle.lookup(&to_request_id(req), parent, name) {
-            Ok(attrs) => {
+            Ok(Some(attrs)) => {
                 let ttl = Timespec::new(1, 0);
                 reply.entry(&ttl, &to_fuse_file_attr(attrs), 0);
             }
+            Ok(None) => {
+                reply.error(ENOENT);
+                return;
+            }
             Err(e) => {
-                if let Some(catalog_error) = e.root_cause().downcast_ref::<CatalogError>() {
-                    if let CatalogError::DEntryNotFound(..) = *catalog_error {
-                        reply.error(ENOENT);
-                        return;
-                    }
-                }
                 print_error_with_causes(&e);
                 reply.error(EINVAL);
             }

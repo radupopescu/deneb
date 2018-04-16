@@ -77,7 +77,7 @@ pub(in engine) enum Request {
 pub(in engine) enum Reply {
     GetAttr(DenebResult<FileAttributes>),
     SetAttr(DenebResult<FileAttributes>),
-    Lookup(DenebResult<FileAttributes>),
+    Lookup(DenebResult<Option<FileAttributes>>),
     OpenDir(DenebResult<()>),
     ReleaseDir(DenebResult<()>),
     ReadDir(DenebResult<Vec<(PathBuf, u64, FileType)>>),

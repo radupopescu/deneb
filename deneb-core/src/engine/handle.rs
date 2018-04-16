@@ -40,7 +40,7 @@ impl Handle {
         _id: &RequestId,
         parent: u64,
         name: &OsStr,
-    ) -> DenebResult<FileAttributes> {
+    ) -> DenebResult<Option<FileAttributes>> {
         let reply = self.make_request(Request::Lookup {
             parent,
             name: name.to_os_string(),

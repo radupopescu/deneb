@@ -265,14 +265,25 @@ where
         Ok(attrs)
     }
 
-    fn lookup(&mut self, parent: u64, name: OsString) -> DenebResult<FileAttributes> {
-        let index = self.catalog
-            .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())
-            .context(EngineError::Lookup(parent, name.clone()))?;
-
-        let attrs = self.get_attr(index)
-            .context(EngineError::Lookup(parent, name))?;
-        Ok(attrs)
+    fn lookup(&mut self, parent: u64, name: OsString) -> DenebResult<Option<FileAttributes>> {
+        let index = if let Some(ws) = self.workspace.dirs.get(&parent) {
+            ws.get_entries_tuple()
+                .iter()
+                .find(|&&(ref n, _, _)| n == &PathBuf::from(name.clone()))
+                .map(|&(_, index, _)| index)
+        } else {
+            let idx = self.catalog
+                .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())
+                .context(EngineError::Lookup(parent, name.clone()))?;
+            idx
+        };
+        if let Some(index) = index {
+            let attrs = self.get_attr(index)
+                .context(EngineError::Lookup(parent, name))?;
+            Ok(Some(attrs))
+        } else {
+            Ok(None)
+        }
     }
 
     // Note: We perform inefficient double lookups since Catalog::get_dir_entries returns
