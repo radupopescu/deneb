@@ -69,8 +69,6 @@ pub enum CatalogError {
     DEntryRead(u64),
     #[fail(display = "Dir entry write error for index: {}", _0)]
     DEntryWrite(u64),
-    #[fail(display = "Dir entry {:?} not found at index: {}", _0, _1)]
-    DEntryNotFound(OsString, u64),
     #[fail(display = "Invalid catalog version: {}", _0)]
     Version(u32),
     #[fail(display = "Could not update max index")]

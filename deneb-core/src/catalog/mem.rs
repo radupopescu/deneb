@@ -55,12 +55,11 @@ impl Catalog for MemCatalog {
             .ok_or_else(|| CatalogError::INodeRead(index).into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
-        self.dir_entries
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
+        Ok(self.dir_entries
             .get(&parent)
             .and_then(|entries| entries.get(name))
-            .cloned()
-            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent).into())
+            .cloned())
     }
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
@@ -75,10 +74,7 @@ impl Catalog for MemCatalog {
             .ok_or_else(|| CatalogError::DEntryRead(parent).into())
     }
 
-    fn add_inode(
-        &mut self,
-        inode: INode,
-    ) -> DenebResult<()> {
+    fn add_inode(&mut self, inode: INode) -> DenebResult<()> {
         let index = inode.attributes.index;
         self.inodes.insert(index, inode);
         if index > self.max_index {

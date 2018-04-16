@@ -132,18 +132,14 @@ impl Catalog for LmdbCatalog {
             .map_err(|e| e.into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
         let reader = self.env.begin_ro_txn()?;
         let buffer = reader
             .get(self.dir_entries, &format!("{}", parent))
             .context(CatalogError::DEntryRead(parent))?;
         let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
             .context(CatalogError::DEntryDeserialization(parent))?;
-        let idx = entries
-            .get(name)
-            .cloned()
-            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent))?;
-        Ok(idx)
+        Ok(entries.get(name).cloned())
     }
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {

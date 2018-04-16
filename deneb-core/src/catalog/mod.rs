@@ -27,12 +27,7 @@ pub trait Catalog {
 
     fn get_inode(&self, index: u64) -> DenebResult<INode>;
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64>;
-
-    fn get_dir_entry_inode(&self, parent: u64, name: &Path) -> DenebResult<INode> {
-        let index = self.get_dir_entry_index(parent, name)?;
-        self.get_inode(index)
-    }
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>>;
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>>;
 
