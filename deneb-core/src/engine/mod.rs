@@ -437,7 +437,9 @@ where
         self.workspace.inodes.insert(index, inode.clone());
 
         // Create new dir workspace
-        let ws = DirWorkspace::new(&[]);
+        let mut ws = DirWorkspace::new(&[]);
+        ws.add_entry(index, PathBuf::from("."), FileType::Directory);
+        ws.add_entry(parent, PathBuf::from(".."), FileType::Directory);
         self.workspace.dirs.insert(index, ws);
 
         // Update the parent directory workspace
