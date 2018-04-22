@@ -219,6 +219,9 @@ where
             Request::Unlink { parent, name } => {
                 let _ = chan.send(Reply::Unlink(self.unlink(parent, name)));
             }
+            Request::RemoveDir { parent, name } => {
+                let _ = chan.send(Reply::RemoveDir(self.remove_dir(parent, name)));
+            }
         }
     }
 
@@ -459,7 +462,42 @@ where
     fn unlink(&mut self, parent: u64, name: OsString) -> DenebResult<()> {
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
-            ws.remove_entry(PathBuf::from(name));
+            ws.remove_entry(&PathBuf::from(name));
+        }
+        Ok(())
+    }
+
+    fn remove_dir(&mut self, parent: u64, name: OsString) -> DenebResult<()> {
+        self.open_dir(parent)?;
+        let index = {
+            self.workspace.dirs.get_mut(&parent).and_then(|parent_ws| {
+                let index = parent_ws.get_entry_index(&PathBuf::from(name.clone()));
+                parent_ws.remove_entry(&PathBuf::from(name));
+                index
+            })
+        };
+        let entries = {
+            index
+                .and_then(|index| {
+                    let _ = self.open_dir(index);
+                    self.workspace.dirs.get(&index)
+                })
+                .map(DirWorkspace::get_entries_tuple)
+        };
+        if let (Some(index), Some(entries)) = (index, entries) {
+            for entry in entries {
+                match entry {
+                    (name, _, FileType::RegularFile) => {
+                        self.unlink(index, name.as_os_str().to_owned())?;
+                    }
+                    (name, _, FileType::Directory) => {
+                        self.remove_dir(index, name.as_os_str().to_owned())?;
+                    }
+                    (name, _, file_type) => {
+                        error!("Entry {:?} has unsupported file type {:?}", name, file_type);
+                    }
+                }
+            }
         }
         Ok(())
     }

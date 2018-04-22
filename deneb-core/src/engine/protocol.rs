@@ -75,6 +75,10 @@ pub(in engine) enum Request {
     Unlink {
         parent: u64,
         name: OsString,
+    },
+    RemoveDir {
+        parent: u64,
+        name: OsString,
     }
 }
 
@@ -92,6 +96,7 @@ pub(in engine) enum Reply {
     CreateFile(DenebResult<(u64, FileAttributes)>),
     CreateDir(DenebResult<FileAttributes>),
     Unlink(DenebResult<()>),
+    RemoveDir(DenebResult<()>),
 }
 
 pub(in engine) type ReplyChannel = SyncSender<Reply>;

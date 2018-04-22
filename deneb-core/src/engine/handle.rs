@@ -204,6 +204,18 @@ impl Handle {
         }
     }
 
+    pub fn remove_dir(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
+        let reply = self.make_request(Request::RemoveDir {
+            parent,
+            name: name.to_owned(),
+        })?;
+        if let Reply::RemoveDir(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     // Private functions
     pub(in engine) fn new(channel: RequestChannel) -> Handle {
         Handle { channel }
