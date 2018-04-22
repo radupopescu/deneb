@@ -311,6 +311,18 @@ impl Filesystem for Fs {
         }
     }
 
+    fn unlink(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
+        match self.engine_handle.unlink(&to_request_id(req), parent, name) {
+            Ok(()) => {
+                reply.ok();
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
+    }
+
     /*
     fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {}
 
@@ -325,8 +337,8 @@ impl Filesystem for Fs {
              reply: ReplyEntry) {
     }
 
-    fn unlink(&mut self, _req: &Request, _parent: u64, _name: &OsStr, reply: ReplyEmpty) {}
     fn rmdir(&mut self, _req: &Request, _parent: u64, _name: &OsStr, reply: ReplyEmpty) {}
+
     fn symlink(&mut self,
                _req: &Request,
                _parent: u64,
@@ -334,6 +346,7 @@ impl Filesystem for Fs {
                _link: &Path,
                reply: ReplyEntry) {
     }
+
     fn rename(&mut self,
               _req: &Request,
               _parent: u64,
@@ -341,6 +354,14 @@ impl Filesystem for Fs {
               _newparent: u64,
               _newname: &OsStr,
               reply: ReplyEmpty) {
+    }
+
+    fn link(&mut self,
+            _req: &Request,
+            _ino: u64,
+            _newparent: u64,
+            _newname: &OsStr,
+            reply: ReplyEntry) {
     }
     */
 
@@ -396,14 +417,6 @@ impl Filesystem for Fs {
     }
 
     fn forget(&mut self, _req: &Request, _ino: u64, _nlookup: u64) {}
-
-    fn link(&mut self,
-            _req: &Request,
-            _ino: u64,
-            _newparent: u64,
-            _newname: &OsStr,
-            reply: ReplyEntry) {
-    }
 
     fn flush(&mut self, _req: &Request, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {}
     fn fsync(&mut self, _req: &Request, _ino: u64, _fh: u64, _datasync: bool, reply: ReplyEmpty) {}

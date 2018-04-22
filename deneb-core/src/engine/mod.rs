@@ -216,6 +216,9 @@ where
             Request::CreateDir { parent, name, mode } => {
                 let _ = chan.send(Reply::CreateDir(self.create_dir(parent, name, mode)));
             }
+            Request::Unlink { parent, name } => {
+                let _ = chan.send(Reply::Unlink(self.unlink(parent, name)));
+            }
         }
     }
 
@@ -451,6 +454,14 @@ where
         }
 
         Ok(attributes)
+    }
+
+    fn unlink(&mut self, parent: u64, name: OsString) -> DenebResult<()> {
+        self.open_dir(parent)?;
+        if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
+            ws.remove_entry(PathBuf::from(name));
+        }
+        Ok(())
     }
 }
 

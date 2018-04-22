@@ -24,6 +24,12 @@ impl DirWorkspace {
         self.entries.push(DirEntry { index, name, entry_type });
         self.entries.sort_by_key(|de| de.index);
     }
+
+    pub(crate) fn remove_entry(&mut self, name: PathBuf) {
+        if let Some((idx, _)) = self.entries.iter().enumerate().find(|&(_, entry)| entry.name == name) {
+            self.entries.remove(idx);
+        }
+    }
 }
 
 #[derive(Clone)]

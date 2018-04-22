@@ -192,6 +192,18 @@ impl Handle {
         }
     }
 
+    pub fn unlink(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
+        let reply = self.make_request(Request::Unlink {
+            parent,
+            name: name.to_owned(),
+        })?;
+        if let Reply::Unlink(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     // Private functions
     pub(in engine) fn new(channel: RequestChannel) -> Handle {
         Handle { channel }
