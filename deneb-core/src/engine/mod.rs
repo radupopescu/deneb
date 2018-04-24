@@ -2,7 +2,7 @@ use failure::ResultExt;
 use nix::libc::mode_t;
 use time::now_utc;
 
-use std::{cell::RefCell, collections::HashMap, ffi::OsString, fs::{create_dir_all, File},
+use std::{cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
           path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn};
 
 use catalog::{Catalog, CatalogBuilder, IndexGenerator};
@@ -136,6 +136,7 @@ struct Workspace<S> {
     dirs: HashMap<u64, DirWorkspace>,
     files: HashMap<u64, FileWorkspace<S>>,
     inodes: HashMap<u64, INode>,
+    deleted_inodes: HashSet<u64>,
 }
 
 impl<S> Workspace<S> {
@@ -144,6 +145,7 @@ impl<S> Workspace<S> {
             dirs: HashMap::new(),
             files: HashMap::new(),
             inodes: HashMap::new(),
+            deleted_inodes: HashSet::new(),
         }
     }
 }
@@ -501,6 +503,7 @@ where
                     }
                 }
             }
+            self.workspace.deleted_inodes.insert(index);
         }
         Ok(())
     }
