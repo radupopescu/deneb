@@ -414,6 +414,8 @@ where
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
+        } else {
+            return Err(EngineError::FileCreate(parent, name.to_owned()).into());
         }
 
         Ok((index, attributes))
@@ -455,25 +457,31 @@ where
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
+        } else {
+            return Err(EngineError::DirCreate(parent, name.to_owned()).into());
         }
 
         Ok(attributes)
     }
 
     fn unlink(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
-        self.open_dir(parent)?;
+        self.open_dir(parent)
+            .context(EngineError::Unlink(parent, name.to_owned()))?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             let name = PathBuf::from(name);
             if let Some(index) = ws.get_entry_index(&name) {
                 self.workspace.deleted_inodes.insert(index);
             }
             ws.remove_entry(&name);
+        } else {
+            return Err(EngineError::Unlink(parent, name.to_owned()).into());
         }
         Ok(())
     }
 
     fn remove_dir(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
-        self.open_dir(parent)?;
+        self.open_dir(parent)
+            .context(EngineError::RemoveDir(parent, name.to_owned()))?;
         let index = {
             self.workspace.dirs.get_mut(&parent).and_then(|parent_ws| {
                 let index = parent_ws.get_entry_index(&PathBuf::from(name.clone()));
@@ -499,11 +507,13 @@ where
                         self.remove_dir(index, name.as_os_str())?;
                     }
                     (name, _, file_type) => {
-                        error!("Entry {:?} has unsupported file type {:?}", name, file_type);
+                        panic!("Entry {:?} has unsupported file type {:?}", name, file_type);
                     }
                 }
             }
             self.workspace.deleted_inodes.insert(index);
+        } else {
+            return Err(EngineError::RemoveDir(parent, name.to_owned()).into());
         }
         Ok(())
     }

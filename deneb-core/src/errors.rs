@@ -109,6 +109,12 @@ pub enum EngineError {
     FileCreate(u64, OsString),
     #[fail(display = "Could not create dir {:?} at {}", _1, _0)]
     DirCreate(u64, OsString),
+    #[fail(display = "Could not unlink entry {:?} at {}", _1, _0)]
+    Unlink(u64, OsString),
+    #[fail(display = "Could not remove dir {:?} at {}", _1, _0)]
+    RemoveDir(u64, OsString),
+    #[fail(display = "Could not rename entry {:?} at {} to {:?} at {}", _1, _0, _3, _2)]
+    Rename(u64, OsString, u64, OsString),
     #[fail(display = "Access error for: {}", _0)]
     Access(u64),
 }
