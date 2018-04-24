@@ -169,7 +169,7 @@ where
                 let _ = chan.send(Reply::SetAttr(self.set_attr(index, &changes)));
             }
             Request::Lookup { parent, name } => {
-                let _ = chan.send(Reply::Lookup(self.lookup(parent, name)));
+                let _ = chan.send(Reply::Lookup(self.lookup(parent, &name)));
             }
             Request::OpenDir { index, .. } => {
                 let _ = chan.send(Reply::OpenDir(self.open_dir(index)));
@@ -208,21 +208,20 @@ where
             } => {
                 let _ = chan.send(Reply::CreateFile(self.create_file(
                     parent,
-                    name,
+                    &name,
                     mode,
                     flags,
                 )));
             }
             Request::CreateDir { parent, name, mode } => {
-                let _ = chan.send(Reply::CreateDir(self.create_dir(parent, name, mode)));
+                let _ = chan.send(Reply::CreateDir(self.create_dir(parent, &name, mode)));
             }
             Request::Unlink { parent, name } => {
-                let _ = chan.send(Reply::Unlink(self.unlink(parent, name)));
+                let _ = chan.send(Reply::Unlink(self.unlink(parent, &name)));
             }
             Request::RemoveDir { parent, name } => {
-                let _ = chan.send(Reply::RemoveDir(self.remove_dir(parent, name)));
+                let _ = chan.send(Reply::RemoveDir(self.remove_dir(parent, &name)));
             }
-        }
     }
 
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
@@ -271,7 +270,7 @@ where
         Ok(attrs)
     }
 
-    fn lookup(&mut self, parent: u64, name: OsString) -> DenebResult<Option<FileAttributes>> {
+    fn lookup(&mut self, parent: u64, name: &OsStr) -> DenebResult<Option<FileAttributes>> {
         let index = if let Some(ws) = self.workspace.dirs.get(&parent) {
             ws.get_entries_tuple()
                 .iter()
@@ -280,12 +279,12 @@ where
         } else {
             let idx = self.catalog
                 .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())
-                .context(EngineError::Lookup(parent, name.clone()))?;
+                .context(EngineError::Lookup(parent, name.to_owned()))?;
             idx
         };
         if let Some(index) = index {
             let attrs = self.get_attr(index)
-                .context(EngineError::Lookup(parent, name))?;
+                .context(EngineError::Lookup(parent, name.to_owned()))?;
             Ok(Some(attrs))
         } else {
             Ok(None)
@@ -382,7 +381,7 @@ where
     fn create_file(
         &mut self,
         parent: u64,
-        name: OsString,
+        name: &OsStr,
         mode: u32,
         _flags: u32,
     ) -> DenebResult<(u64, FileAttributes)> {
@@ -409,7 +408,7 @@ where
 
         // Update the parent directory workspace
         self.open_dir(parent)
-            .context(EngineError::FileCreate(parent, name.clone()))?;
+            .context(EngineError::FileCreate(parent, name.to_owned()))?;
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
@@ -421,7 +420,7 @@ where
     fn create_dir(
         &mut self,
         parent: u64,
-        name: OsString,
+        name: &OsStr,
         mode: u32,
     ) -> DenebResult<FileAttributes> {
         let index = self.index_generator.get_next();
@@ -450,7 +449,7 @@ where
 
         // Update the parent directory workspace
         self.open_dir(parent)
-            .context(EngineError::DirCreate(parent, name.clone()))?;
+            .context(EngineError::DirCreate(parent, name.to_owned()))?;
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
@@ -459,15 +458,19 @@ where
         Ok(attributes)
     }
 
-    fn unlink(&mut self, parent: u64, name: OsString) -> DenebResult<()> {
+    fn unlink(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
-            ws.remove_entry(&PathBuf::from(name));
+            let name = PathBuf::from(name);
+            if let Some(index) = ws.get_entry_index(&name) {
+                self.workspace.deleted_inodes.insert(index);
+            }
+            ws.remove_entry(&name);
         }
         Ok(())
     }
 
-    fn remove_dir(&mut self, parent: u64, name: OsString) -> DenebResult<()> {
+    fn remove_dir(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
         self.open_dir(parent)?;
         let index = {
             self.workspace.dirs.get_mut(&parent).and_then(|parent_ws| {
@@ -488,10 +491,10 @@ where
             for entry in entries {
                 match entry {
                     (name, _, FileType::RegularFile) => {
-                        self.unlink(index, name.as_os_str().to_owned())?;
+                        self.unlink(index, name.as_os_str())?;
                     }
                     (name, _, FileType::Directory) => {
-                        self.remove_dir(index, name.as_os_str().to_owned())?;
+                        self.remove_dir(index, name.as_os_str())?;
                     }
                     (name, _, file_type) => {
                         error!("Entry {:?} has unsupported file type {:?}", name, file_type);
