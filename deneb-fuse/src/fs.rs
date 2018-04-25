@@ -324,7 +324,29 @@ impl Filesystem for Fs {
     }
 
     fn rmdir(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
-        match self.engine_handle.remove_dir(&to_request_id(req), parent, name) {
+        match self.engine_handle
+            .remove_dir(&to_request_id(req), parent, name)
+        {
+            Ok(()) => {
+                reply.ok();
+            }
+            Err(e) => {
+                print_error_with_causes(&e);
+                reply.error(EINVAL);
+            }
+        }
+    }
+
+    fn rename(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        new_parent: u64,
+        new_name: &OsStr,
+        reply: ReplyEmpty,
+    ) {
+        match self.engine_handle.rename(&to_request_id(req), parent, name, new_parent, new_name) {
             Ok(()) => {
                 reply.ok();
             }
@@ -355,15 +377,6 @@ impl Filesystem for Fs {
                _name: &OsStr,
                _link: &Path,
                reply: ReplyEntry) {
-    }
-
-    fn rename(&mut self,
-              _req: &Request,
-              _parent: u64,
-              _name: &OsStr,
-              _newparent: u64,
-              _newname: &OsStr,
-              reply: ReplyEmpty) {
     }
 
     fn link(&mut self,

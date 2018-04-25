@@ -216,6 +216,27 @@ impl Handle {
         }
     }
 
+    pub fn rename(
+        &self,
+        _id: &RequestId,
+        parent: u64,
+        name: &OsStr,
+        new_parent: u64,
+        new_name: &OsStr,
+    ) -> DenebResult<()> {
+        let reply = self.make_request(Request::Rename {
+            parent,
+            name: name.to_owned(),
+            new_parent,
+            new_name: new_name.to_owned(),
+        })?;
+        if let Reply::Rename(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     // Private functions
     pub(in engine) fn new(channel: RequestChannel) -> Handle {
         Handle { channel }

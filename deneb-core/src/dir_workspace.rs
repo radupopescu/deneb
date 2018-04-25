@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use inode::FileType;
 
+#[derive(Clone, Debug)]
 pub(crate) struct DirWorkspace {
     entries: Vec<DirEntry>,
 }
@@ -11,6 +12,10 @@ impl DirWorkspace {
         DirWorkspace {
             entries: entries.to_vec(),
         }
+    }
+
+    pub(crate) fn get_entries(&self) -> &[DirEntry] {
+        &self.entries
     }
 
     pub(crate) fn get_entries_tuple(&self) -> Vec<(PathBuf, u64, FileType)> {
@@ -26,6 +31,10 @@ impl DirWorkspace {
             .enumerate()
             .find(|&(_, entry)| entry.name == name)
             .map(|(idx, _)| idx as u64)
+    }
+
+    pub(crate) fn get_entry(&self, name: &Path) -> Option<&DirEntry> {
+        self.entries.iter().find(|e| e.name == name)
     }
 
     pub(crate) fn add_entry(&mut self, index: u64, name: PathBuf, entry_type: FileType) {
@@ -45,11 +54,11 @@ impl DirWorkspace {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct DirEntry {
-    index: u64,
-    name: PathBuf,
-    entry_type: FileType,
+    pub(crate) index: u64,
+    pub(crate) name: PathBuf,
+    pub(crate) entry_type: FileType,
 }
 
 impl DirEntry {

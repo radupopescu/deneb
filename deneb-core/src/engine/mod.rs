@@ -224,6 +224,20 @@ where
             Request::RemoveDir { parent, name } => {
                 let _ = chan.send(Reply::RemoveDir(self.remove_dir(parent, &name)));
             }
+            Request::Rename {
+                parent,
+                name,
+                new_parent,
+                new_name,
+            } => {
+                let _ = chan.send(Reply::Rename(self.rename(
+                    parent,
+                    &name,
+                    new_parent,
+                    &new_name,
+                )));
+            }
+        }
     }
 
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
@@ -274,10 +288,10 @@ where
 
     fn lookup(&mut self, parent: u64, name: &OsStr) -> DenebResult<Option<FileAttributes>> {
         let index = if let Some(ws) = self.workspace.dirs.get(&parent) {
-            ws.get_entries_tuple()
+            ws.get_entries()
                 .iter()
-                .find(|&&(ref n, _, _)| n == &PathBuf::from(name.clone()))
-                .map(|&(_, index, _)| index)
+                .find(|&&DirEntry { name: ref n, .. }| n == &PathBuf::from(name.clone()))
+                .map(|&DirEntry { index, .. }| index)
         } else {
             let idx = self.catalog
                 .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())
@@ -421,12 +435,7 @@ where
         Ok((index, attributes))
     }
 
-    fn create_dir(
-        &mut self,
-        parent: u64,
-        name: &OsStr,
-        mode: u32,
-    ) -> DenebResult<FileAttributes> {
+    fn create_dir(&mut self, parent: u64, name: &OsStr, mode: u32) -> DenebResult<FileAttributes> {
         let index = self.index_generator.get_next();
 
         // Create new inode
@@ -501,10 +510,12 @@ where
             for entry in entries {
                 match entry {
                     (name, _, FileType::RegularFile) => {
-                        self.unlink(index, name.as_os_str())?;
+                        self.unlink(index, name.as_os_str())
+                            .context(EngineError::RemoveDir(parent, name.as_os_str().to_owned()))?;
                     }
                     (name, _, FileType::Directory) => {
-                        self.remove_dir(index, name.as_os_str())?;
+                        self.remove_dir(index, name.as_os_str())
+                            .context(EngineError::RemoveDir(parent, name.as_os_str().to_owned()))?;
                     }
                     (name, _, file_type) => {
                         panic!("Entry {:?} has unsupported file type {:?}", name, file_type);
@@ -515,6 +526,71 @@ where
         } else {
             return Err(EngineError::RemoveDir(parent, name.to_owned()).into());
         }
+        Ok(())
+    }
+
+    // Note: this implementation isn't atomic
+    fn rename(
+        &mut self,
+        parent: u64,
+        name: &OsStr,
+        new_parent: u64,
+        new_name: &OsStr,
+    ) -> DenebResult<()> {
+        self.open_dir(parent).context(EngineError::Rename(
+            parent,
+            name.to_owned(),
+            new_parent,
+            new_name.to_owned(),
+        ))?;
+        self.open_dir(new_parent).context(EngineError::Rename(
+            parent,
+            name.to_owned(),
+            new_parent,
+            new_name.to_owned(),
+        ))?;
+
+        let src_entry = self.workspace.dirs.get_mut(&parent).and_then(|ws| {
+            let entry = ws.get_entry(&PathBuf::from(name)).cloned();
+            ws.remove_entry(&PathBuf::from(name));
+            entry
+        });
+
+        let new_name = PathBuf::from(new_name);
+
+        let old_entry_type = self.workspace
+            .dirs
+            .get(&new_parent)
+            .and_then(|ws| ws.get_entry(&new_name))
+            .map(|&DirEntry { entry_type, .. }| entry_type);
+
+        if let Some(entry_type) = old_entry_type {
+            match entry_type {
+                FileType::RegularFile => {
+                    self.unlink(new_parent, new_name.as_os_str())?;
+                }
+                FileType::Directory => {
+                    self.remove_dir(new_parent, new_name.as_os_str())?;
+                }
+                _ => {
+                    panic!(
+                        "Entry {:?} has unsupported file type {:?}",
+                        name, old_entry_type
+                    );
+                }
+            }
+        }
+
+        if let (
+            Some(dest_ws),
+            Some(DirEntry {
+                index, entry_type, ..
+            }),
+        ) = (self.workspace.dirs.get_mut(&new_parent), src_entry)
+        {
+            dest_ws.add_entry(index, new_name.clone(), entry_type);
+        }
+
         Ok(())
     }
 }
