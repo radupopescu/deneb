@@ -28,9 +28,8 @@ impl DirWorkspace {
     pub(crate) fn get_entry_index(&self, name: &Path) -> Option<u64> {
         self.entries
             .iter()
-            .enumerate()
-            .find(|&(_, entry)| entry.name == name)
-            .map(|(idx, _)| idx as u64)
+            .find(|&entry| entry.name == name)
+            .map(|entry| entry.index as u64)
     }
 
     pub(crate) fn get_entry(&self, name: &Path) -> Option<&DirEntry> {
@@ -47,7 +46,18 @@ impl DirWorkspace {
     }
 
     pub(crate) fn remove_entry(&mut self, name: &Path) {
-        if let Some(idx) = self.get_entry_index(name)
+        if let Some(idx) = self.entries
+            .iter()
+            .enumerate()
+            .find(
+                |&(
+                    _,
+                    &DirEntry {
+                        name: ref ename, ..
+                    },
+                )| ename == name,
+            )
+            .map(|(idx, _)| idx)
         {
             self.entries.remove(idx as usize);
         }
