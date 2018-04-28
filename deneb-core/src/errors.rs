@@ -79,8 +79,6 @@ pub enum CatalogError {
 
 #[derive(Debug, Fail)]
 pub enum EngineError {
-    #[fail(display = "Failed to retrieve inode for: {}", _0)]
-    GetINode(u64),
     #[fail(display = "Failed to retrieve file attributes for: {}", _0)]
     GetAttr(u64),
     #[fail(display = "Failed to set file attributes for: {}", _0)]
@@ -117,6 +115,23 @@ pub enum EngineError {
     Rename(u64, OsString, u64, OsString),
     #[fail(display = "Access error for: {}", _0)]
     Access(u64),
+}
+
+#[derive(Debug, Fail)]
+pub enum WorkspaceError {
+    #[fail(display = "Could not retrieve file workspace: {}", _0)]
+    FileLookup(u64),
+    #[fail(display = "Could not retrieve dir workspace: {}", _0)]
+    DirLookup(u64),
+    #[fail(display = "Could not retrieve inode workspace: {}", _0)]
+    INodeLookup(u64),
+}
+
+#[derive(Debug, Fail)]
+#[fail(display = "DirWorkspace lookup error at parent {} for entry {:?}", parent, name)]
+pub struct DirWorkspaceEntryLookupError {
+    pub parent: u64,
+    pub name: OsString,
 }
 
 /// Print the error description and its underlying causes

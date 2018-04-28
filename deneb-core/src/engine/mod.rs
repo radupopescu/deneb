@@ -1,4 +1,4 @@
-use failure::ResultExt;
+use failure::{Error, ResultExt};
 use nix::libc::mode_t;
 use time::now_utc;
 
@@ -12,7 +12,7 @@ use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType,
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
-use errors::{DenebResult, EngineError};
+use errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
 use util::{atomic_write, get_egid, get_euid};
 
 mod protocol;
@@ -165,42 +165,82 @@ where
     fn handle_request(&mut self, request: Request, chan: &ReplyChannel) {
         match request {
             Request::GetAttr { index } => {
-                let _ = chan.send(Reply::GetAttr(self.get_attr(index)));
+                let _ = chan.send(Reply::GetAttr(
+                    self.get_attr(index)
+                        .context(EngineError::GetAttr(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::SetAttr { index, changes } => {
-                let _ = chan.send(Reply::SetAttr(self.set_attr(index, &changes)));
+                let _ = chan.send(Reply::SetAttr(
+                    self.set_attr(index, &changes)
+                        .context(EngineError::SetAttr(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::Lookup { parent, name } => {
-                let _ = chan.send(Reply::Lookup(self.lookup(parent, &name)));
+                let _ = chan.send(Reply::Lookup(
+                    self.lookup(parent, &name)
+                        .context(EngineError::Lookup(parent, name))
+                        .map_err(Error::from),
+                ));
             }
             Request::OpenDir { index, .. } => {
-                let _ = chan.send(Reply::OpenDir(self.open_dir(index)));
+                let _ = chan.send(Reply::OpenDir(
+                    self.open_dir(index)
+                        .context(EngineError::DirOpen(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::ReleaseDir { index, .. } => {
-                let _ = chan.send(Reply::ReleaseDir(self.release_dir(index)));
+                let _ = chan.send(Reply::ReleaseDir(
+                    self.release_dir(index)
+                        .context(EngineError::DirClose(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::ReadDir { index, .. } => {
-                let _ = chan.send(Reply::ReadDir(self.read_dir(index)));
+                let _ = chan.send(Reply::ReadDir(
+                    self.read_dir(index)
+                        .context(EngineError::DirRead(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::OpenFile { index, flags } => {
-                let _ = chan.send(Reply::OpenFile(self.open_file(index, flags)));
+                let _ = chan.send(Reply::OpenFile(
+                    self.open_file(index, flags)
+                        .context(EngineError::FileOpen(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::ReadData {
                 index,
                 offset,
                 size,
             } => {
-                let _ = chan.send(Reply::ReadData(self.read_data(index, offset, size)));
+                let _ = chan.send(Reply::ReadData(
+                    self.read_data(index, offset, size)
+                        .context(EngineError::FileRead(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::WriteData {
                 index,
                 offset,
                 data,
             } => {
-                let _ = chan.send(Reply::WriteData(self.write_data(index, offset, &data)));
+                let _ = chan.send(Reply::WriteData(
+                    self.write_data(index, offset, &data)
+                        .context(EngineError::FileWrite(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::ReleaseFile { index, .. } => {
-                let _ = chan.send(Reply::ReleaseFile(self.release_file(index)));
+                let _ = chan.send(Reply::ReleaseFile(
+                    self.release_file(index)
+                        .context(EngineError::FileClose(index))
+                        .map_err(Error::from),
+                ));
             }
             Request::CreateFile {
                 parent,
@@ -208,21 +248,32 @@ where
                 mode,
                 flags,
             } => {
-                let _ = chan.send(Reply::CreateFile(self.create_file(
-                    parent,
-                    &name,
-                    mode,
-                    flags,
-                )));
+                let _ = chan.send(Reply::CreateFile(
+                    self.create_file(parent, &name, mode, flags)
+                        .context(EngineError::FileCreate(parent, name))
+                        .map_err(Error::from),
+                ));
             }
             Request::CreateDir { parent, name, mode } => {
-                let _ = chan.send(Reply::CreateDir(self.create_dir(parent, &name, mode)));
+                let _ = chan.send(Reply::CreateDir(
+                    self.create_dir(parent, &name, mode)
+                        .context(EngineError::DirCreate(parent, name))
+                        .map_err(Error::from),
+                ));
             }
             Request::Unlink { parent, name } => {
-                let _ = chan.send(Reply::Unlink(self.unlink(parent, &name)));
+                let _ = chan.send(Reply::Unlink(
+                    self.unlink(parent, &name)
+                        .context(EngineError::Unlink(parent, name))
+                        .map_err(Error::from),
+                ));
             }
             Request::RemoveDir { parent, name } => {
-                let _ = chan.send(Reply::RemoveDir(self.remove_dir(parent, &name)));
+                let _ = chan.send(Reply::RemoveDir(
+                    self.remove_dir(parent, &name)
+                        .context(EngineError::RemoveDir(parent, name))
+                        .map_err(Error::from),
+                ));
             }
             Request::Rename {
                 parent,
@@ -230,12 +281,11 @@ where
                 new_parent,
                 new_name,
             } => {
-                let _ = chan.send(Reply::Rename(self.rename(
-                    parent,
-                    &name,
-                    new_parent,
-                    &new_name,
-                )));
+                let _ = chan.send(Reply::Rename(
+                    self.rename(parent, &name, new_parent, &new_name)
+                        .context(EngineError::Rename(parent, name, new_parent, new_name))
+                        .map_err(Error::from),
+                ));
             }
         }
     }
@@ -245,16 +295,14 @@ where
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn get_inode(&mut self, index: u64) -> DenebResult<INode> {
         if !self.workspace.inodes.contains_key(&index) {
-            let inode = self.catalog
-                .get_inode(index)
-                .context(EngineError::GetINode(index))?;
+            let inode = self.catalog.get_inode(index)?;
             self.workspace.inodes.insert(index, inode);
         }
         self.workspace
             .inodes
             .get(&index)
             .cloned()
-            .ok_or_else(|| EngineError::GetINode(index).into())
+            .ok_or_else(|| WorkspaceError::INodeLookup(index).into())
     }
 
     fn update_inode(&mut self, index: u64, inode: &INode) -> DenebResult<()> {
@@ -263,7 +311,7 @@ where
     }
 
     fn get_attr(&mut self, index: u64) -> DenebResult<FileAttributes> {
-        let inode = self.get_inode(index).context(EngineError::GetAttr(index))?;
+        let inode = self.get_inode(index)?;
         Ok(inode.attributes)
     }
 
@@ -272,15 +320,16 @@ where
         index: u64,
         changes: &FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        let mut inode = self.get_inode(index).context(EngineError::SetAttr(index))?;
+        let mut inode = self.get_inode(index)?;
         inode.attributes.update(changes);
         let attrs = inode.attributes;
-        self.update_inode(index, &inode)
-            .context(EngineError::SetAttr(index))?;
+        self.update_inode(index, &inode)?;
 
         if let Some(new_size) = changes.size {
             if let Some(ref mut ws) = self.workspace.files.get_mut(&index) {
                 ws.truncate(new_size);
+            } else {
+                return Err(WorkspaceError::FileLookup(index).into());
             }
         }
         Ok(attrs)
@@ -293,15 +342,11 @@ where
                 .find(|&&DirEntry { name: ref n, .. }| n == &PathBuf::from(name.clone()))
                 .map(|&DirEntry { index, .. }| index)
         } else {
-            let idx = self.catalog
-                .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())
-                .context(EngineError::Lookup(parent, name.to_owned()))?;
-            idx
+            self.catalog
+                .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())?
         };
         if let Some(index) = index {
-            let attrs = self.get_attr(index)
-                .context(EngineError::Lookup(parent, name.to_owned()))?;
-            Ok(Some(attrs))
+            self.get_attr(index).map(Some)
         } else {
             Ok(None)
         }
@@ -313,8 +358,7 @@ where
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
             let entries = self.catalog
-                .get_dir_entries(index)
-                .context(EngineError::DirOpen(index))?
+                .get_dir_entries(index)?
                 .iter()
                 .map(|&(ref name, idx)| {
                     if let Ok(inode) = self.get_inode(idx) {
@@ -341,7 +385,7 @@ where
             .dirs
             .get(&index)
             .map(DirWorkspace::get_entries_tuple)
-            .ok_or_else(|| EngineError::DirRead(index).into())
+            .ok_or_else(|| WorkspaceError::DirLookup(index).into())
     }
 
     // Note: We perform inefficient double lookups since Catalog::get_inode returns
@@ -349,7 +393,7 @@ where
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_file(&mut self, index: u64, _flags: u32) -> DenebResult<()> {
         if !self.workspace.files.contains_key(&index) {
-            let inode = self.get_inode(index).context(EngineError::FileOpen(index))?;
+            let inode = self.get_inode(index)?;
             self.workspace
                 .files
                 .insert(index, FileWorkspace::new(&inode, &Rc::clone(&self.store)));
@@ -362,7 +406,7 @@ where
         let ws = self.workspace
             .files
             .get(&index)
-            .ok_or_else(|| EngineError::FileRead(index))?;
+            .ok_or_else(|| WorkspaceError::FileLookup(index))?;
         ws.read_at(offset, size as usize)
     }
 
@@ -372,15 +416,13 @@ where
             let ws = self.workspace
                 .files
                 .get_mut(&index)
-                .ok_or_else(|| EngineError::FileWrite(index))?;
+                .ok_or_else(|| WorkspaceError::FileLookup(index))?;
             ws.write_at(offset, data)
         };
-        let mut inode = self.get_inode(index)
-            .context(EngineError::FileWrite(index))?;
+        let mut inode = self.get_inode(index)?;
         if inode.attributes.size != new_size {
             inode.attributes.size = new_size;
-            self.update_inode(index, &inode)
-                .context(EngineError::FileWrite(index))?;
+            self.update_inode(index, &inode)?;
         }
         Ok(written)
     }
@@ -389,7 +431,7 @@ where
         let ws = self.workspace
             .files
             .get_mut(&index)
-            .ok_or_else(|| EngineError::FileClose(index))?;
+            .ok_or_else(|| WorkspaceError::FileLookup(index))?;
         ws.unload();
         Ok(())
     }
@@ -423,13 +465,12 @@ where
         self.workspace.files.insert(index, ws);
 
         // Update the parent directory workspace
-        self.open_dir(parent)
-            .context(EngineError::FileCreate(parent, name.to_owned()))?;
+        self.open_dir(parent)?;
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
         } else {
-            return Err(EngineError::FileCreate(parent, name.to_owned()).into());
+            return Err(WorkspaceError::DirLookup(parent).into());
         }
 
         Ok((index, attributes))
@@ -461,71 +502,74 @@ where
         self.workspace.dirs.insert(index, ws);
 
         // Update the parent directory workspace
-        self.open_dir(parent)
-            .context(EngineError::DirCreate(parent, name.to_owned()))?;
+        self.open_dir(parent)?;
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
         } else {
-            return Err(EngineError::DirCreate(parent, name.to_owned()).into());
+            return Err(WorkspaceError::DirLookup(parent).into());
         }
 
         Ok(attributes)
     }
 
     fn unlink(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
-        self.open_dir(parent)
-            .context(EngineError::Unlink(parent, name.to_owned()))?;
+        self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
-            let name = PathBuf::from(name);
-            if let Some(index) = ws.get_entry_index(&name) {
-                self.workspace.deleted_inodes.insert(index);
-            }
-            ws.remove_entry(&name);
+            let pname = PathBuf::from(name);
+            let index = ws.get_entry_index(&pname)
+                .ok_or_else(|| DirWorkspaceEntryLookupError {
+                    parent,
+                    name: name.to_owned(),
+                })?;
+            self.workspace.deleted_inodes.insert(index);
+            ws.remove_entry(&pname);
         } else {
-            return Err(EngineError::Unlink(parent, name.to_owned()).into());
+            return Err(WorkspaceError::DirLookup(parent).into());
         }
         Ok(())
     }
 
     fn remove_dir(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
-        self.open_dir(parent)
-            .context(EngineError::RemoveDir(parent, name.to_owned()))?;
+        debug!("remove_dir - parent: {}, name: {:?}", parent, name);
+        self.open_dir(parent)?;
         let index = {
-            self.workspace.dirs.get_mut(&parent).and_then(|parent_ws| {
-                let index = parent_ws.get_entry_index(&PathBuf::from(name.clone()));
-                parent_ws.remove_entry(&PathBuf::from(name));
-                index
-            })
-        };
-        let entries = {
-            index
-                .and_then(|index| {
-                    let _ = self.open_dir(index);
-                    self.workspace.dirs.get(&index)
+            self.workspace
+                .dirs
+                .get_mut(&parent)
+                .and_then(|parent_ws| {
+                    let index = parent_ws.get_entry_index(&PathBuf::from(name.clone()));
+                    parent_ws.remove_entry(&PathBuf::from(name));
+                    index
                 })
-                .map(DirWorkspace::get_entries_tuple)
-        };
-        if let (Some(index), Some(entries)) = (index, entries) {
-            for entry in entries {
-                match entry {
-                    (name, _, FileType::RegularFile) => {
-                        self.unlink(index, name.as_os_str())
-                            .context(EngineError::RemoveDir(parent, name.as_os_str().to_owned()))?;
-                    }
-                    (name, _, FileType::Directory) => {
-                        self.remove_dir(index, name.as_os_str())
-                            .context(EngineError::RemoveDir(parent, name.as_os_str().to_owned()))?;
-                    }
-                    (name, _, file_type) => {
-                        panic!("Entry {:?} has unsupported file type {:?}", name, file_type);
-                    }
+                .ok_or_else(|| DirWorkspaceEntryLookupError {
+                    parent,
+                    name: name.to_owned(),
+                })
+        }?;
+        self.open_dir(index)?;
+        let entries = self.workspace
+            .dirs
+            .get(&index)
+            .map(DirWorkspace::get_entries_tuple)
+            .ok_or_else(|| DirWorkspaceEntryLookupError {
+                parent: index,
+                name: name.to_owned(),
+            })?;
+        for entry in entries {
+            match entry {
+                (name, _, FileType::RegularFile) => {
+                    self.unlink(index, name.as_os_str())?;
+                }
+                (name, _, FileType::Directory) => {
+                    self.remove_dir(index, name.as_os_str())?;
+                }
+                (name, _, file_type) => {
+                    panic!("Entry {:?} has unsupported file type {:?}", name, file_type);
                 }
             }
-            self.workspace.deleted_inodes.insert(index);
-        } else {
-            return Err(EngineError::RemoveDir(parent, name.to_owned()).into());
         }
+        self.workspace.deleted_inodes.insert(index);
         Ok(())
     }
 
@@ -550,11 +594,19 @@ where
             new_name.to_owned(),
         ))?;
 
-        let src_entry = self.workspace.dirs.get_mut(&parent).and_then(|ws| {
-            let entry = ws.get_entry(&PathBuf::from(name)).cloned();
-            ws.remove_entry(&PathBuf::from(name));
+        let src_entry = if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
+            let pname = PathBuf::from(name);
+            let entry = ws.get_entry(&pname).cloned().ok_or_else(|| {
+                DirWorkspaceEntryLookupError {
+                    parent,
+                    name: name.to_owned(),
+                }
+            })?;
+            ws.remove_entry(&pname);
             entry
-        });
+        } else {
+            return Err(WorkspaceError::DirLookup(parent).into());
+        };
 
         let new_name = PathBuf::from(new_name);
 
@@ -581,15 +633,11 @@ where
             }
         }
 
-        if let (
-            Some(dest_ws),
-            Some(DirEntry {
-                index, entry_type, ..
-            }),
-        ) = (self.workspace.dirs.get_mut(&new_parent), src_entry)
-        {
-            dest_ws.add_entry(index, new_name.clone(), entry_type);
-        }
+        let ws = self.workspace
+            .dirs
+            .get_mut(&new_parent)
+            .ok_or_else(|| WorkspaceError::DirLookup(new_parent))?;
+        ws.add_entry(src_entry.index, new_name.clone(), src_entry.entry_type);
 
         Ok(())
     }
