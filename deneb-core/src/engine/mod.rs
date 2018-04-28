@@ -263,14 +263,14 @@ where
             }
             Request::Unlink { parent, name } => {
                 let _ = chan.send(Reply::Unlink(
-                    self.unlink(parent, &name)
+                    self.remove(parent, &name)
                         .context(EngineError::Unlink(parent, name))
                         .map_err(Error::from),
                 ));
             }
             Request::RemoveDir { parent, name } => {
                 let _ = chan.send(Reply::RemoveDir(
-                    self.remove_dir(parent, &name)
+                    self.remove(parent, &name)
                         .context(EngineError::RemoveDir(parent, name))
                         .map_err(Error::from),
                 ));
@@ -513,7 +513,7 @@ where
         Ok(attributes)
     }
 
-    fn unlink(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
+    fn remove(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
@@ -523,53 +523,10 @@ where
                     name: name.to_owned(),
                 })?;
             self.workspace.deleted_inodes.insert(index);
-            ws.remove_entry(&pname);
+            ws.remove_entry(&PathBuf::from(name));
         } else {
             return Err(WorkspaceError::DirLookup(parent).into());
         }
-        Ok(())
-    }
-
-    fn remove_dir(&mut self, parent: u64, name: &OsStr) -> DenebResult<()> {
-        debug!("remove_dir - parent: {}, name: {:?}", parent, name);
-        self.open_dir(parent)?;
-        let index = {
-            self.workspace
-                .dirs
-                .get_mut(&parent)
-                .and_then(|parent_ws| {
-                    let index = parent_ws.get_entry_index(&PathBuf::from(name.clone()));
-                    parent_ws.remove_entry(&PathBuf::from(name));
-                    index
-                })
-                .ok_or_else(|| DirWorkspaceEntryLookupError {
-                    parent,
-                    name: name.to_owned(),
-                })
-        }?;
-        self.open_dir(index)?;
-        let entries = self.workspace
-            .dirs
-            .get(&index)
-            .map(DirWorkspace::get_entries_tuple)
-            .ok_or_else(|| DirWorkspaceEntryLookupError {
-                parent: index,
-                name: name.to_owned(),
-            })?;
-        for entry in entries {
-            match entry {
-                (name, _, FileType::RegularFile) => {
-                    self.unlink(index, name.as_os_str())?;
-                }
-                (name, _, FileType::Directory) => {
-                    self.remove_dir(index, name.as_os_str())?;
-                }
-                (name, _, file_type) => {
-                    panic!("Entry {:?} has unsupported file type {:?}", name, file_type);
-                }
-            }
-        }
-        self.workspace.deleted_inodes.insert(index);
         Ok(())
     }
 
@@ -617,19 +574,13 @@ where
             .map(|&DirEntry { entry_type, .. }| entry_type);
 
         if let Some(entry_type) = old_entry_type {
-            match entry_type {
-                FileType::RegularFile => {
-                    self.unlink(new_parent, new_name.as_os_str())?;
-                }
-                FileType::Directory => {
-                    self.remove_dir(new_parent, new_name.as_os_str())?;
-                }
-                _ => {
-                    panic!(
-                        "Entry {:?} has unsupported file type {:?}",
-                        name, old_entry_type
-                    );
-                }
+            if entry_type == FileType::RegularFile || entry_type == FileType::RegularFile {
+                self.remove(new_parent, new_name.as_os_str())?;
+            } else {
+                panic!(
+                    "Entry {:?} has unsupported file type {:?}",
+                    name, old_entry_type
+                );
             }
         }
 
