@@ -1,11 +1,8 @@
-use std::cell::RefCell;
-use std::cmp::min;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::{cell::RefCell, cmp::min, rc::Rc, sync::Arc};
 
 use cas::Digest;
 use errors::DenebResult;
-use inode::{ChunkDescriptor, FileAttributes, INode};
+use inode::{ChunkDescriptor, INode};
 use store::Store;
 
 /// A type which offers read/write operations on a file in the repository
@@ -20,10 +17,10 @@ use store::Store;
 /// unpackaged chunks in the lower layer is done transparently to the
 /// client of the `FileWorkspace`.
 pub(crate) struct FileWorkspace<S> {
-    #[allow(dead_code)] attributes: FileAttributes,
     lower: Lower<S>,
     upper: Vec<u8>,
     piece_table: Vec<Piece>,
+    size: u64,
 }
 
 impl<S> FileWorkspace<S>
@@ -36,8 +33,8 @@ where
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(inode: &INode, store: Rc<RefCell<S>>) -> FileWorkspace<S> {
-        let lower = Lower::new(inode.chunks.as_slice(), store);
+    pub(crate) fn new(inode: &INode, store: &Rc<RefCell<S>>) -> FileWorkspace<S> {
+        let lower = Lower::new(inode.chunks.as_slice(), &store);
         let piece_table = lower
             .chunks
             .iter()
@@ -51,13 +48,17 @@ where
                 }
             })
             .collect::<Vec<_>>();
-        trace!("New workspace for inode {} - size: {}, num_chunks: {}",
-               inode.attributes.ino, inode.attributes.size, lower.chunks.len());
+        trace!(
+            "New workspace for inode {} - size: {}, num_chunks: {}",
+            inode.attributes.index,
+            inode.attributes.size,
+            lower.chunks.len()
+        );
         FileWorkspace {
-            attributes: inode.attributes,
             lower,
             upper: vec![],
             piece_table,
+            size: inode.attributes.size,
         }
     }
 
@@ -68,8 +69,40 @@ where
         Ok(buffer)
     }
 
+    /// Truncate the workspace to a new size
+    pub(crate) fn truncate(&mut self, new_size: u64) {
+        if new_size == self.size {
+            return;
+        }
+
+        if new_size == 0 {
+            self.size = 0;
+            self.piece_table.clear();
+            self.upper.clear();
+            return;
+        }
+
+        if new_size < self.size {
+            let (piece_idx, offset_in_piece) =
+                piece_idx_for_offset(new_size as usize, &self.piece_table);
+            self.piece_table.truncate(piece_idx + 1);
+            self.piece_table[piece_idx].size = offset_in_piece;
+        } else {
+            let extra_size = (new_size - self.size) as usize;
+            self.piece_table.push(Piece {
+                target: PieceTarget::Zero,
+                offset: 0,
+                size: extra_size,
+            });
+        }
+        self.size = new_size;
+    }
+
     /// Write the contents of buffer into the workspace, starting at `offset`
-    pub(crate) fn write_at(&mut self, offset: usize, buffer: &[u8]) -> DenebResult<()> {
+    ///
+    /// Write the buffer into the workspace at `offset`, returning a tuple with the number of bytes
+    /// written and the new file size
+    pub(crate) fn write_at(&mut self, offset: usize, buffer: &[u8]) -> (u32, u64) {
         // Append buffer to the upper layer
         let buf_size = buffer.len();
         let offset_in_upper = self.upper.len();
@@ -82,17 +115,17 @@ where
         };
 
         // Corner cases: writing into an empty file or appending to the file
-        if self.piece_table.is_empty() || (offset as u64 >= self.attributes.size) {
-            if offset as u64 > self.attributes.size {
+        if self.piece_table.is_empty() || (offset as u64 >= self.size) {
+            if offset as u64 > self.size {
                 self.piece_table.push(Piece {
                     target: PieceTarget::Zero,
                     offset: 0,
-                    size: offset - self.attributes.size as usize,
+                    size: offset - self.size as usize,
                 });
             }
             self.piece_table.push(new_piece);
-            self.attributes.size = (offset + buf_size) as u64;
-            return Ok(());
+            self.size = (offset + buf_size) as u64;
+            return (buf_size as u32, self.size);
         }
 
         // Find the piece where the buffer is to be placed
@@ -115,10 +148,10 @@ where
 
         // Corner case: the buffer to be written extends to the end of the file
         //              or beyond it
-        if (offset + buf_size) as u64 >= self.attributes.size {
-            self.attributes.size = (offset + buf_size) as u64;
+        if (offset + buf_size) as u64 >= self.size {
+            self.size = (offset + buf_size) as u64;
             self.piece_table = new_piece_table;
-            return Ok(());
+            return (buf_size as u32, self.size);
         }
 
         // Find the last piece touched by the buffer
@@ -135,7 +168,7 @@ where
         // Replace the old piece table with the new one
         self.piece_table = new_piece_table;
 
-        Ok(())
+        (buf_size as u32, self.size)
     }
 
     /// Unload the lower layer from memory
@@ -182,7 +215,7 @@ enum PieceTarget {
 
 /// A piece represents a subset of either the lower or upper layers
 ///
-/// If a piece points the lower layer, and index is provided whic identifies which
+/// If a piece points the lower layer, and index is provided which identifies which
 /// chunk in the lower layer is referenced.
 #[derive(Clone)]
 struct Piece {
@@ -219,7 +252,7 @@ where
     S: Store,
 {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(chunk_descriptors: &[ChunkDescriptor], store: Rc<RefCell<S>>) -> Lower<S> {
+    fn new(chunk_descriptors: &[ChunkDescriptor], store: &Rc<RefCell<S>>) -> Lower<S> {
         let mut chunks = vec![];
         for &ChunkDescriptor { digest, size } in chunk_descriptors {
             chunks.push(RefCell::new(Chunk::new(digest, size, Rc::clone(&store))));
@@ -229,7 +262,7 @@ where
 
     /// Unload the lower layer from memory
     fn unload(&self) {
-        for c in self.chunks.iter() {
+        for c in &self.chunks {
             let mut chk = c.borrow_mut();
             chk.unload();
         }
@@ -291,8 +324,11 @@ where
         if self.data.is_none() {
             self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
         }
-        trace!("Loaded contents of chunk {} -  size: {}",
-               self.digest, self.size);
+        trace!(
+            "Loaded contents of chunk {} -  size: {}",
+            self.digest,
+            self.size
+        );
         // Note: The following unwrap should never panic
         Ok(self.data.as_ref().unwrap().as_slice())
     }
@@ -346,6 +382,7 @@ fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) 
 mod tests {
     use super::*;
 
+    use inode::FileAttributes;
     use store::MemStore;
     use util::run;
 
@@ -360,7 +397,7 @@ mod tests {
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        Ok(FileWorkspace::new(&inode, Rc::clone(&store)))
+        Ok(FileWorkspace::new(&inode, &Rc::clone(&store)))
     }
 
     #[test]
@@ -368,7 +405,7 @@ mod tests {
         run(|| {
             let ws = make_test_workspace()?;
 
-            let res = ws.read_at(0, ws.attributes.size as usize)?;
+            let res = ws.read_at(0, ws.size as usize)?;
 
             assert_eq!(b"alabalaportocala", res.as_slice());
 
@@ -387,14 +424,14 @@ mod tests {
                 attributes: FileAttributes::default(),
                 chunks: vec![],
             };
-            let mut ws = FileWorkspace::new(&inode, Rc::clone(&store));
+            let mut ws = FileWorkspace::new(&inode, &Rc::clone(&store));
 
-            assert!(ws.write_at(0, b"written").is_ok());
+            assert_eq!(ws.write_at(0, b"written"), (7, 7));
 
             let res = ws.read_at(0, 7)?;
             assert_eq!(b"written", res.as_slice());
             assert_eq!(ws.piece_table.len(), 1);
-            assert_eq!(ws.attributes.size, 7);
+            assert_eq!(ws.size, 7);
 
             Ok(())
         });
@@ -408,12 +445,12 @@ mod tests {
             let res0 = ws.read_at(0, 16)?;
             assert_eq!(b"alabalaportocala", res0.as_slice());
 
-            assert!(ws.write_at(2, b"written").is_ok());
+            assert_eq!(ws.write_at(2, b"written"), (7, 16));
 
             let res1 = ws.read_at(0, 16)?;
             assert_eq!(b"alwrittenrtocala", res1.as_slice());
 
-            assert!(ws.write_at(6, b"again").is_ok());
+            assert_eq!(ws.write_at(6, b"again"), (5, 16));
 
             ws.unload();
 
@@ -429,13 +466,13 @@ mod tests {
         run(|| {
             let mut ws = make_test_workspace()?;
 
-            assert!(ws.write_at(0, b"written").is_ok());
+            assert_eq!(ws.write_at(0, b"written"), (7, 16));
 
             let res = ws.read_at(0, 16)?;
 
             assert_eq!(b"writtenportocala", res.as_slice());
             assert_eq!(ws.piece_table.len(), 2);
-            assert_eq!(ws.attributes.size, 16);
+            assert_eq!(ws.size, 16);
 
             Ok(())
         });
@@ -446,13 +483,13 @@ mod tests {
         run(|| {
             let mut ws = make_test_workspace()?;
 
-            assert!(ws.write_at(9, b"written").is_ok());
+            assert_eq!(ws.write_at(9, b"written"), (7, 16));
 
             let res = ws.read_at(0, 16)?;
 
             assert_eq!(b"alabalapowritten", res.as_slice());
             assert_eq!(ws.piece_table.len(), 4);
-            assert_eq!(ws.attributes.size, 16);
+            assert_eq!(ws.size, 16);
 
             Ok(())
         });
@@ -463,13 +500,13 @@ mod tests {
         run(|| {
             let mut ws = make_test_workspace()?;
 
-            assert!(ws.write_at(12, b"written").is_ok());
+            assert_eq!(ws.write_at(12, b"written"), (7, 19));
 
             let res = ws.read_at(0, 19)?;
 
             assert_eq!(b"alabalaportowritten", res.as_slice());
             assert_eq!(ws.piece_table.len(), 4);
-            assert_eq!(ws.attributes.size, 19);
+            assert_eq!(ws.size, 19);
 
             Ok(())
         });
@@ -480,13 +517,13 @@ mod tests {
         run(|| {
             let mut ws = make_test_workspace()?;
 
-            assert!(ws.write_at(16, b"written").is_ok());
+            assert_eq!(ws.write_at(16, b"written"), (7, 23));
 
             let res = ws.read_at(0, 23)?;
 
             assert_eq!(b"alabalaportocalawritten", res.as_slice());
             assert_eq!(ws.piece_table.len(), 4);
-            assert_eq!(ws.attributes.size, 23);
+            assert_eq!(ws.size, 23);
 
             Ok(())
         });
@@ -497,7 +534,7 @@ mod tests {
         run(|| {
             let mut ws = make_test_workspace()?;
 
-            assert!(ws.write_at(20, b"written").is_ok());
+            assert_eq!(ws.write_at(20, b"written"), (7, 27));
 
             let res = ws.read_at(0, 27)?;
 
@@ -509,7 +546,7 @@ mod tests {
                 res.as_slice()
             );
             assert_eq!(ws.piece_table.len(), 5);
-            assert_eq!(ws.attributes.size, 27);
+            assert_eq!(ws.size, 27);
 
             Ok(())
         });

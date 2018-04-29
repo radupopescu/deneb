@@ -51,7 +51,9 @@ impl Store for MemStore {
     // Note: can this be improved by inserting chunks as the become available from
     //       read_chunks?
     fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
-        self.objects.entry(*digest).or_insert(Arc::new(contents));
+        self.objects
+            .entry(*digest)
+            .or_insert_with(|| Arc::new(contents));
         Ok(())
     }
 }

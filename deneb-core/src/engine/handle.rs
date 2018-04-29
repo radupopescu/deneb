@@ -1,8 +1,6 @@
-use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::sync::mpsc::sync_channel;
+use std::{ffi::OsStr, path::PathBuf, sync::mpsc::sync_channel};
 
-use inode::{FileAttributes, FileType};
+use inode::{FileAttributeChanges, FileAttributes, FileType};
 use errors::{DenebResult, EngineError};
 
 use super::protocol::{Reply, Request, RequestChannel, RequestId};
@@ -23,14 +21,28 @@ impl Handle {
         }
     }
 
+    pub fn set_attr(
+        &self,
+        _id: &RequestId,
+        index: u64,
+        changes: FileAttributeChanges,
+    ) -> DenebResult<FileAttributes> {
+        let reply = self.make_request(Request::SetAttr { index, changes })?;
+        if let Reply::SetAttr(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     pub fn lookup(
         &self,
         _id: &RequestId,
         parent: u64,
         name: &OsStr,
-    ) -> DenebResult<FileAttributes> {
+    ) -> DenebResult<Option<FileAttributes>> {
         let reply = self.make_request(Request::Lookup {
-            parent: parent,
+            parent,
             name: name.to_os_string(),
         })?;
         if let Reply::Lookup(result) = reply {
@@ -100,6 +112,25 @@ impl Handle {
         }
     }
 
+    pub fn write_data(
+        &self,
+        _id: &RequestId,
+        index: u64,
+        offset: i64,
+        data: &[u8],
+    ) -> DenebResult<u32> {
+        let reply = self.make_request(Request::WriteData {
+            index,
+            offset,
+            data: data.to_vec(),
+        })?;
+        if let Reply::WriteData(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
     pub fn release_file(
         &self,
         _id: &RequestId,
@@ -115,6 +146,91 @@ impl Handle {
             flush,
         })?;
         if let Reply::ReleaseFile(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn create_file(
+        &self,
+        _id: &RequestId,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+        flags: u32,
+    ) -> DenebResult<(u64, FileAttributes)> {
+        let reply = self.make_request(Request::CreateFile {
+            parent,
+            name: name.to_owned(),
+            mode,
+            flags,
+        })?;
+        if let Reply::CreateFile(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn create_dir(
+        &self,
+        _id: &RequestId,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+    ) -> DenebResult<FileAttributes> {
+        let reply = self.make_request(Request::CreateDir {
+            parent,
+            name: name.to_owned(),
+            mode,
+        })?;
+        if let Reply::CreateDir(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn unlink(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
+        let reply = self.make_request(Request::Unlink {
+            parent,
+            name: name.to_owned(),
+        })?;
+        if let Reply::Unlink(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn remove_dir(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
+        let reply = self.make_request(Request::RemoveDir {
+            parent,
+            name: name.to_owned(),
+        })?;
+        if let Reply::RemoveDir(result) = reply {
+            result
+        } else {
+            Err(EngineError::InvalidReply.into())
+        }
+    }
+
+    pub fn rename(
+        &self,
+        _id: &RequestId,
+        parent: u64,
+        name: &OsStr,
+        new_parent: u64,
+        new_name: &OsStr,
+    ) -> DenebResult<()> {
+        let reply = self.make_request(Request::Rename {
+            parent,
+            name: name.to_owned(),
+            new_parent,
+            new_name: new_name.to_owned(),
+        })?;
+        if let Reply::Rename(result) = reply {
             result
         } else {
             Err(EngineError::InvalidReply.into())

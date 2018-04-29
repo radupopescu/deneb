@@ -1,4 +1,5 @@
-use nix::unistd::mkstemp;
+use nix::{libc::{getegid, geteuid, gid_t, uid_t},
+          unistd::mkstemp};
 use time::precise_time_ns;
 
 use std::fs::{remove_file, rename, File};
@@ -35,6 +36,15 @@ pub fn run<F: Fn() -> DenebResult<()>>(f: F) {
         eprintln!("Error: {}", e);
         ::std::process::exit(1);
     }
+}
+
+// Safe wrappers on top of  some libc functions
+pub fn get_egid() -> gid_t {
+    unsafe { getegid() }
+}
+
+pub fn get_euid() -> uid_t {
+    unsafe { geteuid() }
 }
 
 // Can this be made faster? Is it worth it?

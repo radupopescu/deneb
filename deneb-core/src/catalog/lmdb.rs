@@ -1,12 +1,10 @@
 use failure::ResultExt;
-
 use bincode::{deserialize, serialize};
-use lmdb::{Cursor, Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError,
+use lmdb::{Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError,
            Transaction, WriteFlags};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
 
 use std::collections::BTreeMap;
-use std::cmp::max;
 use std::str::from_utf8;
 
 use errors::CatalogError;
@@ -24,9 +22,9 @@ pub struct LmdbCatalog {
     env: Environment,
     inodes: Database,
     dir_entries: Database,
-    _meta: Database,
+    max_index: u64,
+    meta: Database,
     version: u32,
-    index_generator: IndexGenerator,
 }
 
 pub struct LmdbCatalogBuilder;
@@ -46,18 +44,19 @@ impl CatalogBuilder for LmdbCatalogBuilder {
                 &format!("{}", CATALOG_VERSION),
                 WriteFlags::empty(),
             )?;
+            writer.put(meta, &"max_index", &"1", WriteFlags::empty())?;
             writer.commit()?;
         }
 
         info!("Created LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-            env: env,
-            inodes: inodes,
-            dir_entries: dir_entries,
-            _meta: meta,
+            env,
+            inodes,
+            dir_entries,
+            max_index: 1,
+            meta,
             version: CATALOG_VERSION,
-            index_generator: IndexGenerator::default(),
         })
     }
 
@@ -75,25 +74,21 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         }
 
         // Retrieve the largest inode index in the catalog
-        let starting_index = {
+        let max_index = {
             let reader = env.begin_ro_txn()?;
-            let mut max_index = 1;
-            for (k, _v) in reader.open_ro_cursor(inodes)?.iter() {
-                let idx = from_utf8(k)?.parse::<u64>()?;
-                max_index = max(idx, max_index);
-            }
-            max_index
-        };
+            let v = reader.get(meta, &"max_index")?;
+            from_utf8(v)?.parse::<u64>()
+        }?;
 
         info!("Opened LMDB catalog {:?}.", path.as_ref());
 
         Ok(Self::Catalog {
-            env: env,
-            inodes: inodes,
-            dir_entries: dir_entries,
-            _meta: meta,
+            env,
+            inodes,
+            dir_entries,
+            max_index,
+            meta,
             version: ver,
-            index_generator: IndexGenerator::starting_at(starting_index)?,
         })
     }
 }
@@ -123,8 +118,8 @@ impl Catalog for LmdbCatalog {
         info!("Catalog version: {}", self.version);
     }
 
-    fn get_next_index(&self) -> u64 {
-        self.index_generator.get_next()
+    fn get_max_index(&self) -> u64 {
+        self.max_index
     }
 
     fn get_inode(&self, index: u64) -> DenebResult<INode> {
@@ -137,18 +132,14 @@ impl Catalog for LmdbCatalog {
             .map_err(|e| e.into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
         let reader = self.env.begin_ro_txn()?;
         let buffer = reader
             .get(self.dir_entries, &format!("{}", parent))
             .context(CatalogError::DEntryRead(parent))?;
         let entries = deserialize::<BTreeMap<PathBuf, u64>>(buffer)
             .context(CatalogError::DEntryDeserialization(parent))?;
-        let idx = entries
-            .get(name)
-            .cloned()
-            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent))?;
-        Ok(idx)
+        Ok(entries.get(name).cloned())
     }
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
@@ -164,15 +155,15 @@ impl Catalog for LmdbCatalog {
             .collect::<Vec<(PathBuf, u64)>>())
     }
 
-    fn add_inode(
-        &mut self,
-        entry: &Path,
-        index: u64,
-        chunks: Vec<ChunkDescriptor>,
-    ) -> DenebResult<()> {
-        let inode = INode::new(index, entry, chunks)?;
-
+    fn add_inode(&mut self, inode: INode) -> DenebResult<()> {
+        let index = inode.attributes.index;
         let buffer = serialize(&inode).context(CatalogError::INodeSerialization(index))?;
+
+        let max_index = {
+            let reader = self.env.begin_ro_txn()?;
+            let v = reader.get(self.meta, &"max_index")?;
+            from_utf8(v)?.parse::<u64>()
+        }?;
 
         let mut writer = self.env.begin_rw_txn()?;
 
@@ -184,6 +175,16 @@ impl Catalog for LmdbCatalog {
                 WriteFlags::empty(),
             )
             .context(CatalogError::INodeWrite(index))?;
+
+        if index > max_index {
+            writer.put(
+                self.meta,
+                &"max_index",
+                &format!("{}", index),
+                WriteFlags::empty(),
+            )?;
+            self.max_index = index;
+        }
 
         writer.commit()?;
 
@@ -290,9 +291,12 @@ fn get_env_stat(env: &Environment) -> MDB_stat {
 
 #[cfg(test)]
 mod tests {
+    use nix::sys::stat::lstat;
     use tempdir::TempDir;
 
     use super::*;
+
+    use inode::FileAttributes;
 
     #[test]
     fn lmdb_catalog_create_then_reopen() {
@@ -306,15 +310,26 @@ mod tests {
                 assert!(catalog.is_ok());
                 if let Ok(mut catalog) = catalog {
                     catalog.show_stats();
-                    assert!(catalog.add_inode(Path::new("/tmp/"), 2, vec![]).is_ok());
-                    assert!(catalog.add_inode(Path::new("/usr/"), 3, vec![]).is_ok());
+
+                    let stats1 = lstat(Path::new("/tmp/"));
+                    let stats2 = lstat(Path::new("/usr/"));
+                    assert!(stats1.is_ok());
+                    assert!(stats2.is_ok());
+                    if let (Ok(stats1), Ok(stats2)) = (stats1, stats2) {
+                        let attrs1 = FileAttributes::with_stats(stats1, 2);
+                        let attrs2 = FileAttributes::with_stats(stats2, 3);
+                        let inode1 = INode::new(attrs1, vec![]);
+                        let inode2 = INode::new(attrs2, vec![]);
+                        assert!(catalog.add_inode(inode1).is_ok());
+                        assert!(catalog.add_inode(inode2).is_ok());
+                    }
                 }
             }
             {
                 let catalog = cb.open(&catalog_path);
                 assert!(catalog.is_ok());
                 if let Ok(catalog) = catalog {
-                    assert_eq!(catalog.index_generator.get_next(), 4);
+                    assert_eq!(catalog.get_max_index(), 3);
                 }
             }
         }

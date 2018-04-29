@@ -14,18 +14,16 @@ use copy_dir::copy_dir;
 use quickcheck::{QuickCheck, StdGen};
 use tempdir::TempDir;
 
-use std::fs::create_dir_all;
-use std::path::Path;
+use std::{ffi::OsStr, fs::create_dir_all, path::Path};
 
 mod common;
 
 use common::*;
 
-use deneb_core::errors::DenebResult;
-use deneb_core::populate_with_dir;
-use deneb_core::catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder};
-use deneb_core::engine::{start_engine, start_engine_prebuilt};
-use deneb_core::store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder};
+use deneb_core::{populate_with_dir,
+                 catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder},
+                 engine::{start_engine, start_engine_prebuilt}, errors::DenebResult,
+                 store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder}};
 use deneb_fuse::fs::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
@@ -98,7 +96,11 @@ fn init_test<'a>(
             1000,
         ),
     }?;
-    Fs::mount(&mount_point, handle, &[])
+    let options = ["-o", "negative_vncache"]
+        .iter()
+        .map(|o| o.as_ref())
+        .collect::<Vec<&OsStr>>();
+    Fs::mount(&mount_point, handle, &options)
 }
 
 // Simple integration test

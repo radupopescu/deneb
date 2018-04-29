@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use inode::{ChunkDescriptor, INode};
+use inode::INode;
 
 use errors::CatalogError;
 use super::*;
@@ -24,7 +24,7 @@ impl CatalogBuilder for MemCatalogBuilder {
 pub struct MemCatalog {
     inodes: HashMap<u64, INode>,
     dir_entries: HashMap<u64, HashMap<PathBuf, u64>>,
-    index_generator: IndexGenerator,
+    max_index: u64,
 }
 
 impl MemCatalog {
@@ -44,8 +44,8 @@ impl MemCatalog {
 }
 
 impl Catalog for MemCatalog {
-    fn get_next_index(&self) -> u64 {
-        self.index_generator.get_next()
+    fn get_max_index(&self) -> u64 {
+        self.max_index
     }
 
     fn get_inode(&self, index: u64) -> DenebResult<INode> {
@@ -55,12 +55,11 @@ impl Catalog for MemCatalog {
             .ok_or_else(|| CatalogError::INodeRead(index).into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<u64> {
-        self.dir_entries
+    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
+        Ok(self.dir_entries
             .get(&parent)
             .and_then(|entries| entries.get(name))
-            .cloned()
-            .ok_or_else(|| CatalogError::DEntryNotFound(name.into(), parent).into())
+            .cloned())
     }
 
     fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
@@ -75,14 +74,12 @@ impl Catalog for MemCatalog {
             .ok_or_else(|| CatalogError::DEntryRead(parent).into())
     }
 
-    fn add_inode(
-        &mut self,
-        entry: &Path,
-        index: u64,
-        chunks: Vec<ChunkDescriptor>,
-    ) -> DenebResult<()> {
-        let inode = INode::new(index, entry, chunks)?;
+    fn add_inode(&mut self, inode: INode) -> DenebResult<()> {
+        let index = inode.attributes.index;
         self.inodes.insert(index, inode);
+        if index > self.max_index {
+            self.max_index = index;
+        }
         Ok(())
     }
 

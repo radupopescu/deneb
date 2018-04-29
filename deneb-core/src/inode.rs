@@ -1,13 +1,11 @@
 use nix::libc::mode_t;
-use nix::sys::stat::{lstat, SFlag};
+use nix::sys::stat::{FileStat, SFlag};
 use time::Timespec;
 
 use std::cmp::{max, min};
 use std::i32;
 use std::u16;
-use std::path::Path;
 
-use errors::UnixError;
 use cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -22,13 +20,17 @@ pub enum FileType {
 
 #[derive(Copy, Clone, Debug, Deserialize, Serialize)]
 pub struct FileAttributes {
-    pub ino: u64,
+    pub index: u64,
     pub size: u64,
     pub blocks: u64,
-    #[serde(with = "TimespecDef")] pub atime: Timespec,
-    #[serde(with = "TimespecDef")] pub mtime: Timespec,
-    #[serde(with = "TimespecDef")] pub ctime: Timespec,
-    #[serde(with = "TimespecDef")] pub crtime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub atime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub mtime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub ctime: Timespec,
+    #[serde(with = "TimespecDef")]
+    pub crtime: Timespec,
     pub kind: FileType,
     pub perm: u16,
     pub nlink: u32,
@@ -38,10 +40,46 @@ pub struct FileAttributes {
     pub flags: u32,
 }
 
+impl FileAttributes {
+    pub fn with_stats(stats: FileStat, index: u64) -> FileAttributes {
+        let mut attrs = FileAttributes::from(stats);
+        attrs.index = index;
+        attrs
+    }
+
+    pub fn update(&mut self, changes: &FileAttributeChanges) {
+        if let Some(mode) = changes.mode {
+            self.kind = mode_to_file_type(mode as mode_t);
+            self.perm = mode_to_permissions(mode as mode_t);
+        }
+        if let Some(uid) = changes.uid {
+            self.uid = uid;
+        }
+        if let Some(gid) = changes.gid {
+            self.gid = gid;
+        }
+        if let Some(size) = changes.size {
+            self.size = size;
+        }
+        if let Some(atime) = changes.atime {
+            self.atime = atime;
+        }
+        if let Some(mtime) = changes.mtime {
+            self.mtime = mtime;
+        }
+        if let Some(crtime) = changes.crtime {
+            self.crtime = crtime;
+        }
+        if let Some(chgtime) = changes.chgtime {
+            self.ctime = chgtime;
+        }
+    }
+}
+
 impl Default for FileAttributes {
     fn default() -> FileAttributes {
         FileAttributes {
-            ino: 0,
+            index: 0,
             size: 0,
             blocks: 0,
             atime: Timespec::new(0, 0),
@@ -59,25 +97,12 @@ impl Default for FileAttributes {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ChunkDescriptor {
-    pub digest: Digest,
-    pub size: usize,
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-pub struct INode {
-    pub attributes: FileAttributes,
-    pub chunks: Vec<ChunkDescriptor>,
-}
-
-impl INode {
-    pub fn new(index: u64, path: &Path, chunks: Vec<ChunkDescriptor>) -> Result<INode, UnixError> {
-        let stats = lstat(path)?;
+impl From<FileStat> for FileAttributes {
+    fn from(stats: FileStat) -> FileAttributes {
         // Note: we prefix `attributes` with an underscore to avoid triggering an
         //       "unused_mut" warning on Linux.
         let mut _attributes = FileAttributes {
-            ino: index,
+            index: stats.st_ino,
             size: max::<i64>(stats.st_size, 0) as u64,
             blocks: max::<i64>(stats.st_blocks, 0) as u64,
             atime: Timespec {
@@ -108,15 +133,69 @@ impl INode {
                 nsec: min::<i64>(stats.st_birthtime_nsec, i64::from(i32::MAX)) as i32,
             };
         }
-
-        Ok(INode {
-            attributes: _attributes,
-            chunks: chunks,
-        })
+        _attributes
     }
 }
 
-fn mode_to_file_type(mode: mode_t) -> FileType {
+pub struct FileAttributeChanges {
+    mode: Option<u32>,
+    uid: Option<u32>,
+    gid: Option<u32>,
+    pub size: Option<u64>,
+    atime: Option<Timespec>,
+    mtime: Option<Timespec>,
+    crtime: Option<Timespec>,
+    chgtime: Option<Timespec>,
+    #[allow(dead_code)]
+    flags: Option<u32>,
+}
+
+impl FileAttributeChanges {
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    pub fn new(
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+        crtime: Option<Timespec>,
+        chgtime: Option<Timespec>,
+        flags: Option<u32>,
+    ) -> FileAttributeChanges {
+        FileAttributeChanges {
+            mode,
+            uid,
+            gid,
+            size,
+            atime,
+            mtime,
+            crtime,
+            chgtime,
+            flags,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ChunkDescriptor {
+    pub digest: Digest,
+    pub size: usize,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct INode {
+    pub attributes: FileAttributes,
+    pub chunks: Vec<ChunkDescriptor>,
+}
+
+impl INode {
+    pub fn new(attributes: FileAttributes, chunks: Vec<ChunkDescriptor>) -> INode {
+        INode { attributes, chunks }
+    }
+}
+
+pub(crate) fn mode_to_file_type(mode: mode_t) -> FileType {
     let ft = mode & SFlag::S_IFMT.bits();
     if ft == SFlag::S_IFDIR.bits() {
         FileType::Directory
@@ -136,7 +215,7 @@ fn mode_to_file_type(mode: mode_t) -> FileType {
     }
 }
 
-fn mode_to_permissions(mode: mode_t) -> u16 {
+pub(crate) fn mode_to_permissions(mode: mode_t) -> u16 {
     #[cfg(target_os = "linux")]
     debug_assert!(mode <= u16::MAX as u32);
     (mode & !SFlag::S_IFMT.bits()) as u16
@@ -151,6 +230,8 @@ struct TimespecDef {
 
 #[cfg(test)]
 mod tests {
+    use nix::sys::stat::lstat;
+
     use super::*;
 
     #[test]
