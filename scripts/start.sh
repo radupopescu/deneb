@@ -32,6 +32,8 @@ if [ x"$prefix" = x"" ]; then
     exit 1
 fi
 
+mkdir -p $prefix/{internal,mount,data}
+
 args="-w $prefix/internal -m $prefix/mount -l $log_level"
 if [ x"$do_sync" = x"true" ]; then
     args="-s $prefix/data $args"
