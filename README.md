@@ -1,10 +1,10 @@
-# Deneb - distributed directory syncronization
+# Deneb - distributed directory synchronization
 
 [![Build status](https://travis-ci.org/radupopescu/deneb.svg?branch=master)](https://travis-ci.org/radupopescu/deneb)
 
 ## Overview
 
-Deneb is a solution for syncronizing directories across multiple computers. File contents are efficiently stored as immutable content-addressed blobs. File metadata is held in a catalog file, which represents a Merkle tree encoding of the entire directory tree state at a given point in time.
+Deneb is a solution for synchronizing directories across multiple computers. File contents are efficiently stored as immutable content-addressed blobs. File metadata is held in a catalog file, which represents a Merkle tree encoding of the entire directory tree state at a given point in time.
 
 This representation of file data and metadata is chosen to facilitate the distribution and synchronization of the directory tree on multiple computers.
 
