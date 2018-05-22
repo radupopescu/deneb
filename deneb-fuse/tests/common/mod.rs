@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use quickcheck::{Arbitrary, Gen};
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, Rng, RngCore};
 use uuid::Uuid;
 
 use std::fs::{create_dir_all, remove_dir_all, File};
