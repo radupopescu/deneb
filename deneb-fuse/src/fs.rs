@@ -9,9 +9,11 @@ use time::Timespec;
 
 use std::{ffi::OsStr, path::{Path, PathBuf}};
 
-use deneb_core::{engine::{Handle, RequestId},
+use deneb_core::{catalog::Catalog,
+                 engine::{Handle, RequestId},
                  errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
-                 inode::{FileAttributeChanges, FileAttributes, FileType as FT}};
+                 inode::{FileAttributeChanges, FileAttributes, FileType as FT},
+                 store::Store};
 
 pub struct Session<'a> {
     fuse_session: BackgroundSession<'a>,
@@ -45,14 +47,22 @@ impl<'a> Session<'a> {
     }
 }
 
-pub struct Fs {
-    engine_handle: Handle,
+pub struct Fs<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    engine_handle: Handle<C, S>,
 }
 
-impl<'a> Fs {
+impl<'a, C, S> Fs<C, S>
+where
+    C: Catalog + 'static,
+    S: Store + 'static,
+{
     pub fn mount<P: AsRef<Path>>(
         mount_point: &P,
-        engine_handle: Handle,
+        engine_handle: Handle<C, S>,
         options: &[&OsStr],
     ) -> DenebResult<Session<'a>> {
         let fs = Fs { engine_handle };
@@ -64,7 +74,11 @@ impl<'a> Fs {
     }
 }
 
-impl Filesystem for Fs {
+impl<C, S> Filesystem for Fs<C, S>
+where
+    C: Catalog + 'static,
+    S: Store + 'static,
+{
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
         match self.engine_handle.get_attr(&to_request_id(req), ino) {
             Ok(attrs) => {

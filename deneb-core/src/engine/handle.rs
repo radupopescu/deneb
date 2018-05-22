@@ -1,24 +1,36 @@
-use std::{ffi::OsStr, path::PathBuf, sync::mpsc::sync_channel};
+use std::{ffi::OsStr, path::PathBuf};
 
+use catalog::Catalog;
+use errors::DenebResult;
 use inode::{FileAttributeChanges, FileAttributes, FileType};
-use errors::{DenebResult, EngineError};
+use store::Store;
 
-use super::protocol::{Reply, Request, RequestChannel, RequestId};
+use super::{
+    protocol::{make_request, RequestChannel},
+    requests::{
+        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
+        ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, Unlink, WriteData,
+    },
+    Engine,
+};
 
 #[derive(Clone)]
-pub struct Handle {
-    channel: RequestChannel,
+pub struct Handle<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    channel: RequestChannel<Engine<C, S>>,
 }
 
-impl Handle {
+impl<C, S> Handle<C, S>
+where
+    C: Catalog + 'static,
+    S: Store + 'static,
+{
     // Client API
     pub fn get_attr(&self, _id: &RequestId, index: u64) -> DenebResult<FileAttributes> {
-        let reply = self.make_request(Request::GetAttr { index })?;
-        if let Reply::GetAttr(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(GetAttr { index }, &self.channel)
     }
 
     pub fn set_attr(
@@ -27,12 +39,7 @@ impl Handle {
         index: u64,
         changes: FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        let reply = self.make_request(Request::SetAttr { index, changes })?;
-        if let Reply::SetAttr(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(SetAttr { index, changes }, &self.channel)
     }
 
     pub fn lookup(
@@ -41,33 +48,21 @@ impl Handle {
         parent: u64,
         name: &OsStr,
     ) -> DenebResult<Option<FileAttributes>> {
-        let reply = self.make_request(Request::Lookup {
-            parent,
-            name: name.to_os_string(),
-        })?;
-        if let Reply::Lookup(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            Lookup {
+                parent,
+                name: name.to_os_string(),
+            },
+            &self.channel,
+        )
     }
 
     pub fn open_dir(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        let reply = self.make_request(Request::OpenDir { index, flags })?;
-        if let Reply::OpenDir(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(OpenDir { index, flags }, &self.channel)
     }
 
     pub fn release_dir(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        let reply = self.make_request(Request::ReleaseDir { index, flags })?;
-        if let Reply::ReleaseDir(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(ReleaseDir { index, flags }, &self.channel)
     }
 
     pub fn read_dir(
@@ -76,21 +71,11 @@ impl Handle {
         index: u64,
         offset: i64,
     ) -> DenebResult<Vec<(PathBuf, u64, FileType)>> {
-        let reply = self.make_request(Request::ReadDir { index, offset })?;
-        if let Reply::ReadDir(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(ReadDir { index, offset }, &self.channel)
     }
 
     pub fn open_file(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        let reply = self.make_request(Request::OpenFile { index, flags })?;
-        if let Reply::OpenFile(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(OpenFile { index, flags }, &self.channel)
     }
 
     pub fn read_data(
@@ -100,16 +85,14 @@ impl Handle {
         offset: i64,
         size: u32,
     ) -> DenebResult<Vec<u8>> {
-        let reply = self.make_request(Request::ReadData {
-            index,
-            offset,
-            size,
-        })?;
-        if let Reply::ReadData(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            ReadData {
+                index,
+                offset,
+                size,
+            },
+            &self.channel,
+        )
     }
 
     pub fn write_data(
@@ -119,16 +102,14 @@ impl Handle {
         offset: i64,
         data: &[u8],
     ) -> DenebResult<u32> {
-        let reply = self.make_request(Request::WriteData {
-            index,
-            offset,
-            data: data.to_vec(),
-        })?;
-        if let Reply::WriteData(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            WriteData {
+                index,
+                offset,
+                data: data.to_vec(),
+            },
+            &self.channel,
+        )
     }
 
     pub fn release_file(
@@ -139,17 +120,15 @@ impl Handle {
         lock_owner: u64,
         flush: bool,
     ) -> DenebResult<()> {
-        let reply = self.make_request(Request::ReleaseFile {
-            index,
-            flags,
-            lock_owner,
-            flush,
-        })?;
-        if let Reply::ReleaseFile(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            ReleaseFile {
+                index,
+                flags,
+                lock_owner,
+                flush,
+            },
+            &self.channel,
+        )
     }
 
     pub fn create_file(
@@ -160,17 +139,15 @@ impl Handle {
         mode: u32,
         flags: u32,
     ) -> DenebResult<(u64, FileAttributes)> {
-        let reply = self.make_request(Request::CreateFile {
-            parent,
-            name: name.to_owned(),
-            mode,
-            flags,
-        })?;
-        if let Reply::CreateFile(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            CreateFile {
+                parent,
+                name: name.to_owned(),
+                mode,
+                flags,
+            },
+            &self.channel,
+        )
     }
 
     pub fn create_dir(
@@ -180,40 +157,34 @@ impl Handle {
         name: &OsStr,
         mode: u32,
     ) -> DenebResult<FileAttributes> {
-        let reply = self.make_request(Request::CreateDir {
-            parent,
-            name: name.to_owned(),
-            mode,
-        })?;
-        if let Reply::CreateDir(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            CreateDir {
+                parent,
+                name: name.to_owned(),
+                mode,
+            },
+            &self.channel,
+        )
     }
 
     pub fn unlink(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
-        let reply = self.make_request(Request::Unlink {
-            parent,
-            name: name.to_owned(),
-        })?;
-        if let Reply::Unlink(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            Unlink {
+                parent,
+                name: name.to_owned(),
+            },
+            &self.channel,
+        )
     }
 
     pub fn remove_dir(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
-        let reply = self.make_request(Request::RemoveDir {
-            parent,
-            name: name.to_owned(),
-        })?;
-        if let Reply::RemoveDir(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            RemoveDir {
+                parent,
+                name: name.to_owned(),
+            },
+            &self.channel,
+        )
     }
 
     pub fn rename(
@@ -224,30 +195,19 @@ impl Handle {
         new_parent: u64,
         new_name: &OsStr,
     ) -> DenebResult<()> {
-        let reply = self.make_request(Request::Rename {
-            parent,
-            name: name.to_owned(),
-            new_parent,
-            new_name: new_name.to_owned(),
-        })?;
-        if let Reply::Rename(result) = reply {
-            result
-        } else {
-            Err(EngineError::InvalidReply.into())
-        }
+        make_request(
+            Rename {
+                parent,
+                name: name.to_owned(),
+                new_parent,
+                new_name: new_name.to_owned(),
+            },
+            &self.channel,
+        )
     }
 
     // Private functions
-    pub(in engine) fn new(channel: RequestChannel) -> Handle {
+    pub(in engine) fn new(channel: RequestChannel<Engine<C, S>>) -> Handle<C, S> {
         Handle { channel }
-    }
-
-    fn make_request(&self, req: Request) -> DenebResult<Reply> {
-        let (tx, rx) = sync_channel(0);
-        self.channel
-            .clone()
-            .send((req, tx))
-            .map_err(|_| EngineError::SendFailed)?;
-        rx.recv().map_err(|e| e.into())
     }
 }

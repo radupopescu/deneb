@@ -20,10 +20,11 @@ mod common;
 
 use common::*;
 
-use deneb_core::{populate_with_dir,
-                 catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder},
-                 engine::{start_engine, start_engine_prebuilt}, errors::DenebResult,
-                 store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder}};
+use deneb_core::{
+    catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder},
+    engine::{start_engine, start_engine_prebuilt}, errors::DenebResult, populate_with_dir,
+    store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder},
+};
 use deneb_fuse::fs::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
@@ -50,12 +51,10 @@ fn make_test_dir_tree(prefix: &Path) -> DenebResult<DirTree> {
         ),
         DirEntry::Dir(
             "dir2".to_owned(),
-            vec![
-                DirEntry::Dir(
-                    "dir3".to_owned(),
-                    vec![DirEntry::File("c.txt".to_owned(), b"for?\n".to_vec())],
-                ),
-            ],
+            vec![DirEntry::Dir(
+                "dir3".to_owned(),
+                vec![DirEntry::File("c.txt".to_owned(), b"for?\n".to_vec())],
+            )],
         ),
     ];
 
@@ -79,28 +78,32 @@ fn init_test<'a>(
     create_dir_all(&mount_point)?;
     let work_dir = prefix.join("internal");
 
-    let handle = match test_type {
+    let options = ["-o", "negative_vncache"]
+        .iter()
+        .map(|o| o.as_ref())
+        .collect::<Vec<&OsStr>>();
+
+    match test_type {
         TestType::InMemory => {
             // The paths given to the in-memory builders doesn't matter
             let mut store = MemStoreBuilder.at_dir(&work_dir, chunk_size)?;
             let mut catalog = MemCatalogBuilder.create(&work_dir)?;
             populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
-            start_engine_prebuilt(catalog, store, 1000)
+            let handle = start_engine_prebuilt(catalog, store, 1000)?;
+            Fs::mount(&mount_point, handle, &options)
         }
-        TestType::OnDisk => start_engine(
-            &LmdbCatalogBuilder,
-            &DiskStoreBuilder,
-            &work_dir,
-            Some(input.to_owned()),
-            chunk_size,
-            1000,
-        ),
-    }?;
-    let options = ["-o", "negative_vncache"]
-        .iter()
-        .map(|o| o.as_ref())
-        .collect::<Vec<&OsStr>>();
-    Fs::mount(&mount_point, handle, &options)
+        TestType::OnDisk => {
+            let handle = start_engine(
+                &LmdbCatalogBuilder,
+                &DiskStoreBuilder,
+                &work_dir,
+                Some(input.to_owned()),
+                chunk_size,
+                1000,
+            )?;
+            Fs::mount(&mount_point, handle, &options)
+        }
+    }
 }
 
 // Simple integration test

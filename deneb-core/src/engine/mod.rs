@@ -2,28 +2,41 @@ use failure::{Error, ResultExt};
 use nix::libc::mode_t;
 use time::now_utc;
 
-use std::{cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
-          path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn};
+use std::{
+    cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
+    path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
+};
 
 use catalog::{Catalog, CatalogBuilder, IndexGenerator};
 use dir_workspace::{DirEntry, DirWorkspace};
+use errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
 use file_workspace::FileWorkspace;
 use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
 use store::{Store, StoreBuilder};
-use errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
 use util::{atomic_write, get_egid, get_euid};
 
-mod protocol;
 mod handle;
+mod protocol;
+mod requests;
 
-use self::protocol::{Reply, ReplyChannel, Request};
+use self::{
+    protocol::{Actor, HandlerProxy, Request, RequestHandler},
+    requests::{
+        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
+        ReleaseFile, RemoveDir, Rename, SetAttr, Unlink, WriteData,
+    },
+};
 
-pub use self::{handle::Handle, protocol::RequestId};
+pub use self::{handle::Handle, requests::RequestId};
 
 /// Start engine with pre-built catalog and store
-pub fn start_engine_prebuilt<C, S>(catalog: C, store: S, queue_size: usize) -> DenebResult<Handle>
+pub fn start_engine_prebuilt<C, S>(
+    catalog: C,
+    store: S,
+    queue_size: usize,
+) -> DenebResult<Handle<C, S>>
 where
     C: Catalog + Send + 'static,
     S: Store + Send + 'static,
@@ -39,8 +52,8 @@ where
             index_generator,
         };
         info!("Starting engine event loop");
-        for (event, tx) in rx.iter() {
-            engine.handle_request(event, &tx);
+        for request in rx.iter() {
+            request.run_handler(&mut engine);
         }
         info!("Engine event loop finished.");
     });
@@ -56,7 +69,7 @@ pub fn start_engine<CB, SB>(
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
     queue_size: usize,
-) -> DenebResult<Handle>
+) -> DenebResult<Handle<CB::Catalog, SB::Store>>
 where
     CB: CatalogBuilder,
     <CB as CatalogBuilder>::Catalog: Send + 'static,
@@ -150,11 +163,202 @@ impl<S> Workspace<S> {
     }
 }
 
-struct Engine<C, S> {
+pub(in engine) struct Engine<C, S> {
     catalog: C,
     store: Rc<RefCell<S>>,
     workspace: Workspace<S>,
     index_generator: IndexGenerator,
+}
+
+impl<C, S> Actor for Engine<C, S> {}
+
+impl<C, S> RequestHandler<GetAttr> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &GetAttr) -> DenebResult<<GetAttr as Request>::Reply> {
+        self.get_attr(request.index)
+            .context(EngineError::GetAttr(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<SetAttr> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &SetAttr) -> DenebResult<<SetAttr as Request>::Reply> {
+        self.set_attr(request.index, &request.changes)
+            .context(EngineError::SetAttr(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<Lookup> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &Lookup) -> DenebResult<<Lookup as Request>::Reply> {
+        self.lookup(request.parent, &request.name)
+            .context(EngineError::Lookup(request.parent, request.name.clone()))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<OpenDir> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &OpenDir) -> DenebResult<<OpenDir as Request>::Reply> {
+        self.open_dir(request.index)
+            .context(EngineError::DirOpen(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<ReleaseDir> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &ReleaseDir) -> DenebResult<<ReleaseDir as Request>::Reply> {
+        self.release_dir(request.index)
+            .context(EngineError::DirClose(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<ReadDir> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &ReadDir) -> DenebResult<<ReadDir as Request>::Reply> {
+        self.read_dir(request.index)
+            .context(EngineError::DirRead(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<OpenFile> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &OpenFile) -> DenebResult<<OpenFile as Request>::Reply> {
+        self.open_file(request.index, request.flags)
+            .context(EngineError::FileOpen(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<ReadData> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &ReadData) -> DenebResult<<ReadData as Request>::Reply> {
+        self.read_data(request.index, request.offset, request.size)
+            .context(EngineError::FileRead(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<WriteData> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &WriteData) -> DenebResult<<WriteData as Request>::Reply> {
+        self.write_data(request.index, request.offset, &request.data)
+            .context(EngineError::FileWrite(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<ReleaseFile> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &ReleaseFile) -> DenebResult<<ReleaseFile as Request>::Reply> {
+        self.release_file(request.index)
+            .context(EngineError::FileClose(request.index))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<CreateFile> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &CreateFile) -> DenebResult<<CreateFile as Request>::Reply> {
+        self.create_file(request.parent, &request.name, request.mode, request.flags)
+            .context(EngineError::FileCreate(request.parent, request.name.clone()))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<CreateDir> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &CreateDir) -> DenebResult<<CreateDir as Request>::Reply> {
+        self.create_dir(request.parent, &request.name, request.mode)
+            .context(EngineError::DirCreate(request.parent, request.name.clone()))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<Unlink> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &Unlink) -> DenebResult<<Unlink as Request>::Reply> {
+        self.remove(request.parent, &request.name)
+            .context(EngineError::Unlink(request.parent, request.name.clone()))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<RemoveDir> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &RemoveDir) -> DenebResult<<RemoveDir as Request>::Reply> {
+        self.remove(request.parent, &request.name)
+            .context(EngineError::RemoveDir(request.parent, request.name.clone()))
+            .map_err(Error::from)
+    }
+}
+
+impl<C, S> RequestHandler<Rename> for Engine<C, S>
+where
+    C: Catalog,
+    S: Store,
+{
+    fn handle(&mut self, request: &Rename) -> DenebResult<<Rename as Request>::Reply> {
+        self.rename(
+            request.parent,
+            &request.name,
+            request.new_parent,
+            &request.new_name,
+        ).context(EngineError::Rename(
+                request.parent,
+                request.name.clone(),
+                request.new_parent,
+                request.new_name.clone(),
+            ))
+            .map_err(Error::from)
+    }
 }
 
 impl<C, S> Engine<C, S>
@@ -162,134 +366,6 @@ where
     C: Catalog,
     S: Store,
 {
-    fn handle_request(&mut self, request: Request, chan: &ReplyChannel) {
-        match request {
-            Request::GetAttr { index } => {
-                let _ = chan.send(Reply::GetAttr(
-                    self.get_attr(index)
-                        .context(EngineError::GetAttr(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::SetAttr { index, changes } => {
-                let _ = chan.send(Reply::SetAttr(
-                    self.set_attr(index, &changes)
-                        .context(EngineError::SetAttr(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::Lookup { parent, name } => {
-                let _ = chan.send(Reply::Lookup(
-                    self.lookup(parent, &name)
-                        .context(EngineError::Lookup(parent, name))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::OpenDir { index, .. } => {
-                let _ = chan.send(Reply::OpenDir(
-                    self.open_dir(index)
-                        .context(EngineError::DirOpen(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::ReleaseDir { index, .. } => {
-                let _ = chan.send(Reply::ReleaseDir(
-                    self.release_dir(index)
-                        .context(EngineError::DirClose(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::ReadDir { index, .. } => {
-                let _ = chan.send(Reply::ReadDir(
-                    self.read_dir(index)
-                        .context(EngineError::DirRead(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::OpenFile { index, flags } => {
-                let _ = chan.send(Reply::OpenFile(
-                    self.open_file(index, flags)
-                        .context(EngineError::FileOpen(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::ReadData {
-                index,
-                offset,
-                size,
-            } => {
-                let _ = chan.send(Reply::ReadData(
-                    self.read_data(index, offset, size)
-                        .context(EngineError::FileRead(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::WriteData {
-                index,
-                offset,
-                data,
-            } => {
-                let _ = chan.send(Reply::WriteData(
-                    self.write_data(index, offset, &data)
-                        .context(EngineError::FileWrite(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::ReleaseFile { index, .. } => {
-                let _ = chan.send(Reply::ReleaseFile(
-                    self.release_file(index)
-                        .context(EngineError::FileClose(index))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::CreateFile {
-                parent,
-                name,
-                mode,
-                flags,
-            } => {
-                let _ = chan.send(Reply::CreateFile(
-                    self.create_file(parent, &name, mode, flags)
-                        .context(EngineError::FileCreate(parent, name))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::CreateDir { parent, name, mode } => {
-                let _ = chan.send(Reply::CreateDir(
-                    self.create_dir(parent, &name, mode)
-                        .context(EngineError::DirCreate(parent, name))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::Unlink { parent, name } => {
-                let _ = chan.send(Reply::Unlink(
-                    self.remove(parent, &name)
-                        .context(EngineError::Unlink(parent, name))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::RemoveDir { parent, name } => {
-                let _ = chan.send(Reply::RemoveDir(
-                    self.remove(parent, &name)
-                        .context(EngineError::RemoveDir(parent, name))
-                        .map_err(Error::from),
-                ));
-            }
-            Request::Rename {
-                parent,
-                name,
-                new_parent,
-                new_name,
-            } => {
-                let _ = chan.send(Reply::Rename(
-                    self.rename(parent, &name, new_parent, &new_name)
-                        .context(EngineError::Rename(parent, name, new_parent, new_name))
-                        .map_err(Error::from),
-                ));
-            }
-        }
-    }
-
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
     //       and can't be used inside Entry::or_insert_with
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
@@ -357,7 +433,8 @@ where
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
-            let entries = self.catalog
+            let entries = self
+                .catalog
                 .get_dir_entries(index)?
                 .iter()
                 .map(|&(ref name, idx)| {
@@ -403,7 +480,8 @@ where
 
     fn read_data(&self, index: u64, offset: i64, size: u32) -> DenebResult<Vec<u8>> {
         let offset = ::std::cmp::max(offset, 0) as usize;
-        let ws = self.workspace
+        let ws = self
+            .workspace
             .files
             .get(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -413,7 +491,8 @@ where
     fn write_data(&mut self, index: u64, offset: i64, data: &[u8]) -> DenebResult<u32> {
         let offset = ::std::cmp::max(offset, 0) as usize;
         let (written, new_size) = {
-            let ws = self.workspace
+            let ws = self
+                .workspace
                 .files
                 .get_mut(&index)
                 .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -428,7 +507,8 @@ where
     }
 
     fn release_file(&mut self, index: u64) -> DenebResult<()> {
-        let ws = self.workspace
+        let ws = self
+            .workspace
             .files
             .get_mut(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -517,7 +597,8 @@ where
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
-            let index = ws.get_entry_index(&pname)
+            let index = ws
+                .get_entry_index(&pname)
                 .ok_or_else(|| DirWorkspaceEntryLookupError {
                     parent,
                     name: name.to_owned(),
@@ -567,7 +648,8 @@ where
 
         let new_name = PathBuf::from(new_name);
 
-        let old_entry_type = self.workspace
+        let old_entry_type = self
+            .workspace
             .dirs
             .get(&new_parent)
             .and_then(|ws| ws.get_entry(&new_name))
@@ -584,7 +666,8 @@ where
             }
         }
 
-        let ws = self.workspace
+        let ws = self
+            .workspace
             .dirs
             .get_mut(&new_parent)
             .ok_or_else(|| WorkspaceError::DirLookup(new_parent))?;
@@ -593,21 +676,3 @@ where
         Ok(())
     }
 }
-
-// TODO: bring back test when Engine is fixed for in-memory catalogs and stores
-/*
-#[cfg(test)]
-mod tests {
-    use catalog::MemCatalogBuilder;
-    use store::MemStoreBuilder;
-
-    use super::*;
-
-    #[test]
-    fn engine_works() {
-        let cb = MemCatalogBuilder;
-        let sb = MemStoreBuilder;
-        assert!(start_engine(&cb, &sb, &PathBuf::new(), None, 1000, 1000).is_ok());
-    }
-}
- */

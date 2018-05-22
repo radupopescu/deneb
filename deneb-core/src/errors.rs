@@ -85,8 +85,6 @@ pub enum EngineError {
     SetAttr(u64),
     #[fail(display = "Failed lookup of entry: {:?} in parent: {}", _1, _0)]
     Lookup(u64, OsString),
-    #[fail(display = "Failed to send request to engine")]
-    SendFailed,
     #[fail(display = "Invalid reply received from engine")]
     InvalidReply,
     #[fail(display = "Could not open directory: {}", _0)]
@@ -144,17 +142,5 @@ pub fn print_error_with_causes(err: &Error) {
             error!("caused by: {}", cause);
             failure = cause;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_print_error() {
-        use failure::Error;
-        let f = Error::from(EngineError::SendFailed);
-        print_error_with_causes(&f);
     }
 }
