@@ -113,7 +113,7 @@ fn hash_buf(buffer: &[u8]) -> (Digest, Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use quickcheck::{QuickCheck, StdGen, TestResult};
-    use rand::{thread_rng, Rng, RngCore};
+    use rand::{thread_rng, Rng};
 
     use super::*;
 
