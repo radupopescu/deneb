@@ -19,19 +19,17 @@ pub trait HandlerProxy: Send {
     fn run_handler(&self, handler: &mut Self::Handler);
 }
 
-pub trait Actor {}
-
-pub struct PackagedRequest<A>
+pub struct PackagedRequest<H>
 {
-    inner: Box<HandlerProxy<Handler = A>>,
+    inner: Box<HandlerProxy<Handler = H>>,
 }
 
-pub type RequestChannel<A> = SyncSender<PackagedRequest<A>>;
+pub type RequestChannel<H> = SyncSender<PackagedRequest<H>>;
 
-pub fn make_request<R, A>(req: R, ch: &RequestChannel<A>) -> DenebResult<R::Reply>
+pub fn make_request<R, H>(req: R, ch: &RequestChannel<H>) -> DenebResult<R::Reply>
 where
     R: Request + 'static,
-    A: RequestHandler<R> + 'static,
+    H: RequestHandler<R> + 'static,
 {
     let (tx, rx) = sync_channel(1);
     let envelope = PackagedRequest {
@@ -73,11 +71,9 @@ where
     }
 }
 
-impl<A> HandlerProxy for PackagedRequest<A>
-where
-    A: Actor,
+impl<H> HandlerProxy for PackagedRequest<H>
 {
-    type Handler = A;
+    type Handler = H;
     fn run_handler(&self, hd: &mut Self::Handler) {
         self.inner.run_handler(hd);
     }
