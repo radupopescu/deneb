@@ -22,7 +22,7 @@ mod protocol;
 mod requests;
 
 use self::{
-    protocol::{Actor, HandlerProxy, Request, RequestHandler},
+    protocol::{HandlerProxy, Request, RequestHandler},
     requests::{
         CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
         ReleaseFile, RemoveDir, Rename, SetAttr, Unlink, WriteData,
@@ -169,8 +169,6 @@ pub(in engine) struct Engine<C, S> {
     workspace: Workspace<S>,
     index_generator: IndexGenerator,
 }
-
-impl<C, S> Actor for Engine<C, S> {}
 
 impl<C, S> RequestHandler<GetAttr> for Engine<C, S>
 where
