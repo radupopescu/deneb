@@ -11,12 +11,12 @@ use failure::ResultExt;
 use std::ffi::OsStr;
 
 use deneb_core::{catalog::LmdbCatalogBuilder, engine::start_engine,
-                 errors::{print_error_with_causes, DenebResult}, store::DiskStoreBuilder};
+                 errors::{DenebResult}, store::DiskStoreBuilder};
 use deneb_fuse::fs::Fs;
 
 use deneb::{logging::init_logger, params::AppParameters, util::{block_signals, set_sigint_handler}};
 
-fn run() -> DenebResult<()> {
+fn main() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before
     // spawning any new threads.
     block_signals().context("Could not block signals in current thread")?;
@@ -68,13 +68,4 @@ fn run() -> DenebResult<()> {
     }
 
     Ok(())
-}
-
-fn main() {
-    if let Err(ref fail) = run() {
-        print_error_with_causes(fail);
-        error!("Backtrace: {}", fail.backtrace());
-
-        ::std::process::exit(1)
-    }
 }
