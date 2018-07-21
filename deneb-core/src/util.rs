@@ -27,7 +27,7 @@ pub fn tick() -> i64 {
     precise_time_ns() as i64
 }
 
-pub fn tock(t0: &i64) -> i64 {
+pub fn tock(t0: i64) -> i64 {
     precise_time_ns() as i64 - t0
 }
 

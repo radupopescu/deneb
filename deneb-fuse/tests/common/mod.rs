@@ -64,8 +64,8 @@ pub struct DirTree {
 impl DirTree {
     pub fn with_entries(root: PathBuf, entries: Vec<DirEntry>) -> DirTree {
         DirTree {
-            root: root,
-            entries: entries,
+            root,
+            entries,
         }
     }
 

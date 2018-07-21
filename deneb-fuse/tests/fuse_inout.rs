@@ -175,7 +175,7 @@ fn multiple_chunks_per_file_disk() {
 fn prop_inout_unchanged_mem() {
     fn inout_unchanged(mut dt: DirTree) -> bool {
         let tmp = TempDir::new("/tmp/deneb_fuse_prop_inout");
-        if !tmp.is_ok() {
+        if tmp.is_err() {
             return false;
         }
         if let Ok(prefix) = tmp {
@@ -186,13 +186,13 @@ fn prop_inout_unchanged_mem() {
 
             let check_result =
                 check_inout(TestType::InMemory, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
-            if !check_result.is_ok() {
+            if check_result.is_err() {
                 println!("Check failed: {:?}", check_result);
                 return false;
             }
 
             // Explicit cleanup
-            if !prefix.close().is_ok() {
+            if prefix.close().is_err() {
                 return false;
             }
         }
@@ -209,7 +209,7 @@ fn prop_inout_unchanged_mem() {
 fn prop_inout_unchanged_disk() {
     fn inout_unchanged(mut dt: DirTree) -> bool {
         let tmp = TempDir::new("/tmp/deneb_fuse_prop_inout");
-        if !tmp.is_ok() {
+        if tmp.is_err() {
             return false;
         }
         if let Ok(prefix) = tmp {
@@ -220,13 +220,13 @@ fn prop_inout_unchanged_disk() {
 
             let check_result =
                 check_inout(TestType::OnDisk, &dt, prefix.path(), DEFAULT_CHUNK_SIZE);
-            if !check_result.is_ok() {
+            if check_result.is_err() {
                 println!("Check failed: {:?}", check_result);
                 return false;
             }
 
             // Explicit cleanup
-            if !prefix.close().is_ok() {
+            if prefix.close().is_err() {
                 return false;
             }
         }

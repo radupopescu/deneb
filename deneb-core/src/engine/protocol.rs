@@ -39,12 +39,11 @@ where
             _hd: PhantomData,
         }),
     };
-    if let Err(_) = ch.send(envelope) {
+    if ch.send(envelope).is_err() {
         panic!("Could not send request to engine.");
     }
 
-    let rep = rx.recv()?;
-    rep
+    rx.recv()?
 }
 
 struct RequestProxy<R, H>
@@ -65,7 +64,7 @@ where
     type Handler = H;
     fn run_handler(&self, hd: &mut Self::Handler) {
         let reply = hd.handle(&self.req);
-        if let Err(_) = self.tx.send(reply) {
+        if self.tx.send(reply).is_err() {
             panic!("Could not send reply after handling request.");
         }
     }

@@ -413,11 +413,11 @@ where
         let index = if let Some(ws) = self.workspace.dirs.get(&parent) {
             ws.get_entries()
                 .iter()
-                .find(|&&DirEntry { name: ref n, .. }| n == &PathBuf::from(name.clone()))
+                .find(|DirEntry { name: ref n, .. }| n == &PathBuf::from(name))
                 .map(|&DirEntry { index, .. }| index)
         } else {
             self.catalog
-                .get_dir_entry_index(parent, PathBuf::from(name.clone()).as_path())?
+                .get_dir_entry_index(parent, PathBuf::from(name).as_path())?
         };
         if let Some(index) = index {
             self.get_attr(index).map(Some)
@@ -546,7 +546,7 @@ where
         self.open_dir(parent)?;
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
-            ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
+            ws.add_entry(index, PathBuf::from(name), inode.attributes.kind);
         } else {
             return Err(WorkspaceError::DirLookup(parent).into());
         }
@@ -583,7 +583,7 @@ where
         self.open_dir(parent)?;
 
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
-            ws.add_entry(index, PathBuf::from(name.clone()), inode.attributes.kind);
+            ws.add_entry(index, PathBuf::from(name), inode.attributes.kind);
         } else {
             return Err(WorkspaceError::DirLookup(parent).into());
         }
@@ -654,7 +654,7 @@ where
             .map(|&DirEntry { entry_type, .. }| entry_type);
 
         if let Some(entry_type) = old_entry_type {
-            if entry_type == FileType::RegularFile || entry_type == FileType::RegularFile {
+            if entry_type == FileType::RegularFile {
                 self.remove(new_parent, new_name.as_os_str())?;
             } else {
                 panic!(
