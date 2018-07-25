@@ -7,6 +7,7 @@ extern crate lmdb_sys;
 #[macro_use]
 extern crate log;
 extern crate lru;
+extern crate memmap;
 extern crate nix;
 extern crate rust_sodium;
 extern crate serde;
