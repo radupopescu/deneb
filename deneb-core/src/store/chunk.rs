@@ -21,11 +21,12 @@ pub(crate) struct MmapChunk {
     pub size: usize,
     disk_path: PathBuf,
     map: Mmap,
+    own_file: bool,
 }
 
 impl MmapChunk
 {
-    pub(crate) fn new(digest: Digest, size: usize, disk_path: PathBuf) -> DenebResult<MmapChunk> {
+    pub(crate) fn new(digest: Digest, size: usize, disk_path: PathBuf, own_file: bool) -> DenebResult<MmapChunk> {
         let f = File::open(&disk_path)?;
         let mm = unsafe { Mmap::map(&f) }?;
 
@@ -34,16 +35,19 @@ impl MmapChunk
             size,
             disk_path,
             map: mm,
+            own_file
         })
     }
 }
 
 impl Drop for MmapChunk {
     fn drop(&mut self) {
-        if ::std::fs::remove_file(&self.disk_path).is_ok() {
-            trace!("Removing chunk file: {:?}", &self.disk_path);
-        } else {
-            panic!("Could not remove chunk file {:?}", &self.disk_path);
+        if self.own_file {
+            if ::std::fs::remove_file(&self.disk_path).is_ok() {
+                trace!("Removing chunk file: {:?}", &self.disk_path);
+            } else {
+                panic!("Could not remove chunk file {:?}", &self.disk_path);
+            }
         }
     }
 }
@@ -67,30 +71,65 @@ impl Chunk for MmapChunk {
     }
 }
 
+pub(crate) struct MemChunk {
+    digest: Digest,
+    pub size: usize,
+    data: Vec<u8>,
+}
+
+impl MemChunk {
+    pub(crate) fn new(digest: Digest, size: usize, data: Vec<u8>) -> MemChunk {
+        MemChunk { digest, size, data }
+    }
+}
+
+impl Chunk for MemChunk {
+    fn get_slice(&self) -> &[u8] {
+        self.data.as_slice()
+    }
+
+    fn digest(&self) -> Digest {
+        self.digest
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use tempdir::TempDir;
-    use std::{fs::{OpenOptions, remove_file}, io::Write};
+    use std::{fs::OpenOptions, io::Write};
 
-    use super::{Chunk, MmapChunk};
+    use super::{Chunk, MemChunk, MmapChunk};
 
     use cas::hash;
 
     #[test]
-    fn basic() {
-        const msg: &[u8] = b"alabalaportocala";
+    fn mmap_chunk() {
+        const MSG: &[u8] = b"alabalaportocala";
 
         let tmp = TempDir::new("chunks");
         if let Ok(tmp) = tmp {
             let fname = tmp.path().join("c1");
             let mut f = OpenOptions::new().write(true).read(true).create(true).open(&fname);
             if let Ok(mut f) = f {
-                f.write(msg);
-                let cnk = MmapChunk::new(hash(msg), msg.len(), fname.clone());
+                let _ = f.write(MSG);
+                let cnk = MmapChunk::new(hash(MSG), MSG.len(), fname.clone(), true);
                 if let Ok(cnk) = cnk {
-                    assert_eq!(msg, cnk.get_slice());
+                    let cnk = Box::new(cnk);
+                    assert_eq!(MSG, cnk.get_slice());
                 }
             }
         }
+    }
+
+    #[test]
+    fn mem_chunk() {
+        const MSG: &[u8] = b"alabalaportocala";
+
+        let cnk = MemChunk::new(hash(MSG), MSG.len(), MSG.to_owned());
+        assert_eq!(MSG, cnk.get_slice());
     }
 }
