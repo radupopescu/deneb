@@ -6,7 +6,7 @@ use {cas::Digest, errors::DenebResult};
 
 /// An trait for accessing the contents of chunks stored in a repository
 ///
-pub(crate) trait Chunk {
+pub trait Chunk : Send + Sync {
     /// Return the content of the chunk in a slice
     ///
     fn get_slice(&self) -> &[u8];
@@ -73,13 +73,12 @@ impl Chunk for MmapChunk {
 
 pub(crate) struct MemChunk {
     digest: Digest,
-    pub size: usize,
     data: Vec<u8>,
 }
 
 impl MemChunk {
-    pub(crate) fn new(digest: Digest, size: usize, data: Vec<u8>) -> MemChunk {
-        MemChunk { digest, size, data }
+    pub(crate) fn new(digest: Digest, data: Vec<u8>) -> MemChunk {
+        MemChunk { digest, data }
     }
 }
 
@@ -93,7 +92,7 @@ impl Chunk for MemChunk {
     }
 
     fn size(&self) -> usize {
-        self.size
+        self.data.len()
     }
 }
 
@@ -129,7 +128,7 @@ mod tests {
     fn mem_chunk() {
         const MSG: &[u8] = b"alabalaportocala";
 
-        let cnk = MemChunk::new(hash(MSG), MSG.len(), MSG.to_owned());
+        let cnk = MemChunk::new(hash(MSG), MSG.to_owned());
         assert_eq!(MSG, cnk.get_slice());
     }
 }

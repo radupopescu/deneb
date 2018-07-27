@@ -1,23 +1,20 @@
-use failure::ResultExt;
 use lru::LruCache;
 use nix::sys::stat::stat;
 
 use std::cell::RefCell;
-use std::fs::{create_dir_all, File};
-use std::io::Read;
+use std::fs::create_dir_all;
 use std::sync::Arc;
 
 use std::path::{Path, PathBuf};
 
 use cas::Digest;
-use errors::{DenebError, DenebResult, StoreError};
+use errors::{DenebResult, StoreError};
 use util::atomic_write;
 
-use super::{Store, StoreBuilder};
+use super::{Chunk, MmapChunk, Store, StoreBuilder};
 
 const OBJECT_PATH: &str = "data";
 const PREFIX_SIZE: usize = 2;
-//const NUM_PREFIX: usize = 2;
 
 const CACHE_MAX_OBJECTS: usize = 100;
 
@@ -55,7 +52,7 @@ pub struct DiskStore {
     chunk_size: usize,
     _root_dir: PathBuf,
     object_dir: PathBuf,
-    cache: RefCell<LruCache<Digest, Arc<Vec<u8>>>>,
+    cache: RefCell<LruCache<Digest, Arc<Chunk>>>,
 }
 
 impl DiskStore {
@@ -76,7 +73,7 @@ impl Store for DiskStore {
         self.chunk_size
     }
 
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<Vec<u8>>> {
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>> {
         let mut cache = self.cache.borrow_mut();
         if cache.contains(digest) {
             cache
@@ -86,19 +83,12 @@ impl Store for DiskStore {
         } else {
             let (full_path, _) = self.digest_to_path(digest);
             let file_stats = stat(full_path.as_path())?;
-            let mut buffer = Vec::new();
-            let mut f = File::open(&full_path).context(DenebError::DiskIO)?;
-            let bytes_read = f.read_to_end(&mut buffer).context(DenebError::DiskIO)?;
-            if bytes_read as i64 == file_stats.st_size {
-                trace!("Chunk read: {:?}", full_path);
-                cache.put(*digest, Arc::new(buffer));
-                cache
-                    .get(digest)
-                    .map(Arc::clone)
-                    .ok_or_else(|| StoreError::ChunkGet(digest.to_string()).into())
-            } else {
-                Err(StoreError::ChunkGet(digest.to_string()).into())
-            }
+            let chunk = MmapChunk::new(*digest, file_stats.st_size as usize, full_path, true)?;
+            cache.put(*digest, Arc::new(chunk));
+            cache
+                .get(digest)
+                .map(Arc::clone)
+                .ok_or_else(|| StoreError::ChunkGet(digest.to_string()).into())
         }
     }
 
@@ -128,7 +118,7 @@ mod tests {
             let v1: Vec<u8> = vec![0 as u8; 1000];
             let descriptors = store.put_file_chunked(v1.as_slice())?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(v1, *v2);
+            assert_eq!(v1.as_slice(), v2.get_slice());
             Ok(())
         });
     }

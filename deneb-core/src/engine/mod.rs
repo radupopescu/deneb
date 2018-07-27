@@ -14,7 +14,7 @@ use file_workspace::FileWorkspace;
 use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
-use store::{Store, StoreBuilder};
+use store::{Chunk, Store, StoreBuilder};
 use util::{atomic_write, get_egid, get_euid};
 
 mod handle;
@@ -135,8 +135,8 @@ where
     // Get the catalog out of storage and open it
     {
         let root_hash = manifest.root_hash;
-        let buffer = store.get_chunk(&root_hash)?;
-        atomic_write(catalog_path.as_path(), buffer.as_slice())?;
+        let chunk = store.get_chunk(&root_hash)?;
+        atomic_write(catalog_path.as_path(), chunk.get_slice())?;
     }
 
     let catalog = catalog_builder.open(catalog_path)?;
