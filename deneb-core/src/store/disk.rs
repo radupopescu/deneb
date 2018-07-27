@@ -83,7 +83,11 @@ impl Store for DiskStore {
         } else {
             let (full_path, _) = self.digest_to_path(digest);
             let file_stats = stat(full_path.as_path())?;
-            let chunk = MmapChunk::new(*digest, file_stats.st_size as usize, full_path, true)?;
+            // Note: once compression and/or encryption are implemented, the MmapChunk::new
+            //       function can be called with true as a last parameter, ensuring that the
+            //       unpacked chunk files are deleted when the last reference to the chunk
+            //       goes away.
+            let chunk = MmapChunk::new(*digest, file_stats.st_size as usize, full_path, false)?;
             cache.put(*digest, Arc::new(chunk));
             cache
                 .get(digest)
