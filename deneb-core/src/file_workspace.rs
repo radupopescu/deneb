@@ -1,9 +1,8 @@
-use std::{cell::RefCell, cmp::min, rc::Rc, sync::Arc};
+use std::{cmp::min, sync::Arc};
 
-use cas::Digest;
 use errors::DenebResult;
 use inode::{ChunkDescriptor, INode};
-use store::Store;
+use store::{Chunk, Store};
 
 /// A type which offers read/write operations on a file in the repository
 ///
@@ -16,31 +15,31 @@ use store::Store;
 /// Its implementation is based on interior mutability - caching of
 /// unpackaged chunks in the lower layer is done transparently to the
 /// client of the `FileWorkspace`.
-pub(crate) struct FileWorkspace<S> {
-    lower: Lower<S>,
+pub(crate) struct FileWorkspace {
+    lower: Lower,
     upper: Vec<u8>,
     piece_table: Vec<Piece>,
     size: u64,
 }
 
-impl<S> FileWorkspace<S>
-where
-    S: Store,
-{
+impl FileWorkspace {
     /// Create a new `FileWorkspace` for an `INode`
     ///
     /// Constructs a new workspace object for the file described by
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(inode: &INode, store: &Rc<RefCell<S>>) -> FileWorkspace<S> {
-        let lower = Lower::new(inode.chunks.as_slice(), &store);
+    pub(crate) fn new<S>(inode: &INode, store: &S) -> DenebResult<FileWorkspace>
+    where
+        S: Store,
+    {
+        let lower = Lower::new(inode.chunks.as_slice(), store)?;
         let piece_table = lower
             .chunks
             .iter()
             .enumerate()
-            .map(|(idx, ref c)| {
-                let chunk_size = c.borrow().size;
+            .map(|(idx, c)| {
+                let chunk_size = c.size();
                 Piece {
                     target: PieceTarget::Lower(idx),
                     offset: 0,
@@ -54,12 +53,12 @@ where
             inode.attributes.size,
             lower.chunks.len()
         );
-        FileWorkspace {
+        Ok(FileWorkspace {
             lower,
             upper: vec![],
             piece_table,
             size: inode.attributes.size,
-        }
+        })
     }
 
     /// Read `size` number of bytes, starting at `offset`
@@ -186,8 +185,8 @@ where
             let piece = &self.piece_table[index];
             match piece.target {
                 PieceTarget::Lower(chunk_index) => {
-                    let mut chunk = self.lower.chunks[chunk_index].borrow_mut();
-                    let slice = chunk.get_slice()?;
+                    let mut chunk = &self.lower.chunks[chunk_index];
+                    let slice = chunk.get_slice();
                     buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
                 }
                 PieceTarget::Upper => {
@@ -243,94 +242,29 @@ struct PieceSlice {
 /// The lower layer represents a vector of file `Chunk` objects. Each
 /// chunk is wrapped in a `RefCell`, to allow certain mutable
 /// operations on the chunks.
-struct Lower<S> {
-    chunks: Vec<RefCell<Chunk<S>>>,
+struct Lower {
+    chunks: Vec<Arc<Chunk>>,
 }
 
-impl<S> Lower<S>
-where
-    S: Store,
-{
+impl Lower {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(chunk_descriptors: &[ChunkDescriptor], store: &Rc<RefCell<S>>) -> Lower<S> {
+    fn new<S>(chunk_descriptors: &[ChunkDescriptor], store: &S) -> DenebResult<Lower>
+    where
+        S: Store,
+    {
         let mut chunks = vec![];
-        for &ChunkDescriptor { digest, size } in chunk_descriptors {
-            chunks.push(RefCell::new(Chunk::new(digest, size, Rc::clone(&store))));
+        for &ChunkDescriptor { digest, .. } in chunk_descriptors {
+            let chunk = store.get_chunk(&digest)?;
+            chunks.push(chunk)
         }
-        Lower { chunks }
+        Ok(Lower { chunks })
     }
 
     /// Unload the lower layer from memory
     fn unload(&self) {
-        for c in &self.chunks {
-            let mut chk = c.borrow_mut();
-            chk.unload();
-        }
-    }
-}
-
-/// An interface to the file chunks stored in a repository
-///
-/// The `Chunk` type, allows reading a file chunk identified by a
-/// `Digest` from a repository. This type provides a read-only view of
-/// the chunk, but the mutable aspect of the type comes from the
-/// caching behaviour: the byte vector returned by the object store
-/// (wrapped in an `Arc`) is cached by this type. Calling `unload`
-/// will release this cached vector.
-struct Chunk<S> {
-    digest: Digest,
-    size: usize,
-    store: Rc<RefCell<S>>,
-    data: Option<Arc<Vec<u8>>>,
-}
-
-impl<S> Chunk<S>
-where
-    S: Store,
-{
-    /// Construct a new `Chunk` of `size`, identified by `Digest`
-    ///
-    /// The newly constructed object maintains an pointer to a
-    /// `Store`, used to retrieve the content of the chunk only when
-    /// needed
-    fn new(digest: Digest, size: usize, store: Rc<RefCell<S>>) -> Chunk<S> {
-        Chunk {
-            digest,
-            size,
-            store,
-            data: None,
-        }
-    }
-
-    /// Discard the cached content of the chunk
-    ///
-    /// After calling this method, when the content of the chunk is
-    /// again requested, the chunk needs to be retrieved from the
-    /// `Store`, potentially involving a costly decompression and
-    /// decryption process
-    fn unload(&mut self) {
-        if self.data.is_some() {
-            self.data = None;
-        }
-        trace!("Unloaded chunk {}", self.digest);
-    }
-
-    /// Return the content of the chunk in a slice
-    ///
-    /// This method potentially involves retrieving the content of the
-    /// chunk from the `Store`. Upon retrieval, the contents are
-    /// cached in memory, so subsequent calls to this method are fast
-    fn get_slice(&mut self) -> DenebResult<&[u8]> {
-        if self.data.is_none() {
-            self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
-        }
-        trace!(
-            "Loaded contents of chunk {} -  size: {}",
-            self.digest,
-            self.size
-        );
-        // Note: The following unwrap should never panic
-        Ok(self.data.as_ref().unwrap().as_slice())
+        //for c in &self.chunks {
+        //    c.unload();
+        //}
     }
 }
 
@@ -386,18 +320,18 @@ mod tests {
     use store::MemStore;
     use util::run;
 
-    fn make_test_workspace() -> DenebResult<FileWorkspace<MemStore>> {
-        let store = Rc::new(RefCell::new(MemStore::new(10000)));
+    fn make_test_workspace() -> DenebResult<FileWorkspace> {
+        let mut store = MemStore::new(10000);
 
         let names = ["ala", "bala", "portocala"];
         let mut chunks = vec![];
         for n in names.iter() {
-            chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
+            chunks.push(store.put_file(n.as_bytes())?);
         }
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        Ok(FileWorkspace::new(&inode, &Rc::clone(&store)))
+        FileWorkspace::new(&inode, &store)
     }
 
     #[test]
@@ -418,13 +352,13 @@ mod tests {
     #[test]
     fn write_into_empty() {
         run(|| {
-            let store = Rc::new(RefCell::new(MemStore::new(10000)));
+            let store = MemStore::new(10000);
 
             let inode = INode {
                 attributes: FileAttributes::default(),
                 chunks: vec![],
             };
-            let mut ws = FileWorkspace::new(&inode, &Rc::clone(&store));
+            let mut ws = FileWorkspace::new(&inode, &store)?;
 
             assert_eq!(ws.write_at(0, b"written"), (7, 7));
 

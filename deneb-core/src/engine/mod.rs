@@ -3,8 +3,8 @@ use nix::libc::mode_t;
 use time::now_utc;
 
 use std::{
-    cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
-    path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
+    collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
+    path::{Path, PathBuf}, sync::mpsc::sync_channel, thread::spawn as tspawn,
 };
 
 use catalog::{Catalog, CatalogBuilder, IndexGenerator};
@@ -14,7 +14,7 @@ use file_workspace::FileWorkspace;
 use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
-use store::{Chunk, Store, StoreBuilder};
+use store::{Store, StoreBuilder};
 use util::{atomic_write, get_egid, get_euid};
 
 mod handle;
@@ -47,7 +47,7 @@ where
     let _ = tspawn(move || {
         let mut engine = Engine {
             catalog,
-            store: Rc::new(RefCell::new(store)),
+            store: store,
             workspace: Workspace::new(),
             index_generator,
         };
@@ -145,15 +145,15 @@ where
     Ok((catalog, store))
 }
 
-struct Workspace<S> {
+struct Workspace {
     dirs: HashMap<u64, DirWorkspace>,
-    files: HashMap<u64, FileWorkspace<S>>,
+    files: HashMap<u64, FileWorkspace>,
     inodes: HashMap<u64, INode>,
     deleted_inodes: HashSet<u64>,
 }
 
-impl<S> Workspace<S> {
-    fn new() -> Workspace<S> {
+impl Workspace {
+    fn new() -> Workspace {
         Workspace {
             dirs: HashMap::new(),
             files: HashMap::new(),
@@ -165,8 +165,8 @@ impl<S> Workspace<S> {
 
 pub(in engine) struct Engine<C, S> {
     catalog: C,
-    store: Rc<RefCell<S>>,
-    workspace: Workspace<S>,
+    store: S,
+    workspace: Workspace,
     index_generator: IndexGenerator,
 }
 
@@ -471,7 +471,7 @@ where
             let inode = self.get_inode(index)?;
             self.workspace
                 .files
-                .insert(index, FileWorkspace::new(&inode, &Rc::clone(&self.store)));
+                .insert(index, FileWorkspace::new(&inode, &self.store)?);
         }
         Ok(())
     }
@@ -539,7 +539,7 @@ where
         self.workspace.inodes.insert(index, inode.clone());
 
         // Create new file workspace
-        let ws = FileWorkspace::new(&inode, &Rc::clone(&self.store));
+        let ws = FileWorkspace::new(&inode, &self.store)?;
         self.workspace.files.insert(index, ws);
 
         // Update the parent directory workspace
