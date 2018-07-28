@@ -10,11 +10,14 @@ use failure::ResultExt;
 
 use std::ffi::OsStr;
 
-use deneb_core::{catalog::LmdbCatalogBuilder, engine::start_engine,
-                 errors::{DenebResult}, store::DiskStoreBuilder};
+use deneb_core::{
+    catalog::LmdbCatalogBuilder, engine::start_engine, errors::DenebResult, store::DiskStoreBuilder,
+};
 use deneb_fuse::fs::Fs;
 
-use deneb::{logging::init_logger, params::AppParameters, util::{block_signals, set_sigint_handler}};
+use deneb::{
+    logging::init_logger, params::AppParameters, util::{block_signals, set_sigint_handler},
+};
 
 fn main() -> DenebResult<()> {
     // Block the signals in SigSet on the current and all future threads. Should be run before

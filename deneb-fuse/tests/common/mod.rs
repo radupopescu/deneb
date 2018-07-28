@@ -8,9 +8,9 @@ use std::fs::{create_dir_all, remove_dir_all, File};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use deneb_core::cas::hash;
 use deneb_core::errors::DenebResult;
 use deneb_core::util::atomic_write;
-use deneb_core::cas::hash;
 
 #[derive(Clone, Debug)]
 pub enum DirEntry {
@@ -63,10 +63,7 @@ pub struct DirTree {
 
 impl DirTree {
     pub fn with_entries(root: PathBuf, entries: Vec<DirEntry>) -> DirTree {
-        DirTree {
-            root,
-            entries,
-        }
+        DirTree { root, entries }
     }
 
     pub fn show(&self) -> DenebResult<()> {

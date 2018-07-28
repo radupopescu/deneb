@@ -55,8 +55,7 @@ pub enum DenebCoreInitError {
 
 pub fn init() -> DenebResult<()> {
     // Initialize the rust_sodium library (needed to make all its functions thread-safe)
-    rust_sodium::init()
-        .map_err(|_| DenebCoreInitError::RustSodium)?;
+    rust_sodium::init().map_err(|_| DenebCoreInitError::RustSodium)?;
 
     Ok(())
 }

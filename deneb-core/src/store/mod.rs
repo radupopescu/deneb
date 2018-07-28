@@ -3,8 +3,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use cas::{hash, read_chunks, Digest};
-use inode::ChunkDescriptor;
 use errors::DenebResult;
+use inode::ChunkDescriptor;
 
 mod chunk;
 pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};

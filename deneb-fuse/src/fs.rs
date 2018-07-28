@@ -1,19 +1,25 @@
-use fuse::{spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate,
-           ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request};
+use fuse::{
+    spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate,
+    ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
+};
 use nix::libc::{EACCES, EINVAL, ENOENT};
 #[cfg(target_os = "linux")]
-use nix::mount::{MntFlags, umount2};
+use nix::mount::{umount2, MntFlags};
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
-use nix::{NixPath, libc::{unmount, MNT_FORCE}};
+use nix::{
+    libc::{unmount, MNT_FORCE}, NixPath,
+};
 use time::Timespec;
 
-use std::{ffi::OsStr, path::{Path, PathBuf}};
+use std::{
+    ffi::OsStr, path::{Path, PathBuf},
+};
 
-use deneb_core::{catalog::Catalog,
-                 engine::{Handle, RequestId},
-                 errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
-                 inode::{FileAttributeChanges, FileAttributes, FileType as FT},
-                 store::Store};
+use deneb_core::{
+    catalog::Catalog, engine::{Handle, RequestId},
+    errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
+    inode::{FileAttributeChanges, FileAttributes, FileType as FT}, store::Store,
+};
 
 pub struct Session<'a> {
     fuse_session: BackgroundSession<'a>,
@@ -360,7 +366,9 @@ where
         new_name: &OsStr,
         reply: ReplyEmpty,
     ) {
-        match self.engine_handle.rename(&to_request_id(req), parent, name, new_parent, new_name) {
+        match self.engine_handle
+            .rename(&to_request_id(req), parent, name, new_parent, new_name)
+        {
             Ok(()) => {
                 reply.ok();
             }

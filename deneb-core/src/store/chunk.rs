@@ -6,7 +6,7 @@ use {cas::Digest, errors::DenebResult};
 
 /// An trait for accessing the contents of chunks stored in a repository
 ///
-pub trait Chunk : Send + Sync {
+pub trait Chunk: Send + Sync {
     /// Return the content of the chunk in a slice
     ///
     fn get_slice(&self) -> &[u8];
@@ -22,9 +22,13 @@ pub(crate) struct MmapChunk {
     own_file: bool,
 }
 
-impl MmapChunk
-{
-    pub(crate) fn new(digest: Digest, size: usize, disk_path: PathBuf, own_file: bool) -> DenebResult<MmapChunk> {
+impl MmapChunk {
+    pub(crate) fn new(
+        digest: Digest,
+        size: usize,
+        disk_path: PathBuf,
+        own_file: bool,
+    ) -> DenebResult<MmapChunk> {
         let f = File::open(&disk_path)?;
         let map = unsafe { Mmap::map(&f) }?;
         Ok(MmapChunk {
@@ -32,7 +36,7 @@ impl MmapChunk
             size,
             disk_path,
             map,
-            own_file
+            own_file,
         })
     }
 }
@@ -92,8 +96,8 @@ impl Chunk for MemChunk {
 
 #[cfg(test)]
 mod tests {
-    use tempdir::TempDir;
     use std::{fs::OpenOptions, io::Write};
+    use tempdir::TempDir;
 
     use super::{Chunk, MemChunk, MmapChunk};
 
@@ -106,7 +110,11 @@ mod tests {
         let tmp = TempDir::new("chunks");
         if let Ok(tmp) = tmp {
             let fname = tmp.path().join("c1");
-            let mut f = OpenOptions::new().write(true).read(true).create(true).open(&fname);
+            let mut f = OpenOptions::new()
+                .write(true)
+                .read(true)
+                .create(true)
+                .open(&fname);
             if let Ok(mut f) = f {
                 let _ = f.write(MSG);
                 let cnk = MmapChunk::new(hash(MSG), MSG.len(), fname.clone(), true);

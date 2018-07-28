@@ -1,14 +1,16 @@
-use failure::ResultExt;
 use bincode::{deserialize, serialize};
-use lmdb::{Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError,
-           Transaction, WriteFlags};
+use failure::ResultExt;
+use lmdb::{
+    Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError, Transaction,
+    WriteFlags,
+};
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
 
 use std::collections::BTreeMap;
 use std::str::from_utf8;
 
-use errors::CatalogError;
 use super::*;
+use errors::CatalogError;
 
 const MAX_CATALOG_SIZE: usize = 100 * 1024 * 1024; // 100MB
 const MAX_CATALOG_READERS: u32 = 100;

@@ -19,8 +19,7 @@ pub trait HandlerProxy: Send {
     fn run_handler(&self, handler: &mut Self::Handler);
 }
 
-pub struct PackagedRequest<H>
-{
+pub struct PackagedRequest<H> {
     inner: Box<HandlerProxy<Handler = H>>,
 }
 
@@ -70,8 +69,7 @@ where
     }
 }
 
-impl<H> HandlerProxy for PackagedRequest<H>
-{
+impl<H> HandlerProxy for PackagedRequest<H> {
     type Handler = H;
     fn run_handler(&self, hd: &mut Self::Handler) {
         self.inner.run_handler(hd);

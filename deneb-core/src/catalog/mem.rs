@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use inode::INode;
 
-use errors::CatalogError;
 use super::*;
+use errors::CatalogError;
 
 pub struct MemCatalogBuilder;
 

@@ -42,9 +42,9 @@ impl Manifest {
 }
 
 mod serde_tm {
-    use std::fmt;
-    use serde::{Deserializer, Serializer};
     use serde::de::{Error, Visitor};
+    use serde::{Deserializer, Serializer};
+    use std::fmt;
     use time::{strptime, Tm};
 
     pub fn serialize<S>(tm: &Tm, serializer: S) -> Result<S::Ok, S::Error>

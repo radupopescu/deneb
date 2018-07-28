@@ -1,6 +1,8 @@
 use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc};
 
-use {cas::Digest, errors::DenebResult, inode::{ChunkDescriptor, INode}, store::{Chunk, Store}};
+use {
+    cas::Digest, errors::DenebResult, inode::{ChunkDescriptor, INode}, store::{Chunk, Store},
+};
 
 /// A type which offers read/write operations on a file in the repository
 ///
@@ -22,7 +24,7 @@ pub(crate) struct FileWorkspace<S> {
 
 impl<S> FileWorkspace<S>
 where
-    S: Store
+    S: Store,
 {
     /// Create a new `FileWorkspace` for an `INode`
     ///
