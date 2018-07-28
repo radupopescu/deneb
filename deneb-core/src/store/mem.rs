@@ -5,7 +5,7 @@ use std::sync::Arc;
 use cas::Digest;
 use errors::{DenebResult, StoreError};
 
-use super::{Store, StoreBuilder};
+use super::{Chunk, MemChunk, Store, StoreBuilder};
 
 pub struct MemStoreBuilder;
 
@@ -20,7 +20,7 @@ impl StoreBuilder for MemStoreBuilder {
 #[derive(Default)]
 pub struct MemStore {
     chunk_size: usize,
-    objects: HashMap<Digest, Arc<Vec<u8>>>,
+    objects: HashMap<Digest, Arc<Chunk>>,
 }
 
 impl MemStore {
@@ -41,7 +41,7 @@ impl Store for MemStore {
         self.chunk_size
     }
 
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<Vec<u8>>> {
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>> {
         self.objects
             .get(digest)
             .map(Arc::clone)
@@ -53,7 +53,7 @@ impl Store for MemStore {
     fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
         self.objects
             .entry(*digest)
-            .or_insert_with(|| Arc::new(contents));
+            .or_insert_with(|| Arc::new(MemChunk::new(*digest, contents)));
         Ok(())
     }
 }
@@ -71,7 +71,7 @@ mod tests {
             let v1: Vec<u8> = vec![1, 2, 3];
             let descriptors = store.put_file_chunked(v1.as_slice())?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(v1, *v2);
+            assert_eq!(v1.as_slice(), v2.get_slice());
             Ok(())
         })
     }

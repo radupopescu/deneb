@@ -6,6 +6,9 @@ use cas::{hash, read_chunks, Digest};
 use inode::ChunkDescriptor;
 use errors::DenebResult;
 
+mod chunk;
+pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};
+
 mod mem;
 pub use self::mem::{MemStore, MemStoreBuilder};
 
@@ -33,7 +36,7 @@ pub trait Store {
     ///
     /// The method returns the "unpacked" chunks wrapped in an `Arc`,
     /// allowing implementations to cache the results.
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<Vec<u8>>>;
+    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>>;
 
     /// Write a single chunk into the repository
     ///

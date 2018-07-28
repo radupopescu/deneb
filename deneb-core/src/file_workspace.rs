@@ -1,9 +1,6 @@
-use std::{cell::RefCell, cmp::min, rc::Rc, sync::Arc};
+use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc};
 
-use cas::Digest;
-use errors::DenebResult;
-use inode::{ChunkDescriptor, INode};
-use store::Store;
+use {cas::Digest, errors::DenebResult, inode::{ChunkDescriptor, INode}, store::{Chunk, Store}};
 
 /// A type which offers read/write operations on a file in the repository
 ///
@@ -17,7 +14,7 @@ use store::Store;
 /// unpackaged chunks in the lower layer is done transparently to the
 /// client of the `FileWorkspace`.
 pub(crate) struct FileWorkspace<S> {
-    lower: Lower<S>,
+    lower: RefCell<Lower<S>>,
     upper: Vec<u8>,
     piece_table: Vec<Piece>,
     size: u64,
@@ -25,7 +22,7 @@ pub(crate) struct FileWorkspace<S> {
 
 impl<S> FileWorkspace<S>
 where
-    S: Store,
+    S: Store
 {
     /// Create a new `FileWorkspace` for an `INode`
     ///
@@ -33,14 +30,17 @@ where
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(inode: &INode, store: &Rc<RefCell<S>>) -> FileWorkspace<S> {
-        let lower = Lower::new(inode.chunks.as_slice(), &store);
-        let piece_table = lower
+    pub(crate) fn new(inode: &INode, store: &Rc<RefCell<S>>) -> DenebResult<FileWorkspace<S>>
+    where
+        S: Store,
+    {
+        let lower = Lower::new(inode.chunks.as_slice(), &store)?;
+        let piece_table = inode
             .chunks
             .iter()
             .enumerate()
-            .map(|(idx, ref c)| {
-                let chunk_size = c.borrow().size;
+            .map(|(idx, c)| {
+                let chunk_size = c.size;
                 Piece {
                     target: PieceTarget::Lower(idx),
                     offset: 0,
@@ -54,12 +54,12 @@ where
             inode.attributes.size,
             lower.chunks.len()
         );
-        FileWorkspace {
-            lower,
+        Ok(FileWorkspace {
+            lower: RefCell::new(lower),
             upper: vec![],
             piece_table,
             size: inode.attributes.size,
-        }
+        })
     }
 
     /// Read `size` number of bytes, starting at `offset`
@@ -177,7 +177,7 @@ where
     /// memory, when "closing" the workspace is desired, while
     /// maintaining any changes recorded in the top layer.
     pub(crate) fn unload(&self) {
-        self.lower.unload();
+        self.lower.borrow_mut().unload();
     }
 
     fn fill_buffer(&self, slices: &[PieceSlice]) -> DenebResult<Vec<u8>> {
@@ -186,8 +186,10 @@ where
             let piece = &self.piece_table[index];
             match piece.target {
                 PieceTarget::Lower(chunk_index) => {
-                    let mut chunk = self.lower.chunks[chunk_index].borrow_mut();
-                    let slice = chunk.get_slice()?;
+                    let mut lower = self.lower.borrow_mut();
+                    lower.load_chunk(chunk_index)?;
+                    let mut chunk = &lower.chunks[&chunk_index];
+                    let slice = chunk.get_slice();
                     buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
                 }
                 PieceTarget::Upper => {
@@ -244,7 +246,9 @@ struct PieceSlice {
 /// chunk is wrapped in a `RefCell`, to allow certain mutable
 /// operations on the chunks.
 struct Lower<S> {
-    chunks: Vec<RefCell<Chunk<S>>>,
+    digests: Vec<Digest>,
+    store: Rc<RefCell<S>>,
+    chunks: HashMap<usize, Arc<Chunk>>,
 }
 
 impl<S> Lower<S>
@@ -252,85 +256,31 @@ where
     S: Store,
 {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(chunk_descriptors: &[ChunkDescriptor], store: &Rc<RefCell<S>>) -> Lower<S> {
-        let mut chunks = vec![];
-        for &ChunkDescriptor { digest, size } in chunk_descriptors {
-            chunks.push(RefCell::new(Chunk::new(digest, size, Rc::clone(&store))));
-        }
-        Lower { chunks }
+    fn new(chunk_descriptors: &[ChunkDescriptor], store: &Rc<RefCell<S>>) -> DenebResult<Lower<S>> {
+        let digests = chunk_descriptors
+            .iter()
+            .map(|&ChunkDescriptor { digest, .. }| digest)
+            .collect::<Vec<_>>();
+        Ok(Lower {
+            digests,
+            chunks: HashMap::new(),
+            store: Rc::clone(store),
+        })
     }
 
-    /// Unload the lower layer from memory
-    fn unload(&self) {
-        for c in &self.chunks {
-            let mut chk = c.borrow_mut();
-            chk.unload();
+    // Load a single chunk
+    fn load_chunk(&mut self, index: usize) -> DenebResult<()> {
+        let digest = self.digests[index];
+        if !self.chunks.contains_key(&index) {
+            let chunk = self.store.borrow().get_chunk(&digest)?;
+            self.chunks.insert(index, chunk);
         }
-    }
-}
-
-/// An interface to the file chunks stored in a repository
-///
-/// The `Chunk` type, allows reading a file chunk identified by a
-/// `Digest` from a repository. This type provides a read-only view of
-/// the chunk, but the mutable aspect of the type comes from the
-/// caching behaviour: the byte vector returned by the object store
-/// (wrapped in an `Arc`) is cached by this type. Calling `unload`
-/// will release this cached vector.
-struct Chunk<S> {
-    digest: Digest,
-    size: usize,
-    store: Rc<RefCell<S>>,
-    data: Option<Arc<Vec<u8>>>,
-}
-
-impl<S> Chunk<S>
-where
-    S: Store,
-{
-    /// Construct a new `Chunk` of `size`, identified by `Digest`
-    ///
-    /// The newly constructed object maintains an pointer to a
-    /// `Store`, used to retrieve the content of the chunk only when
-    /// needed
-    fn new(digest: Digest, size: usize, store: Rc<RefCell<S>>) -> Chunk<S> {
-        Chunk {
-            digest,
-            size,
-            store,
-            data: None,
-        }
+        Ok(())
     }
 
-    /// Discard the cached content of the chunk
-    ///
-    /// After calling this method, when the content of the chunk is
-    /// again requested, the chunk needs to be retrieved from the
-    /// `Store`, potentially involving a costly decompression and
-    /// decryption process
+    /// Release the chunks that make up the lower layer
     fn unload(&mut self) {
-        if self.data.is_some() {
-            self.data = None;
-        }
-        trace!("Unloaded chunk {}", self.digest);
-    }
-
-    /// Return the content of the chunk in a slice
-    ///
-    /// This method potentially involves retrieving the content of the
-    /// chunk from the `Store`. Upon retrieval, the contents are
-    /// cached in memory, so subsequent calls to this method are fast
-    fn get_slice(&mut self) -> DenebResult<&[u8]> {
-        if self.data.is_none() {
-            self.data = Some(self.store.borrow().get_chunk(&self.digest)?);
-        }
-        trace!(
-            "Loaded contents of chunk {} -  size: {}",
-            self.digest,
-            self.size
-        );
-        // Note: The following unwrap should never panic
-        Ok(self.data.as_ref().unwrap().as_slice())
+        self.chunks.clear();
     }
 }
 
@@ -387,17 +337,17 @@ mod tests {
     use util::run;
 
     fn make_test_workspace() -> DenebResult<FileWorkspace<MemStore>> {
-        let store = Rc::new(RefCell::new(MemStore::new(10000)));
+        let mut store = MemStore::new(10000);
 
         let names = ["ala", "bala", "portocala"];
         let mut chunks = vec![];
         for n in names.iter() {
-            chunks.push(store.borrow_mut().put_file(n.as_bytes())?);
+            chunks.push(store.put_file(n.as_bytes())?);
         }
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        Ok(FileWorkspace::new(&inode, &Rc::clone(&store)))
+        FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))
     }
 
     #[test]
@@ -418,13 +368,13 @@ mod tests {
     #[test]
     fn write_into_empty() {
         run(|| {
-            let store = Rc::new(RefCell::new(MemStore::new(10000)));
+            let store = MemStore::new(10000);
 
             let inode = INode {
                 attributes: FileAttributes::default(),
                 chunks: vec![],
             };
-            let mut ws = FileWorkspace::new(&inode, &Rc::clone(&store));
+            let mut ws = FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))?;
 
             assert_eq!(ws.write_at(0, b"written"), (7, 7));
 

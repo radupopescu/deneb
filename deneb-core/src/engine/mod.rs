@@ -135,8 +135,8 @@ where
     // Get the catalog out of storage and open it
     {
         let root_hash = manifest.root_hash;
-        let buffer = store.get_chunk(&root_hash)?;
-        atomic_write(catalog_path.as_path(), buffer.as_slice())?;
+        let chunk = store.get_chunk(&root_hash)?;
+        atomic_write(catalog_path.as_path(), chunk.get_slice())?;
     }
 
     let catalog = catalog_builder.open(catalog_path)?;
@@ -297,7 +297,10 @@ where
 {
     fn handle(&mut self, request: &CreateFile) -> DenebResult<<CreateFile as Request>::Reply> {
         self.create_file(request.parent, &request.name, request.mode, request.flags)
-            .context(EngineError::FileCreate(request.parent, request.name.clone()))
+            .context(EngineError::FileCreate(
+                request.parent,
+                request.name.clone(),
+            ))
             .map_err(Error::from)
     }
 }
@@ -431,8 +434,7 @@ where
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
-            let entries = self
-                .catalog
+            let entries = self.catalog
                 .get_dir_entries(index)?
                 .iter()
                 .map(|&(ref name, idx)| {
@@ -471,15 +473,14 @@ where
             let inode = self.get_inode(index)?;
             self.workspace
                 .files
-                .insert(index, FileWorkspace::new(&inode, &Rc::clone(&self.store)));
+                .insert(index, FileWorkspace::new(&inode, &self.store)?);
         }
         Ok(())
     }
 
     fn read_data(&self, index: u64, offset: i64, size: u32) -> DenebResult<Vec<u8>> {
         let offset = ::std::cmp::max(offset, 0) as usize;
-        let ws = self
-            .workspace
+        let ws = self.workspace
             .files
             .get(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -489,8 +490,7 @@ where
     fn write_data(&mut self, index: u64, offset: i64, data: &[u8]) -> DenebResult<u32> {
         let offset = ::std::cmp::max(offset, 0) as usize;
         let (written, new_size) = {
-            let ws = self
-                .workspace
+            let ws = self.workspace
                 .files
                 .get_mut(&index)
                 .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -505,8 +505,7 @@ where
     }
 
     fn release_file(&mut self, index: u64) -> DenebResult<()> {
-        let ws = self
-            .workspace
+        let ws = self.workspace
             .files
             .get_mut(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -539,7 +538,7 @@ where
         self.workspace.inodes.insert(index, inode.clone());
 
         // Create new file workspace
-        let ws = FileWorkspace::new(&inode, &Rc::clone(&self.store));
+        let ws = FileWorkspace::new(&inode, &self.store)?;
         self.workspace.files.insert(index, ws);
 
         // Update the parent directory workspace
@@ -595,8 +594,7 @@ where
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
-            let index = ws
-                .get_entry_index(&pname)
+            let index = ws.get_entry_index(&pname)
                 .ok_or_else(|| DirWorkspaceEntryLookupError {
                     parent,
                     name: name.to_owned(),
@@ -646,8 +644,7 @@ where
 
         let new_name = PathBuf::from(new_name);
 
-        let old_entry_type = self
-            .workspace
+        let old_entry_type = self.workspace
             .dirs
             .get(&new_parent)
             .and_then(|ws| ws.get_entry(&new_name))
@@ -664,8 +661,7 @@ where
             }
         }
 
-        let ws = self
-            .workspace
+        let ws = self.workspace
             .dirs
             .get_mut(&new_parent)
             .ok_or_else(|| WorkspaceError::DirLookup(new_parent))?;
