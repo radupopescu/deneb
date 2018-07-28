@@ -3,8 +3,8 @@ use nix::libc::mode_t;
 use time::now_utc;
 
 use std::{
-    collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
-    path::{Path, PathBuf}, sync::mpsc::sync_channel, thread::spawn as tspawn,
+    cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
+    path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
 };
 
 use catalog::{Catalog, CatalogBuilder, IndexGenerator};
@@ -47,7 +47,7 @@ where
     let _ = tspawn(move || {
         let mut engine = Engine {
             catalog,
-            store: store,
+            store: Rc::new(RefCell::new(store)),
             workspace: Workspace::new(),
             index_generator,
         };
@@ -145,15 +145,15 @@ where
     Ok((catalog, store))
 }
 
-struct Workspace {
+struct Workspace<S> {
     dirs: HashMap<u64, DirWorkspace>,
-    files: HashMap<u64, FileWorkspace>,
+    files: HashMap<u64, FileWorkspace<S>>,
     inodes: HashMap<u64, INode>,
     deleted_inodes: HashSet<u64>,
 }
 
-impl Workspace {
-    fn new() -> Workspace {
+impl<S> Workspace<S> {
+    fn new() -> Workspace<S> {
         Workspace {
             dirs: HashMap::new(),
             files: HashMap::new(),
@@ -165,8 +165,8 @@ impl Workspace {
 
 pub(in engine) struct Engine<C, S> {
     catalog: C,
-    store: S,
-    workspace: Workspace,
+    store: Rc<RefCell<S>>,
+    workspace: Workspace<S>,
     index_generator: IndexGenerator,
 }
 
@@ -297,7 +297,10 @@ where
 {
     fn handle(&mut self, request: &CreateFile) -> DenebResult<<CreateFile as Request>::Reply> {
         self.create_file(request.parent, &request.name, request.mode, request.flags)
-            .context(EngineError::FileCreate(request.parent, request.name.clone()))
+            .context(EngineError::FileCreate(
+                request.parent,
+                request.name.clone(),
+            ))
             .map_err(Error::from)
     }
 }
@@ -431,8 +434,7 @@ where
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
-            let entries = self
-                .catalog
+            let entries = self.catalog
                 .get_dir_entries(index)?
                 .iter()
                 .map(|&(ref name, idx)| {
@@ -478,8 +480,7 @@ where
 
     fn read_data(&self, index: u64, offset: i64, size: u32) -> DenebResult<Vec<u8>> {
         let offset = ::std::cmp::max(offset, 0) as usize;
-        let ws = self
-            .workspace
+        let ws = self.workspace
             .files
             .get(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -489,8 +490,7 @@ where
     fn write_data(&mut self, index: u64, offset: i64, data: &[u8]) -> DenebResult<u32> {
         let offset = ::std::cmp::max(offset, 0) as usize;
         let (written, new_size) = {
-            let ws = self
-                .workspace
+            let ws = self.workspace
                 .files
                 .get_mut(&index)
                 .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -505,8 +505,7 @@ where
     }
 
     fn release_file(&mut self, index: u64) -> DenebResult<()> {
-        let ws = self
-            .workspace
+        let ws = self.workspace
             .files
             .get_mut(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -595,8 +594,7 @@ where
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
-            let index = ws
-                .get_entry_index(&pname)
+            let index = ws.get_entry_index(&pname)
                 .ok_or_else(|| DirWorkspaceEntryLookupError {
                     parent,
                     name: name.to_owned(),
@@ -646,8 +644,7 @@ where
 
         let new_name = PathBuf::from(new_name);
 
-        let old_entry_type = self
-            .workspace
+        let old_entry_type = self.workspace
             .dirs
             .get(&new_parent)
             .and_then(|ws| ws.get_entry(&new_name))
@@ -664,8 +661,7 @@ where
             }
         }
 
-        let ws = self
-            .workspace
+        let ws = self.workspace
             .dirs
             .get_mut(&new_parent)
             .ok_or_else(|| WorkspaceError::DirLookup(new_parent))?;

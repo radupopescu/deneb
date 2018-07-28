@@ -11,8 +11,6 @@ pub trait Chunk : Send + Sync {
     ///
     fn get_slice(&self) -> &[u8];
 
-    fn digest(&self) -> Digest;
-
     fn size(&self) -> usize;
 }
 
@@ -28,13 +26,12 @@ impl MmapChunk
 {
     pub(crate) fn new(digest: Digest, size: usize, disk_path: PathBuf, own_file: bool) -> DenebResult<MmapChunk> {
         let f = File::open(&disk_path)?;
-        let mm = unsafe { Mmap::map(&f) }?;
-
+        let map = unsafe { Mmap::map(&f) }?;
         Ok(MmapChunk {
             digest,
             size,
             disk_path,
-            map: mm,
+            map,
             own_file
         })
     }
@@ -62,10 +59,6 @@ impl Chunk for MmapChunk {
         self.map.as_ref()
     }
 
-    fn digest(&self) -> Digest {
-        self.digest
-    }
-
     fn size(&self) -> usize {
         self.size
     }
@@ -84,11 +77,12 @@ impl MemChunk {
 
 impl Chunk for MemChunk {
     fn get_slice(&self) -> &[u8] {
+        trace!(
+            "Loaded contents of chunk {} -  size: {}",
+            self.digest,
+            self.data.len(),
+        );
         self.data.as_slice()
-    }
-
-    fn digest(&self) -> Digest {
-        self.digest
     }
 
     fn size(&self) -> usize {
