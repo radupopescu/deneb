@@ -98,8 +98,9 @@ fn init(
     // Create the file metadata catalog and populate it with the contents of "sync_dir"
     if let Some(sync_dir) = sync_dir {
         {
+            //use std::ops::DerefMut;
             let mut catalog = catalog_builder.create(catalog_path.as_path())?;
-            populate_with_dir(&mut catalog, &mut store, sync_dir.as_path(), chunk_size)?;
+            populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
             info!(
                 "Catalog populated with contents of {:?}",
                 sync_dir.as_path()

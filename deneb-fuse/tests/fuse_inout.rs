@@ -88,7 +88,7 @@ fn init_test<'a>(
             // The paths given to the in-memory builders doesn't matter
             let mut store = MemStoreBuilder.at_dir(&work_dir, chunk_size)?;
             let mut catalog = MemCatalogBuilder.create(&work_dir)?;
-            populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
+            populate_with_dir(&mut *catalog, &mut *store, input, chunk_size)?;
             let handle = start_engine_prebuilt(catalog, store, 1000)?;
             Fs::mount(&mount_point, handle, &options)
         }

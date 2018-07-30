@@ -268,6 +268,7 @@ impl Lower {
     }
 
     // Load a single chunk
+    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn load_chunk(&mut self, index: usize) -> DenebResult<()> {
         let digest = self.digests[index];
         if !self.chunks.contains_key(&index) {
@@ -340,7 +341,7 @@ mod tests {
 
         let mut names: Vec<&[u8]> = vec![b"ala", b"bala", b"portocala"];
         let mut chunks = vec![];
-        for n in names.iter_mut() {
+        for n in &mut names {
             chunks.push(store.put_file(n)?);
         }
         let mut attributes = FileAttributes::default();

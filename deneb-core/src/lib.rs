@@ -61,8 +61,8 @@ pub fn init() -> DenebResult<()> {
 }
 
 pub fn populate_with_dir(
-    catalog: &mut Box<dyn Catalog>,
-    store: &mut Box<dyn Store>,
+    catalog: &mut dyn Catalog,
+    store: &mut dyn Store,
     dir: &Path,
     chunk_size: usize,
 ) -> DenebResult<()> {
@@ -85,8 +85,8 @@ pub fn populate_with_dir(
 }
 
 fn visit_dirs(
-    catalog: &mut Box<dyn Catalog>,
-    store: &mut Box<dyn Store>,
+    catalog: &mut dyn Catalog,
+    store: &mut dyn Store,
     index_generator: &mut IndexGenerator,
     buffer: &mut [u8],
     dir: &Path,

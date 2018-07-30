@@ -118,7 +118,7 @@ mod tests {
             let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
             let sb = DiskStoreBuilder;
             let mut store = sb.at_dir(temp_dir.path(), 10000)?;
-            let mut v1: &[u8] = BYTES.clone();
+            let mut v1: &[u8] = BYTES;
             let descriptors = store.put_file_chunked(&mut v1)?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
             assert_eq!(BYTES, v2.get_slice());

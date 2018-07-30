@@ -67,7 +67,7 @@ mod tests {
         run(|| {
             const BYTES: &[u8] = b"alabalaportocala";
             let mut store: MemStore = MemStore::new(10000);
-            let mut v1: &[u8] = BYTES.clone();
+            let mut v1: &[u8] = BYTES;
             let descriptors = store.put_file_chunked(&mut v1)?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
             assert_eq!(BYTES, v2.get_slice());
