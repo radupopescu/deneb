@@ -22,16 +22,17 @@ pub(crate) struct FileWorkspace {
     size: u64,
 }
 
-impl FileWorkspace
-{
+impl FileWorkspace {
     /// Create a new `FileWorkspace` for an `INode`
     ///
     /// Constructs a new workspace object for the file described by
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(inode: &INode, store: &Rc<RefCell<Box<dyn Store>>>) -> DenebResult<FileWorkspace>
-    {
+    pub(crate) fn new(
+        inode: &INode,
+        store: &Rc<RefCell<Box<dyn Store>>>,
+    ) -> DenebResult<FileWorkspace> {
         let lower = Lower::new(inode.chunks.as_slice(), store)?;
         let piece_table = inode
             .chunks
@@ -249,10 +250,12 @@ struct Lower {
     chunks: HashMap<usize, Arc<dyn Chunk>>,
 }
 
-impl Lower
-{
+impl Lower {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(chunk_descriptors: &[ChunkDescriptor], store: &Rc<RefCell<Box<dyn Store>>>) -> DenebResult<Lower> {
+    fn new(
+        chunk_descriptors: &[ChunkDescriptor],
+        store: &Rc<RefCell<Box<dyn Store>>>,
+    ) -> DenebResult<Lower> {
         let digests = chunk_descriptors
             .iter()
             .map(|&ChunkDescriptor { digest, .. }| digest)

@@ -13,13 +13,11 @@ use super::{
 };
 
 #[derive(Clone)]
-pub struct Handle
-{
+pub struct Handle {
     channel: RequestChannel<Engine>,
 }
 
-impl Handle
-{
+impl Handle {
     // Client API
     pub fn get_attr(&self, _id: &RequestId, index: u64) -> DenebResult<FileAttributes> {
         make_request(GetAttr { index }, &self.channel)

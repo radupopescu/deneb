@@ -65,8 +65,7 @@ pub fn populate_with_dir(
     store: &mut Box<dyn Store>,
     dir: &Path,
     chunk_size: usize,
-) -> DenebResult<()>
-{
+) -> DenebResult<()> {
     let attrs = FileAttributes::with_stats(lstat(dir)?, 1);
     catalog.add_inode(INode::new(attrs, vec![]))?;
 
@@ -93,8 +92,7 @@ fn visit_dirs(
     dir: &Path,
     dir_index: u64,
     parent_index: u64,
-) -> DenebResult<()>
-{
+) -> DenebResult<()> {
     catalog.add_dir_entry(dir_index, Path::new("."), dir_index)?;
     catalog.add_dir_entry(dir_index, Path::new(".."), parent_index)?;
 

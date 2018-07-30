@@ -18,7 +18,7 @@ use std::{
 use deneb_core::{
     engine::{Handle, RequestId},
     errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
-    inode::{FileAttributeChanges, FileAttributes, FileType as FT}
+    inode::{FileAttributeChanges, FileAttributes, FileType as FT},
 };
 
 pub struct Session<'a> {
@@ -53,13 +53,11 @@ impl<'a> Session<'a> {
     }
 }
 
-pub struct Fs
-{
+pub struct Fs {
     engine_handle: Handle,
 }
 
-impl<'a> Fs
-{
+impl<'a> Fs {
     pub fn mount<P: AsRef<Path>>(
         mount_point: &P,
         engine_handle: Handle,
@@ -74,8 +72,7 @@ impl<'a> Fs
     }
 }
 
-impl Filesystem for Fs
-{
+impl Filesystem for Fs {
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
         match self.engine_handle.get_attr(&to_request_id(req), ino) {
             Ok(attrs) => {

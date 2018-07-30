@@ -36,8 +36,7 @@ pub fn start_engine_prebuilt(
     catalog: Box<dyn Catalog>,
     store: Box<dyn Store>,
     queue_size: usize,
-) -> DenebResult<Handle>
-{
+) -> DenebResult<Handle> {
     let (tx, rx) = sync_channel(queue_size);
     let index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
     let engine_handle = Handle::new(tx);
@@ -66,8 +65,7 @@ pub fn start_engine(
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
     queue_size: usize,
-) -> DenebResult<Handle>
-{
+) -> DenebResult<Handle> {
     let (catalog, store) = init(
         catalog_builder,
         store_builder,
@@ -85,8 +83,7 @@ fn init(
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
-) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)>
-{
+) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)> {
     // Create an object store
     let mut store = store_builder.at_dir(work_dir, chunk_size)?;
 
@@ -159,8 +156,7 @@ pub(in engine) struct Engine {
     index_generator: IndexGenerator,
 }
 
-impl RequestHandler<GetAttr> for Engine
-{
+impl RequestHandler<GetAttr> for Engine {
     fn handle(&mut self, request: &GetAttr) -> DenebResult<<GetAttr as Request>::Reply> {
         self.get_attr(request.index)
             .context(EngineError::GetAttr(request.index))
@@ -168,8 +164,7 @@ impl RequestHandler<GetAttr> for Engine
     }
 }
 
-impl RequestHandler<SetAttr> for Engine
-{
+impl RequestHandler<SetAttr> for Engine {
     fn handle(&mut self, request: &SetAttr) -> DenebResult<<SetAttr as Request>::Reply> {
         self.set_attr(request.index, &request.changes)
             .context(EngineError::SetAttr(request.index))
@@ -177,8 +172,7 @@ impl RequestHandler<SetAttr> for Engine
     }
 }
 
-impl RequestHandler<Lookup> for Engine
-{
+impl RequestHandler<Lookup> for Engine {
     fn handle(&mut self, request: &Lookup) -> DenebResult<<Lookup as Request>::Reply> {
         self.lookup(request.parent, &request.name)
             .context(EngineError::Lookup(request.parent, request.name.clone()))
@@ -186,8 +180,7 @@ impl RequestHandler<Lookup> for Engine
     }
 }
 
-impl RequestHandler<OpenDir> for Engine
-{
+impl RequestHandler<OpenDir> for Engine {
     fn handle(&mut self, request: &OpenDir) -> DenebResult<<OpenDir as Request>::Reply> {
         self.open_dir(request.index)
             .context(EngineError::DirOpen(request.index))
@@ -195,8 +188,7 @@ impl RequestHandler<OpenDir> for Engine
     }
 }
 
-impl RequestHandler<ReleaseDir> for Engine
-{
+impl RequestHandler<ReleaseDir> for Engine {
     fn handle(&mut self, request: &ReleaseDir) -> DenebResult<<ReleaseDir as Request>::Reply> {
         self.release_dir(request.index)
             .context(EngineError::DirClose(request.index))
@@ -204,8 +196,7 @@ impl RequestHandler<ReleaseDir> for Engine
     }
 }
 
-impl RequestHandler<ReadDir> for Engine
-{
+impl RequestHandler<ReadDir> for Engine {
     fn handle(&mut self, request: &ReadDir) -> DenebResult<<ReadDir as Request>::Reply> {
         self.read_dir(request.index)
             .context(EngineError::DirRead(request.index))
@@ -213,8 +204,7 @@ impl RequestHandler<ReadDir> for Engine
     }
 }
 
-impl RequestHandler<OpenFile> for Engine
-{
+impl RequestHandler<OpenFile> for Engine {
     fn handle(&mut self, request: &OpenFile) -> DenebResult<<OpenFile as Request>::Reply> {
         self.open_file(request.index, request.flags)
             .context(EngineError::FileOpen(request.index))
@@ -222,8 +212,7 @@ impl RequestHandler<OpenFile> for Engine
     }
 }
 
-impl RequestHandler<ReadData> for Engine
-{
+impl RequestHandler<ReadData> for Engine {
     fn handle(&mut self, request: &ReadData) -> DenebResult<<ReadData as Request>::Reply> {
         self.read_data(request.index, request.offset, request.size)
             .context(EngineError::FileRead(request.index))
@@ -231,8 +220,7 @@ impl RequestHandler<ReadData> for Engine
     }
 }
 
-impl RequestHandler<WriteData> for Engine
-{
+impl RequestHandler<WriteData> for Engine {
     fn handle(&mut self, request: &WriteData) -> DenebResult<<WriteData as Request>::Reply> {
         self.write_data(request.index, request.offset, &request.data)
             .context(EngineError::FileWrite(request.index))
@@ -240,8 +228,7 @@ impl RequestHandler<WriteData> for Engine
     }
 }
 
-impl RequestHandler<ReleaseFile> for Engine
-{
+impl RequestHandler<ReleaseFile> for Engine {
     fn handle(&mut self, request: &ReleaseFile) -> DenebResult<<ReleaseFile as Request>::Reply> {
         self.release_file(request.index)
             .context(EngineError::FileClose(request.index))
@@ -249,8 +236,7 @@ impl RequestHandler<ReleaseFile> for Engine
     }
 }
 
-impl RequestHandler<CreateFile> for Engine
-{
+impl RequestHandler<CreateFile> for Engine {
     fn handle(&mut self, request: &CreateFile) -> DenebResult<<CreateFile as Request>::Reply> {
         self.create_file(request.parent, &request.name, request.mode, request.flags)
             .context(EngineError::FileCreate(
@@ -261,8 +247,7 @@ impl RequestHandler<CreateFile> for Engine
     }
 }
 
-impl RequestHandler<CreateDir> for Engine
-{
+impl RequestHandler<CreateDir> for Engine {
     fn handle(&mut self, request: &CreateDir) -> DenebResult<<CreateDir as Request>::Reply> {
         self.create_dir(request.parent, &request.name, request.mode)
             .context(EngineError::DirCreate(request.parent, request.name.clone()))
@@ -270,8 +255,7 @@ impl RequestHandler<CreateDir> for Engine
     }
 }
 
-impl RequestHandler<Unlink> for Engine
-{
+impl RequestHandler<Unlink> for Engine {
     fn handle(&mut self, request: &Unlink) -> DenebResult<<Unlink as Request>::Reply> {
         self.remove(request.parent, &request.name)
             .context(EngineError::Unlink(request.parent, request.name.clone()))
@@ -279,8 +263,7 @@ impl RequestHandler<Unlink> for Engine
     }
 }
 
-impl RequestHandler<RemoveDir> for Engine
-{
+impl RequestHandler<RemoveDir> for Engine {
     fn handle(&mut self, request: &RemoveDir) -> DenebResult<<RemoveDir as Request>::Reply> {
         self.remove(request.parent, &request.name)
             .context(EngineError::RemoveDir(request.parent, request.name.clone()))
@@ -288,8 +271,7 @@ impl RequestHandler<RemoveDir> for Engine
     }
 }
 
-impl RequestHandler<Rename> for Engine
-{
+impl RequestHandler<Rename> for Engine {
     fn handle(&mut self, request: &Rename) -> DenebResult<<Rename as Request>::Reply> {
         self.rename(
             request.parent,
@@ -306,8 +288,7 @@ impl RequestHandler<Rename> for Engine
     }
 }
 
-impl Engine
-{
+impl Engine {
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
     //       and can't be used inside Entry::or_insert_with
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
