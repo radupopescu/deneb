@@ -67,11 +67,12 @@ mod tests {
     #[test]
     fn memstore_create_put_get() {
         run(|| {
+            const BYTES: &[u8] = b"alabalaportocala";
             let mut store: MemStore = MemStore::new(10000);
-            let v1: Vec<u8> = vec![1, 2, 3];
-            let descriptors = store.put_file_chunked(v1.as_slice())?;
+            let mut v1: &[u8] = BYTES.clone();
+            let descriptors = store.put_file_chunked(&mut v1)?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(v1.as_slice(), v2.get_slice());
+            assert_eq!(BYTES, v2.get_slice());
             Ok(())
         })
     }

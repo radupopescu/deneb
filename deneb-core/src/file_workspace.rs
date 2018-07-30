@@ -341,10 +341,10 @@ mod tests {
     fn make_test_workspace() -> DenebResult<FileWorkspace<MemStore>> {
         let mut store = MemStore::new(10000);
 
-        let names = ["ala", "bala", "portocala"];
+        let mut names: Vec<&[u8]> = vec![b"ala", b"bala", b"portocala"];
         let mut chunks = vec![];
-        for n in names.iter() {
-            chunks.push(store.put_file(n.as_bytes())?);
+        for n in names.iter_mut() {
+            chunks.push(store.put_file(n)?);
         }
         let mut attributes = FileAttributes::default();
         attributes.size = 16;

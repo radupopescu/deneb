@@ -116,13 +116,14 @@ mod tests {
     #[test]
     fn diskstore_create_put_get() {
         run(|| {
+            const BYTES: &[u8] = b"alabalaportocala";
             let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
             let sb = DiskStoreBuilder;
             let mut store = sb.at_dir(temp_dir.path(), 10000)?;
-            let v1: Vec<u8> = vec![0 as u8; 1000];
-            let descriptors = store.put_file_chunked(v1.as_slice())?;
+            let mut v1: &[u8] = BYTES.clone();
+            let descriptors = store.put_file_chunked(&mut v1)?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(v1.as_slice(), v2.get_slice());
+            assert_eq!(BYTES, v2.get_slice());
             Ok(())
         });
     }

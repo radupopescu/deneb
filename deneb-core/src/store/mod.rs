@@ -44,7 +44,7 @@ pub trait Store {
 
     /// Write a file into the repository without chunking
     ///
-    fn put_file<R: Read>(&mut self, mut data: R) -> DenebResult<ChunkDescriptor> {
+    fn put_file(&mut self, data: &mut dyn Read) -> DenebResult<ChunkDescriptor> {
         let mut buf = vec![];
         let n = data.read_to_end(&mut buf)?;
         let digest = hash(buf.as_slice());
@@ -55,7 +55,7 @@ pub trait Store {
 
     /// Write a file into the repository with chunking
     ///
-    fn put_file_chunked<R: Read>(&mut self, data: R) -> DenebResult<Vec<ChunkDescriptor>> {
+    fn put_file_chunked(&mut self, data: &mut dyn Read) -> DenebResult<Vec<ChunkDescriptor>> {
         let mut descriptors = vec![];
         let mut buf = vec![0 as u8; self.chunk_size()];
         for (digest, obj) in read_chunks(data, buf.as_mut_slice())? {
