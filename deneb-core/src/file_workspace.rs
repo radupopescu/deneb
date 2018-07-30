@@ -330,16 +330,14 @@ fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) 
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
 
     use inode::FileAttributes;
-    use store::{StoreBuilder, MemStoreBuilder};
+    use store::{Builder, StoreType};
     use util::run;
 
     fn make_test_workspace() -> DenebResult<FileWorkspace> {
-        let mut store = MemStoreBuilder.at_dir(&Path::new("/"), 10000)?;
+        let mut store = Builder::build(StoreType::InMemory, "/", 10000)?;
 
         let mut names: Vec<&[u8]> = vec![b"ala", b"bala", b"portocala"];
         let mut chunks = vec![];
@@ -370,7 +368,7 @@ mod tests {
     #[test]
     fn write_into_empty() {
         run(|| {
-            let store = MemStoreBuilder.at_dir(&Path::new("/"), 10000)?;
+            let store = Builder::build(StoreType::InMemory, "/", 10000)?;
 
             let inode = INode {
                 attributes: FileAttributes::default(),

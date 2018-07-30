@@ -1,28 +1,19 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use cas::Digest;
 use errors::{DenebResult, StoreError};
 
-use super::{Chunk, MemChunk, Store, StoreBuilder};
-
-pub struct MemStoreBuilder;
-
-impl StoreBuilder for MemStoreBuilder {
-    fn at_dir(&self, _dir: &Path, chunk_size: usize) -> DenebResult<Box<dyn Store>> {
-        Ok(Box::new(MemStore::new(chunk_size)))
-    }
-}
+use super::{Chunk, MemChunk, Store};
 
 #[derive(Default)]
-pub struct MemStore {
+pub(super) struct MemStore {
     chunk_size: usize,
     objects: HashMap<Digest, Arc<dyn Chunk>>,
 }
 
 impl MemStore {
-    pub fn new(chunk_size: usize) -> MemStore {
+    pub(super) fn new(chunk_size: usize) -> MemStore {
         MemStore {
             chunk_size,
             objects: HashMap::new(),

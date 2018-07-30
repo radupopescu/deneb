@@ -14,7 +14,7 @@ use file_workspace::FileWorkspace;
 use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
-use store::{Store, StoreBuilder};
+use store::{Builder as StoreBuilder, Store, StoreType};
 use util::{atomic_write, get_egid, get_euid};
 
 mod handle;
@@ -60,32 +60,26 @@ pub fn start_engine_prebuilt(
 /// Start the engine using catalog and store builders
 pub fn start_engine(
     catalog_builder: &dyn CatalogBuilder,
-    store_builder: &dyn StoreBuilder,
+    store_type: StoreType,
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
     queue_size: usize,
 ) -> DenebResult<Handle> {
-    let (catalog, store) = init(
-        catalog_builder,
-        store_builder,
-        work_dir,
-        sync_dir,
-        chunk_size,
-    )?;
+    let (catalog, store) = init(catalog_builder, store_type, work_dir, sync_dir, chunk_size)?;
 
     start_engine_prebuilt(catalog, store, queue_size)
 }
 
 fn init(
     catalog_builder: &dyn CatalogBuilder,
-    store_builder: &dyn StoreBuilder,
+    store_type: StoreType,
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
 ) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)> {
     // Create an object store
-    let mut store = store_builder.at_dir(work_dir, chunk_size)?;
+    let mut store = StoreBuilder::build(store_type, work_dir, chunk_size)?;
 
     let catalog_root = work_dir.to_path_buf().join("scratch");
     create_dir_all(catalog_root.as_path())?;

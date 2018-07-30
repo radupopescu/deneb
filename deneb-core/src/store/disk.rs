@@ -11,31 +11,12 @@ use cas::Digest;
 use errors::{DenebResult, StoreError};
 use util::atomic_write;
 
-use super::{Chunk, MmapChunk, Store, StoreBuilder};
+use super::{Chunk, MmapChunk, Store};
 
 const OBJECT_PATH: &str = "data";
 const PREFIX_SIZE: usize = 2;
 
 const CACHE_MAX_OBJECTS: usize = 100;
-
-pub struct DiskStoreBuilder;
-
-impl StoreBuilder for DiskStoreBuilder {
-    fn at_dir(&self, dir: &Path, chunk_size: usize) -> DenebResult<Box<dyn Store>> {
-        let root_dir = dir;
-        let object_dir = root_dir.join(OBJECT_PATH);
-
-        // Create object dir
-        create_dir_all(&object_dir)?;
-
-        Ok(Box::new(DiskStore {
-            chunk_size,
-            _root_dir: root_dir.to_owned(),
-            object_dir,
-            cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)),
-        }))
-    }
-}
 
 /// A disk-based implementation of the `Store` trait.
 ///
@@ -46,7 +27,7 @@ impl StoreBuilder for DiskStoreBuilder {
 /// For example:
 /// The full path at which a file with the digest "abcdefg123456" is stored is:
 /// "`root_dir`/data/ab/cdefg123456"
-pub struct DiskStore {
+pub(super) struct DiskStore {
     chunk_size: usize,
     _root_dir: PathBuf,
     object_dir: PathBuf,
@@ -54,6 +35,21 @@ pub struct DiskStore {
 }
 
 impl DiskStore {
+    pub(super) fn new(dir: &Path, chunk_size: usize) -> DenebResult<DiskStore> {
+        let root_dir = dir;
+        let object_dir = root_dir.join(OBJECT_PATH);
+
+        // Create object dir
+        create_dir_all(&object_dir)?;
+
+        Ok(DiskStore {
+            chunk_size,
+            _root_dir: root_dir.to_owned(),
+            object_dir,
+            cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)),
+        })
+    }
+
     /// Given a Digest, returns the absolute file path and the directory path
     /// corresponding to the object in the store
     fn digest_to_path(&self, digest: &Digest) -> (PathBuf, PathBuf) {
@@ -116,8 +112,7 @@ mod tests {
         run(|| {
             const BYTES: &[u8] = b"alabalaportocala";
             let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
-            let sb = DiskStoreBuilder;
-            let mut store = sb.at_dir(temp_dir.path(), 10000)?;
+            let mut store = DiskStore::new(temp_dir.path(), 10000)?;
             let mut v1: &[u8] = BYTES;
             let descriptors = store.put_file_chunked(&mut v1)?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;

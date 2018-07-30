@@ -11,7 +11,7 @@ use failure::ResultExt;
 use std::ffi::OsStr;
 
 use deneb_core::{
-    catalog::LmdbCatalogBuilder, engine::start_engine, errors::DenebResult, store::DiskStoreBuilder,
+    catalog::LmdbCatalogBuilder, engine::start_engine, errors::DenebResult, store::StoreType,
 };
 use deneb_fuse::fs::Fs;
 
@@ -41,10 +41,9 @@ fn main() -> DenebResult<()> {
 
     // Create the file system data structure
     let cb = LmdbCatalogBuilder;
-    let sb = DiskStoreBuilder;
     let handle = start_engine(
         &cb,
-        &sb,
+        StoreType::OnDisk,
         &params.work_dir,
         params.sync_dir,
         params.chunk_size,
