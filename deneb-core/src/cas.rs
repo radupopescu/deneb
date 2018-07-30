@@ -15,7 +15,7 @@ pub fn hash(msg: &[u8]) -> Digest {
     Digest(sodium_hash(msg))
 }
 
-pub fn read_chunks<R: ::std::io::Read>(
+pub(crate) fn read_chunks<R: ::std::io::Read>(
     mut reader: R,
     buffer: &mut [u8],
 ) -> Result<Vec<(Digest, Vec<u8>)>, DenebError> {

@@ -10,10 +10,10 @@ mod chunk;
 pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};
 
 mod mem;
-pub use self::mem::{MemStore, MemStoreBuilder};
+pub use self::mem::MemStoreBuilder;
 
 mod disk;
-pub use self::disk::{DiskStore, DiskStoreBuilder};
+pub use self::disk::DiskStoreBuilder;
 
 /// Builder types for `Store` objects
 pub trait StoreBuilder {

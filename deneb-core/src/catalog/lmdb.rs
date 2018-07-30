@@ -20,7 +20,7 @@ const CATALOG_VERSION: u32 = 1;
 
 // Note: Could be enhanced with an in-memory LRU cache
 /// A filesystem metadata catalog backed by an LMDB database
-pub struct LmdbCatalog {
+struct LmdbCatalog {
     env: Environment,
     inodes: Database,
     dir_entries: Database,

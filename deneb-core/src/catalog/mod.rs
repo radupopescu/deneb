@@ -4,10 +4,10 @@ use errors::{DenebError, DenebResult};
 use inode::INode;
 
 mod mem;
-pub use self::mem::{MemCatalog, MemCatalogBuilder};
+pub use self::mem::MemCatalogBuilder;
 
 mod lmdb;
-pub use self::lmdb::{LmdbCatalog, LmdbCatalogBuilder};
+pub use self::lmdb::LmdbCatalogBuilder;
 
 /// Describes the interface of catalog builders
 pub trait CatalogBuilder {
@@ -35,7 +35,7 @@ pub trait Catalog: Send {
 }
 
 #[derive(Copy, Clone)]
-pub struct IndexGenerator {
+pub(crate) struct IndexGenerator {
     current_index: u64,
 }
 

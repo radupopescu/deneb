@@ -28,10 +28,6 @@ impl MemStore {
             objects: HashMap::new(),
         }
     }
-
-    pub fn show_stats(&self) {
-        info!("MemStore: number of objects: {}", self.objects.len());
-    }
 }
 
 impl Store for MemStore {
