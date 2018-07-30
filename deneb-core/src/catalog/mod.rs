@@ -3,17 +3,38 @@ use std::path::{Path, PathBuf};
 use errors::{DenebError, DenebResult};
 use inode::INode;
 
-mod mem;
-pub use self::mem::MemCatalogBuilder;
-
 mod lmdb;
-pub use self::lmdb::LmdbCatalogBuilder;
+mod mem;
+
+#[derive(Clone, Copy)]
+pub enum CatalogType {
+    InMemory,
+    Lmdb,
+}
 
 /// Describes the interface of catalog builders
-pub trait CatalogBuilder {
-    fn create(&self, path: &Path) -> DenebResult<Box<dyn Catalog>>;
+pub struct Builder;
 
-    fn open(&self, path: &Path) -> DenebResult<Box<dyn Catalog>>;
+impl Builder {
+    pub fn create<P: AsRef<Path>>(
+        catalog_type: CatalogType,
+        path: P,
+    ) -> DenebResult<Box<dyn Catalog>> {
+        Ok(match catalog_type {
+            CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
+            CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::create(path.as_ref())?),
+        })
+    }
+
+    pub fn open<P: AsRef<Path>>(
+        catalog_type: CatalogType,
+        path: P,
+    ) -> DenebResult<Box<dyn Catalog>> {
+        Ok(match catalog_type {
+            CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
+            CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::open(path.as_ref())?),
+        })
+    }
 }
 
 /// Describes the interface of metadata catalogs

@@ -11,7 +11,7 @@ use failure::ResultExt;
 use std::ffi::OsStr;
 
 use deneb_core::{
-    catalog::LmdbCatalogBuilder, engine::start_engine, errors::DenebResult, store::StoreType,
+    catalog::CatalogType, engine::start_engine, errors::DenebResult, store::StoreType,
 };
 use deneb_fuse::fs::Fs;
 
@@ -40,9 +40,8 @@ fn main() -> DenebResult<()> {
     info!("Force unmount: {}", params.force_unmount);
 
     // Create the file system data structure
-    let cb = LmdbCatalogBuilder;
     let handle = start_engine(
-        &cb,
+        CatalogType::Lmdb,
         StoreType::OnDisk,
         &params.work_dir,
         params.sync_dir,

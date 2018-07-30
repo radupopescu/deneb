@@ -21,15 +21,15 @@ pub enum StoreType {
 pub struct Builder;
 
 impl Builder {
-    pub fn build<P: AsRef<Path>>(
+    pub fn create<P: AsRef<Path>>(
         store_type: StoreType,
         dir: P,
         chunk_size: usize,
     ) -> DenebResult<Box<dyn Store>> {
-        match store_type {
-            StoreType::InMemory => Ok(Box::new(mem::MemStore::new(chunk_size))),
-            StoreType::OnDisk => Ok(Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?)),
-        }
+        Ok(match store_type {
+            StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
+            StoreType::OnDisk => Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?),
+        })
     }
 }
 

@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
 };
 
-use catalog::{Catalog, CatalogBuilder, IndexGenerator};
+use catalog::{Builder as CatalogBuilder, Catalog, CatalogType, IndexGenerator};
 use dir_workspace::{DirEntry, DirWorkspace};
 use errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
 use file_workspace::FileWorkspace;
@@ -59,27 +59,27 @@ pub fn start_engine_prebuilt(
 
 /// Start the engine using catalog and store builders
 pub fn start_engine(
-    catalog_builder: &dyn CatalogBuilder,
+    catalog_type: CatalogType,
     store_type: StoreType,
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
     queue_size: usize,
 ) -> DenebResult<Handle> {
-    let (catalog, store) = init(catalog_builder, store_type, work_dir, sync_dir, chunk_size)?;
+    let (catalog, store) = init(catalog_type, store_type, work_dir, sync_dir, chunk_size)?;
 
     start_engine_prebuilt(catalog, store, queue_size)
 }
 
 fn init(
-    catalog_builder: &dyn CatalogBuilder,
+    catalog_type: CatalogType,
     store_type: StoreType,
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
 ) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)> {
     // Create an object store
-    let mut store = StoreBuilder::build(store_type, work_dir, chunk_size)?;
+    let mut store = StoreBuilder::create(store_type, work_dir, chunk_size)?;
 
     let catalog_root = work_dir.to_path_buf().join("scratch");
     create_dir_all(catalog_root.as_path())?;
@@ -93,7 +93,7 @@ fn init(
     if let Some(sync_dir) = sync_dir {
         {
             //use std::ops::DerefMut;
-            let mut catalog = catalog_builder.create(catalog_path.as_path())?;
+            let mut catalog = CatalogBuilder::create(catalog_type, catalog_path.as_path())?;
             populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
             info!(
                 "Catalog populated with contents of {:?}",
@@ -120,7 +120,7 @@ fn init(
         atomic_write(catalog_path.as_path(), chunk.get_slice())?;
     }
 
-    let catalog = catalog_builder.open(catalog_path.as_path())?;
+    let catalog = CatalogBuilder::open(catalog_type, catalog_path.as_path())?;
     catalog.show_stats();
 
     Ok((catalog, store))
