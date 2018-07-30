@@ -10,17 +10,15 @@ use super::{Chunk, MemChunk, Store, StoreBuilder};
 pub struct MemStoreBuilder;
 
 impl StoreBuilder for MemStoreBuilder {
-    type Store = MemStore;
-
-    fn at_dir<P: AsRef<Path>>(&self, _dir: P, chunk_size: usize) -> DenebResult<Self::Store> {
-        Ok(Self::Store::new(chunk_size))
+    fn at_dir(&self, _dir: &Path, chunk_size: usize) -> DenebResult<Box<dyn Store>> {
+        Ok(Box::new(MemStore::new(chunk_size)))
     }
 }
 
 #[derive(Default)]
 pub struct MemStore {
     chunk_size: usize,
-    objects: HashMap<Digest, Arc<Chunk>>,
+    objects: HashMap<Digest, Arc<dyn Chunk>>,
 }
 
 impl MemStore {

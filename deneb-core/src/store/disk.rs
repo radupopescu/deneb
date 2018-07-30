@@ -21,21 +21,19 @@ const CACHE_MAX_OBJECTS: usize = 100;
 pub struct DiskStoreBuilder;
 
 impl StoreBuilder for DiskStoreBuilder {
-    type Store = DiskStore;
-
-    fn at_dir<P: AsRef<Path>>(&self, dir: P, chunk_size: usize) -> DenebResult<Self::Store> {
-        let root_dir = dir.as_ref().to_owned();
+    fn at_dir(&self, dir: &Path, chunk_size: usize) -> DenebResult<Box<dyn Store>> {
+        let root_dir = dir;
         let object_dir = root_dir.join(OBJECT_PATH);
 
         // Create object dir
         create_dir_all(&object_dir)?;
 
-        Ok(Self::Store {
+        Ok(Box::new(DiskStore {
             chunk_size,
-            _root_dir: root_dir,
+            _root_dir: root_dir.to_owned(),
             object_dir,
             cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)),
-        })
+        }))
     }
 }
 
@@ -52,7 +50,7 @@ pub struct DiskStore {
     chunk_size: usize,
     _root_dir: PathBuf,
     object_dir: PathBuf,
-    cache: RefCell<LruCache<Digest, Arc<Chunk>>>,
+    cache: RefCell<LruCache<Digest, Arc<dyn Chunk>>>,
 }
 
 impl DiskStore {

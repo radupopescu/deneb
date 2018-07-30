@@ -17,18 +17,16 @@ pub use self::disk::{DiskStore, DiskStoreBuilder};
 
 /// Builder types for `Store` objects
 pub trait StoreBuilder {
-    type Store: self::Store;
-
     /// Construct the new store at the specified directory
     ///
     /// It is assumed that the newly constructed store will keep any
     /// objects (chunks) already present at the specified directory
-    fn at_dir<P: AsRef<Path>>(&self, dir: P, chunk_size: usize) -> DenebResult<Self::Store>;
+    fn at_dir(&self, dir: &Path, chunk_size: usize) -> DenebResult<Box<dyn Store>>;
 }
 
 /// Types which can perform IO into repository storage
 ///
-pub trait Store {
+pub trait Store: Send {
     /// Returns the chunk size used by the store
     fn chunk_size(&self) -> usize;
 

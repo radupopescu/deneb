@@ -32,9 +32,7 @@ pub struct LmdbCatalog {
 pub struct LmdbCatalogBuilder;
 
 impl CatalogBuilder for LmdbCatalogBuilder {
-    type Catalog = LmdbCatalog;
-
-    fn create<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
+    fn create(&self, path: &Path) -> DenebResult<Box<dyn Catalog>> {
         let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         {
@@ -50,19 +48,19 @@ impl CatalogBuilder for LmdbCatalogBuilder {
             writer.commit()?;
         }
 
-        info!("Created LMDB catalog {:?}.", path.as_ref());
+        info!("Created LMDB catalog {:?}.", path);
 
-        Ok(Self::Catalog {
+        Ok(Box::new(LmdbCatalog {
             env,
             inodes,
             dir_entries,
             max_index: 1,
             meta,
             version: CATALOG_VERSION,
-        })
+        }))
     }
 
-    fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
+    fn open(&self, path: &Path) -> DenebResult<Box<dyn Catalog>> {
         let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         let ver = {
@@ -82,16 +80,16 @@ impl CatalogBuilder for LmdbCatalogBuilder {
             from_utf8(v)?.parse::<u64>()
         }?;
 
-        info!("Opened LMDB catalog {:?}.", path.as_ref());
+        info!("Opened LMDB catalog {:?}.", path);
 
-        Ok(Self::Catalog {
+        Ok(Box::new(LmdbCatalog {
             env,
             inodes,
             dir_entries,
             max_index,
             meta,
             version: ver,
-        })
+        }))
     }
 }
 

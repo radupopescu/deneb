@@ -32,14 +32,11 @@ use self::{
 pub use self::{handle::Handle, requests::RequestId};
 
 /// Start engine with pre-built catalog and store
-pub fn start_engine_prebuilt<C, S>(
-    catalog: C,
-    store: S,
+pub fn start_engine_prebuilt(
+    catalog: Box<dyn Catalog>,
+    store: Box<dyn Store>,
     queue_size: usize,
-) -> DenebResult<Handle<C, S>>
-where
-    C: Catalog + Send + 'static,
-    S: Store + Send + 'static,
+) -> DenebResult<Handle>
 {
     let (tx, rx) = sync_channel(queue_size);
     let index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
@@ -62,19 +59,14 @@ where
 }
 
 /// Start the engine using catalog and store builders
-pub fn start_engine<CB, SB>(
-    catalog_builder: &CB,
-    store_builder: &SB,
+pub fn start_engine(
+    catalog_builder: &dyn CatalogBuilder,
+    store_builder: &dyn StoreBuilder,
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
     queue_size: usize,
-) -> DenebResult<Handle<CB::Catalog, SB::Store>>
-where
-    CB: CatalogBuilder,
-    <CB as CatalogBuilder>::Catalog: Send + 'static,
-    SB: StoreBuilder,
-    <SB as StoreBuilder>::Store: Send + 'static,
+) -> DenebResult<Handle>
 {
     let (catalog, store) = init(
         catalog_builder,
@@ -87,16 +79,13 @@ where
     start_engine_prebuilt(catalog, store, queue_size)
 }
 
-fn init<CB, SB>(
-    catalog_builder: &CB,
-    store_builder: &SB,
+fn init(
+    catalog_builder: &dyn CatalogBuilder,
+    store_builder: &dyn StoreBuilder,
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
-) -> DenebResult<(CB::Catalog, SB::Store)>
-where
-    CB: CatalogBuilder,
-    SB: StoreBuilder,
+) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)>
 {
     // Create an object store
     let mut store = store_builder.at_dir(work_dir, chunk_size)?;
@@ -139,21 +128,21 @@ where
         atomic_write(catalog_path.as_path(), chunk.get_slice())?;
     }
 
-    let catalog = catalog_builder.open(catalog_path)?;
+    let catalog = catalog_builder.open(catalog_path.as_path())?;
     catalog.show_stats();
 
     Ok((catalog, store))
 }
 
-struct Workspace<S> {
+struct Workspace {
     dirs: HashMap<u64, DirWorkspace>,
-    files: HashMap<u64, FileWorkspace<S>>,
+    files: HashMap<u64, FileWorkspace>,
     inodes: HashMap<u64, INode>,
     deleted_inodes: HashSet<u64>,
 }
 
-impl<S> Workspace<S> {
-    fn new() -> Workspace<S> {
+impl Workspace {
+    fn new() -> Workspace {
         Workspace {
             dirs: HashMap::new(),
             files: HashMap::new(),
@@ -163,17 +152,14 @@ impl<S> Workspace<S> {
     }
 }
 
-pub(in engine) struct Engine<C, S> {
-    catalog: C,
-    store: Rc<RefCell<S>>,
-    workspace: Workspace<S>,
+pub(in engine) struct Engine {
+    catalog: Box<dyn Catalog>,
+    store: Rc<RefCell<Box<dyn Store>>>,
+    workspace: Workspace,
     index_generator: IndexGenerator,
 }
 
-impl<C, S> RequestHandler<GetAttr> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<GetAttr> for Engine
 {
     fn handle(&mut self, request: &GetAttr) -> DenebResult<<GetAttr as Request>::Reply> {
         self.get_attr(request.index)
@@ -182,10 +168,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<SetAttr> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<SetAttr> for Engine
 {
     fn handle(&mut self, request: &SetAttr) -> DenebResult<<SetAttr as Request>::Reply> {
         self.set_attr(request.index, &request.changes)
@@ -194,10 +177,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<Lookup> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<Lookup> for Engine
 {
     fn handle(&mut self, request: &Lookup) -> DenebResult<<Lookup as Request>::Reply> {
         self.lookup(request.parent, &request.name)
@@ -206,10 +186,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<OpenDir> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<OpenDir> for Engine
 {
     fn handle(&mut self, request: &OpenDir) -> DenebResult<<OpenDir as Request>::Reply> {
         self.open_dir(request.index)
@@ -218,10 +195,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<ReleaseDir> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<ReleaseDir> for Engine
 {
     fn handle(&mut self, request: &ReleaseDir) -> DenebResult<<ReleaseDir as Request>::Reply> {
         self.release_dir(request.index)
@@ -230,10 +204,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<ReadDir> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<ReadDir> for Engine
 {
     fn handle(&mut self, request: &ReadDir) -> DenebResult<<ReadDir as Request>::Reply> {
         self.read_dir(request.index)
@@ -242,10 +213,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<OpenFile> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<OpenFile> for Engine
 {
     fn handle(&mut self, request: &OpenFile) -> DenebResult<<OpenFile as Request>::Reply> {
         self.open_file(request.index, request.flags)
@@ -254,10 +222,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<ReadData> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<ReadData> for Engine
 {
     fn handle(&mut self, request: &ReadData) -> DenebResult<<ReadData as Request>::Reply> {
         self.read_data(request.index, request.offset, request.size)
@@ -266,10 +231,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<WriteData> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<WriteData> for Engine
 {
     fn handle(&mut self, request: &WriteData) -> DenebResult<<WriteData as Request>::Reply> {
         self.write_data(request.index, request.offset, &request.data)
@@ -278,10 +240,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<ReleaseFile> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<ReleaseFile> for Engine
 {
     fn handle(&mut self, request: &ReleaseFile) -> DenebResult<<ReleaseFile as Request>::Reply> {
         self.release_file(request.index)
@@ -290,10 +249,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<CreateFile> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<CreateFile> for Engine
 {
     fn handle(&mut self, request: &CreateFile) -> DenebResult<<CreateFile as Request>::Reply> {
         self.create_file(request.parent, &request.name, request.mode, request.flags)
@@ -305,10 +261,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<CreateDir> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<CreateDir> for Engine
 {
     fn handle(&mut self, request: &CreateDir) -> DenebResult<<CreateDir as Request>::Reply> {
         self.create_dir(request.parent, &request.name, request.mode)
@@ -317,10 +270,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<Unlink> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<Unlink> for Engine
 {
     fn handle(&mut self, request: &Unlink) -> DenebResult<<Unlink as Request>::Reply> {
         self.remove(request.parent, &request.name)
@@ -329,10 +279,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<RemoveDir> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<RemoveDir> for Engine
 {
     fn handle(&mut self, request: &RemoveDir) -> DenebResult<<RemoveDir as Request>::Reply> {
         self.remove(request.parent, &request.name)
@@ -341,10 +288,7 @@ where
     }
 }
 
-impl<C, S> RequestHandler<Rename> for Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl RequestHandler<Rename> for Engine
 {
     fn handle(&mut self, request: &Rename) -> DenebResult<<Rename as Request>::Reply> {
         self.rename(
@@ -362,10 +306,7 @@ where
     }
 }
 
-impl<C, S> Engine<C, S>
-where
-    C: Catalog,
-    S: Store,
+impl Engine
 {
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
     //       and can't be used inside Entry::or_insert_with

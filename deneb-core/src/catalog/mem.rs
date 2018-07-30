@@ -9,14 +9,12 @@ use errors::CatalogError;
 pub struct MemCatalogBuilder;
 
 impl CatalogBuilder for MemCatalogBuilder {
-    type Catalog = MemCatalog;
-
-    fn create<P: AsRef<Path>>(&self, _path: P) -> DenebResult<Self::Catalog> {
-        Ok(MemCatalog::new())
+    fn create(&self, _path: &Path) -> DenebResult<Box<dyn Catalog>> {
+        Ok(Box::new(MemCatalog::new()))
     }
 
-    fn open<P: AsRef<Path>>(&self, _path: P) -> DenebResult<Self::Catalog> {
-        Ok(MemCatalog::new())
+    fn open(&self, _path: &Path) -> DenebResult<Box<dyn Catalog>> {
+        Ok(Box::new(MemCatalog::new()))
     }
 }
 

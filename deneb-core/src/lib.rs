@@ -60,15 +60,12 @@ pub fn init() -> DenebResult<()> {
     Ok(())
 }
 
-pub fn populate_with_dir<C, S>(
-    catalog: &mut C,
-    store: &mut S,
+pub fn populate_with_dir(
+    catalog: &mut Box<dyn Catalog>,
+    store: &mut Box<dyn Store>,
     dir: &Path,
     chunk_size: usize,
 ) -> DenebResult<()>
-where
-    C: Catalog,
-    S: Store,
 {
     let attrs = FileAttributes::with_stats(lstat(dir)?, 1);
     catalog.add_inode(INode::new(attrs, vec![]))?;
@@ -88,18 +85,15 @@ where
     Ok(())
 }
 
-fn visit_dirs<C, S>(
-    catalog: &mut C,
-    store: &mut S,
+fn visit_dirs(
+    catalog: &mut Box<dyn Catalog>,
+    store: &mut Box<dyn Store>,
     index_generator: &mut IndexGenerator,
     buffer: &mut [u8],
     dir: &Path,
     dir_index: u64,
     parent_index: u64,
 ) -> DenebResult<()>
-where
-    C: Catalog,
-    S: Store,
 {
     catalog.add_dir_entry(dir_index, Path::new("."), dir_index)?;
     catalog.add_dir_entry(dir_index, Path::new(".."), parent_index)?;

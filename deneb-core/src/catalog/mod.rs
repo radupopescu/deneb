@@ -11,16 +11,14 @@ pub use self::lmdb::{LmdbCatalog, LmdbCatalogBuilder};
 
 /// Describes the interface of catalog builders
 pub trait CatalogBuilder {
-    type Catalog: self::Catalog;
+    fn create(&self, path: &Path) -> DenebResult<Box<dyn Catalog>>;
 
-    fn create<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog>;
-
-    fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog>;
+    fn open(&self, path: &Path) -> DenebResult<Box<dyn Catalog>>;
 }
 
 /// Describes the interface of metadata catalogs
 ///
-pub trait Catalog {
+pub trait Catalog: Send {
     fn show_stats(&self) {}
 
     fn get_max_index(&self) -> u64;
