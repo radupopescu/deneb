@@ -1,38 +1,23 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 
 use cas::Digest;
 use errors::{DenebResult, StoreError};
 
-use super::{Chunk, MemChunk, Store, StoreBuilder};
-
-pub struct MemStoreBuilder;
-
-impl StoreBuilder for MemStoreBuilder {
-    type Store = MemStore;
-
-    fn at_dir<P: AsRef<Path>>(&self, _dir: P, chunk_size: usize) -> DenebResult<Self::Store> {
-        Ok(Self::Store::new(chunk_size))
-    }
-}
+use super::{Chunk, MemChunk, Store};
 
 #[derive(Default)]
-pub struct MemStore {
+pub(super) struct MemStore {
     chunk_size: usize,
-    objects: HashMap<Digest, Arc<Chunk>>,
+    objects: HashMap<Digest, Arc<dyn Chunk>>,
 }
 
 impl MemStore {
-    pub fn new(chunk_size: usize) -> MemStore {
+    pub(super) fn new(chunk_size: usize) -> MemStore {
         MemStore {
             chunk_size,
             objects: HashMap::new(),
         }
-    }
-
-    pub fn show_stats(&self) {
-        info!("MemStore: number of objects: {}", self.objects.len());
     }
 }
 
@@ -67,11 +52,12 @@ mod tests {
     #[test]
     fn memstore_create_put_get() {
         run(|| {
+            const BYTES: &[u8] = b"alabalaportocala";
             let mut store: MemStore = MemStore::new(10000);
-            let v1: Vec<u8> = vec![1, 2, 3];
-            let descriptors = store.put_file_chunked(v1.as_slice())?;
+            let mut v1: &[u8] = BYTES;
+            let descriptors = store.put_file_chunked(&mut v1)?;
             let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(v1.as_slice(), v2.get_slice());
+            assert_eq!(BYTES, v2.get_slice());
             Ok(())
         })
     }

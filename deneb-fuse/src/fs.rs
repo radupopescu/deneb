@@ -16,9 +16,9 @@ use std::{
 };
 
 use deneb_core::{
-    catalog::Catalog, engine::{Handle, RequestId},
+    engine::{Handle, RequestId},
     errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
-    inode::{FileAttributeChanges, FileAttributes, FileType as FT}, store::Store,
+    inode::{FileAttributeChanges, FileAttributes, FileType as FT},
 };
 
 pub struct Session<'a> {
@@ -53,22 +53,14 @@ impl<'a> Session<'a> {
     }
 }
 
-pub struct Fs<C, S>
-where
-    C: Catalog,
-    S: Store,
-{
-    engine_handle: Handle<C, S>,
+pub struct Fs {
+    engine_handle: Handle,
 }
 
-impl<'a, C, S> Fs<C, S>
-where
-    C: Catalog + 'static,
-    S: Store + 'static,
-{
+impl<'a> Fs {
     pub fn mount<P: AsRef<Path>>(
         mount_point: &P,
-        engine_handle: Handle<C, S>,
+        engine_handle: Handle,
         options: &[&OsStr],
     ) -> DenebResult<Session<'a>> {
         let fs = Fs { engine_handle };
@@ -80,11 +72,7 @@ where
     }
 }
 
-impl<C, S> Filesystem for Fs<C, S>
-where
-    C: Catalog + 'static,
-    S: Store + 'static,
-{
+impl Filesystem for Fs {
     fn getattr(&mut self, req: &Request, ino: u64, reply: ReplyAttr) {
         match self.engine_handle.get_attr(&to_request_id(req), ino) {
             Ok(attrs) => {

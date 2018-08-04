@@ -3,24 +3,43 @@ use std::path::{Path, PathBuf};
 use errors::{DenebError, DenebResult};
 use inode::INode;
 
-mod mem;
-pub use self::mem::{MemCatalog, MemCatalogBuilder};
-
 mod lmdb;
-pub use self::lmdb::{LmdbCatalog, LmdbCatalogBuilder};
+mod mem;
+
+#[derive(Clone, Copy)]
+pub enum CatalogType {
+    InMemory,
+    Lmdb,
+}
 
 /// Describes the interface of catalog builders
-pub trait CatalogBuilder {
-    type Catalog: self::Catalog;
+pub struct Builder;
 
-    fn create<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog>;
+impl Builder {
+    pub fn create<P: AsRef<Path>>(
+        catalog_type: CatalogType,
+        path: P,
+    ) -> DenebResult<Box<dyn Catalog>> {
+        Ok(match catalog_type {
+            CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
+            CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::create(path.as_ref())?),
+        })
+    }
 
-    fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog>;
+    pub fn open<P: AsRef<Path>>(
+        catalog_type: CatalogType,
+        path: P,
+    ) -> DenebResult<Box<dyn Catalog>> {
+        Ok(match catalog_type {
+            CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
+            CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::open(path.as_ref())?),
+        })
+    }
 }
 
 /// Describes the interface of metadata catalogs
 ///
-pub trait Catalog {
+pub trait Catalog: Send {
     fn show_stats(&self) {}
 
     fn get_max_index(&self) -> u64;
@@ -37,7 +56,7 @@ pub trait Catalog {
 }
 
 #[derive(Copy, Clone)]
-pub struct IndexGenerator {
+pub(crate) struct IndexGenerator {
     current_index: u64,
 }
 

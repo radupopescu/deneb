@@ -6,33 +6,21 @@ use inode::INode;
 use super::*;
 use errors::CatalogError;
 
-pub struct MemCatalogBuilder;
-
-impl CatalogBuilder for MemCatalogBuilder {
-    type Catalog = MemCatalog;
-
-    fn create<P: AsRef<Path>>(&self, _path: P) -> DenebResult<Self::Catalog> {
-        Ok(MemCatalog::new())
-    }
-
-    fn open<P: AsRef<Path>>(&self, _path: P) -> DenebResult<Self::Catalog> {
-        Ok(MemCatalog::new())
-    }
-}
-
 #[derive(Default)]
-pub struct MemCatalog {
+pub(super) struct MemCatalog {
     inodes: HashMap<u64, INode>,
     dir_entries: HashMap<u64, HashMap<PathBuf, u64>>,
     max_index: u64,
 }
 
 impl MemCatalog {
-    pub fn new() -> MemCatalog {
+    pub(super) fn new() -> MemCatalog {
         Self::default()
     }
+}
 
-    pub fn show_stats(&self) {
+impl Catalog for MemCatalog {
+    fn show_stats(&self) {
         info!("Catalog stats: number of inodes: {}", self.inodes.len());
         info!("Directory entries:");
         for (k1, v1) in &self.dir_entries {
@@ -41,9 +29,7 @@ impl MemCatalog {
             }
         }
     }
-}
 
-impl Catalog for MemCatalog {
     fn get_max_index(&self) -> u64 {
         self.max_index
     }

@@ -9,26 +9,33 @@ use inode::ChunkDescriptor;
 mod chunk;
 pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};
 
-mod mem;
-pub use self::mem::{MemStore, MemStoreBuilder};
-
 mod disk;
-pub use self::disk::{DiskStore, DiskStoreBuilder};
+mod mem;
 
-/// Builder types for `Store` objects
-pub trait StoreBuilder {
-    type Store: self::Store;
+#[derive(Clone, Copy)]
+pub enum StoreType {
+    InMemory,
+    OnDisk,
+}
 
-    /// Construct the new store at the specified directory
-    ///
-    /// It is assumed that the newly constructed store will keep any
-    /// objects (chunks) already present at the specified directory
-    fn at_dir<P: AsRef<Path>>(&self, dir: P, chunk_size: usize) -> DenebResult<Self::Store>;
+pub struct Builder;
+
+impl Builder {
+    pub fn create<P: AsRef<Path>>(
+        store_type: StoreType,
+        dir: P,
+        chunk_size: usize,
+    ) -> DenebResult<Box<dyn Store>> {
+        Ok(match store_type {
+            StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
+            StoreType::OnDisk => Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?),
+        })
+    }
 }
 
 /// Types which can perform IO into repository storage
 ///
-pub trait Store {
+pub trait Store: Send {
     /// Returns the chunk size used by the store
     fn chunk_size(&self) -> usize;
 
@@ -44,7 +51,7 @@ pub trait Store {
 
     /// Write a file into the repository without chunking
     ///
-    fn put_file<R: Read>(&mut self, mut data: R) -> DenebResult<ChunkDescriptor> {
+    fn put_file(&mut self, data: &mut dyn Read) -> DenebResult<ChunkDescriptor> {
         let mut buf = vec![];
         let n = data.read_to_end(&mut buf)?;
         let digest = hash(buf.as_slice());
@@ -55,7 +62,7 @@ pub trait Store {
 
     /// Write a file into the repository with chunking
     ///
-    fn put_file_chunked<R: Read>(&mut self, data: R) -> DenebResult<Vec<ChunkDescriptor>> {
+    fn put_file_chunked(&mut self, data: &mut dyn Read) -> DenebResult<Vec<ChunkDescriptor>> {
         let mut descriptors = vec![];
         let mut buf = vec![0 as u8; self.chunk_size()];
         for (digest, obj) in read_chunks(data, buf.as_mut_slice())? {

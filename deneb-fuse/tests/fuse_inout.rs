@@ -21,9 +21,9 @@ mod common;
 use common::*;
 
 use deneb_core::{
-    catalog::{CatalogBuilder, LmdbCatalogBuilder, MemCatalogBuilder},
+    catalog::{Builder as CatalogBuilder, CatalogType},
     engine::{start_engine, start_engine_prebuilt}, errors::DenebResult, populate_with_dir,
-    store::{DiskStoreBuilder, MemStoreBuilder, StoreBuilder},
+    store::{Builder as StoreBuilder, StoreType},
 };
 use deneb_fuse::fs::{Fs, Session};
 
@@ -86,16 +86,16 @@ fn init_test<'a>(
     match test_type {
         TestType::InMemory => {
             // The paths given to the in-memory builders doesn't matter
-            let mut store = MemStoreBuilder.at_dir(&work_dir, chunk_size)?;
-            let mut catalog = MemCatalogBuilder.create(&work_dir)?;
-            populate_with_dir(&mut catalog, &mut store, input, chunk_size)?;
+            let mut store = StoreBuilder::create(StoreType::InMemory, &work_dir, chunk_size)?;
+            let mut catalog = CatalogBuilder::create(CatalogType::InMemory, &work_dir)?;
+            populate_with_dir(&mut *catalog, &mut *store, input, chunk_size)?;
             let handle = start_engine_prebuilt(catalog, store, 1000)?;
             Fs::mount(&mount_point, handle, &options)
         }
         TestType::OnDisk => {
             let handle = start_engine(
-                &LmdbCatalogBuilder,
-                &DiskStoreBuilder,
+                CatalogType::Lmdb,
+                StoreType::OnDisk,
                 &work_dir,
                 Some(input.to_owned()),
                 chunk_size,

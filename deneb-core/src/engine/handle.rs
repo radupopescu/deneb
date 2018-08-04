@@ -1,9 +1,7 @@
 use std::{ffi::OsStr, path::PathBuf};
 
-use catalog::Catalog;
 use errors::DenebResult;
 use inode::{FileAttributeChanges, FileAttributes, FileType};
-use store::Store;
 
 use super::{
     protocol::{make_request, RequestChannel},
@@ -15,19 +13,11 @@ use super::{
 };
 
 #[derive(Clone)]
-pub struct Handle<C, S>
-where
-    C: Catalog,
-    S: Store,
-{
-    channel: RequestChannel<Engine<C, S>>,
+pub struct Handle {
+    channel: RequestChannel<Engine>,
 }
 
-impl<C, S> Handle<C, S>
-where
-    C: Catalog + 'static,
-    S: Store + 'static,
-{
+impl Handle {
     // Client API
     pub fn get_attr(&self, _id: &RequestId, index: u64) -> DenebResult<FileAttributes> {
         make_request(GetAttr { index }, &self.channel)
@@ -207,7 +197,7 @@ where
     }
 
     // Private functions
-    pub(in engine) fn new(channel: RequestChannel<Engine<C, S>>) -> Handle<C, S> {
+    pub(in engine) fn new(channel: RequestChannel<Engine>) -> Handle {
         Handle { channel }
     }
 }

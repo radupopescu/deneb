@@ -40,11 +40,11 @@ pub fn run<F: Fn() -> DenebResult<()>>(f: F) {
 }
 
 // Safe wrappers on top of  some libc functions
-pub fn get_egid() -> gid_t {
+pub(crate) fn get_egid() -> gid_t {
     unsafe { getegid() }
 }
 
-pub fn get_euid() -> uid_t {
+pub(crate) fn get_euid() -> uid_t {
     unsafe { geteuid() }
 }
 

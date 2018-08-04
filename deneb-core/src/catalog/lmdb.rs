@@ -20,7 +20,7 @@ const CATALOG_VERSION: u32 = 1;
 
 // Note: Could be enhanced with an in-memory LRU cache
 /// A filesystem metadata catalog backed by an LMDB database
-pub struct LmdbCatalog {
+pub(super) struct LmdbCatalog {
     env: Environment,
     inodes: Database,
     dir_entries: Database,
@@ -29,12 +29,8 @@ pub struct LmdbCatalog {
     version: u32,
 }
 
-pub struct LmdbCatalogBuilder;
-
-impl CatalogBuilder for LmdbCatalogBuilder {
-    type Catalog = LmdbCatalog;
-
-    fn create<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
+impl LmdbCatalog {
+    pub(super) fn create(path: &Path) -> DenebResult<LmdbCatalog> {
         let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         {
@@ -50,9 +46,9 @@ impl CatalogBuilder for LmdbCatalogBuilder {
             writer.commit()?;
         }
 
-        info!("Created LMDB catalog {:?}.", path.as_ref());
+        info!("Created LMDB catalog {:?}.", path);
 
-        Ok(Self::Catalog {
+        Ok(LmdbCatalog {
             env,
             inodes,
             dir_entries,
@@ -62,7 +58,7 @@ impl CatalogBuilder for LmdbCatalogBuilder {
         })
     }
 
-    fn open<P: AsRef<Path>>(&self, path: P) -> DenebResult<Self::Catalog> {
+    pub(super) fn open(path: &Path) -> DenebResult<LmdbCatalog> {
         let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         let ver = {
@@ -82,9 +78,9 @@ impl CatalogBuilder for LmdbCatalogBuilder {
             from_utf8(v)?.parse::<u64>()
         }?;
 
-        info!("Opened LMDB catalog {:?}.", path.as_ref());
+        info!("Opened LMDB catalog {:?}.", path);
 
-        Ok(Self::Catalog {
+        Ok(LmdbCatalog {
             env,
             inodes,
             dir_entries,
@@ -305,10 +301,9 @@ mod tests {
         let tmp = TempDir::new("/tmp/deneb_lmdb_test");
         assert!(tmp.is_ok());
         if let Ok(prefix) = tmp {
-            let cb = LmdbCatalogBuilder;
             let catalog_path = prefix.path().to_owned().join("test-lmdb-catalog");
             {
-                let catalog = cb.create(&catalog_path);
+                let catalog = Builder::create(CatalogType::Lmdb, &catalog_path);
                 assert!(catalog.is_ok());
                 if let Ok(mut catalog) = catalog {
                     catalog.show_stats();
@@ -328,7 +323,7 @@ mod tests {
                 }
             }
             {
-                let catalog = cb.open(&catalog_path);
+                let catalog = Builder::open(CatalogType::Lmdb, &catalog_path);
                 assert!(catalog.is_ok());
                 if let Ok(catalog) = catalog {
                     assert_eq!(catalog.get_max_index(), 3);
