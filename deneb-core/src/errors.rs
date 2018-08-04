@@ -136,7 +136,7 @@ pub struct DirWorkspaceEntryLookupError {
 pub fn print_error_with_causes(err: &Error) {
     error!("Error: {}", err);
     {
-        let mut failure = err.cause();
+        let mut failure = err.as_fail();
         error!("caused by: {}", failure);
         while let Some(cause) = failure.cause() {
             error!("caused by: {}", cause);
