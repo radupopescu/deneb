@@ -1,7 +1,10 @@
 use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc};
 
 use {
-    cas::Digest, errors::DenebResult, inode::{ChunkDescriptor, INode}, store::{Chunk, Store},
+    cas::Digest,
+    errors::DenebResult,
+    inode::{ChunkDescriptor, INode},
+    store::{Chunk, Store},
 };
 
 /// A type which offers read/write operations on a file in the repository
@@ -334,7 +337,6 @@ mod tests {
 
     use inode::FileAttributes;
     use store::{Builder, StoreType};
-    use util::run;
 
     fn make_test_workspace() -> DenebResult<FileWorkspace> {
         let mut store = Builder::create(StoreType::InMemory, "/", 10000)?;
@@ -351,155 +353,139 @@ mod tests {
     }
 
     #[test]
-    fn read() {
-        run(|| {
-            let ws = make_test_workspace()?;
+    fn read() -> DenebResult<()> {
+        let ws = make_test_workspace()?;
 
-            let res = ws.read_at(0, ws.size as usize)?;
+        let res = ws.read_at(0, ws.size as usize)?;
 
-            assert_eq!(b"alabalaportocala", res.as_slice());
+        assert_eq!(b"alabalaportocala", res.as_slice());
 
-            ws.unload();
+        ws.unload();
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn write_into_empty() {
-        run(|| {
-            let store = Builder::create(StoreType::InMemory, "/", 10000)?;
+    fn write_into_empty() -> DenebResult<()> {
+        let store = Builder::create(StoreType::InMemory, "/", 10000)?;
 
-            let inode = INode {
-                attributes: FileAttributes::default(),
-                chunks: vec![],
-            };
-            let mut ws = FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))?;
+        let inode = INode {
+            attributes: FileAttributes::default(),
+            chunks: vec![],
+        };
+        let mut ws = FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))?;
 
-            assert_eq!(ws.write_at(0, b"written"), (7, 7));
+        assert_eq!(ws.write_at(0, b"written"), (7, 7));
 
-            let res = ws.read_at(0, 7)?;
-            assert_eq!(b"written", res.as_slice());
-            assert_eq!(ws.piece_table.len(), 1);
-            assert_eq!(ws.size, 7);
+        let res = ws.read_at(0, 7)?;
+        assert_eq!(b"written", res.as_slice());
+        assert_eq!(ws.piece_table.len(), 1);
+        assert_eq!(ws.size, 7);
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn successive_writes() {
-        run(|| {
-            let mut ws = make_test_workspace()?;
+    fn successive_writes() -> DenebResult<()> {
+        let mut ws = make_test_workspace()?;
 
-            let res0 = ws.read_at(0, 16)?;
-            assert_eq!(b"alabalaportocala", res0.as_slice());
+        let res0 = ws.read_at(0, 16)?;
+        assert_eq!(b"alabalaportocala", res0.as_slice());
 
-            assert_eq!(ws.write_at(2, b"written"), (7, 16));
+        assert_eq!(ws.write_at(2, b"written"), (7, 16));
 
-            let res1 = ws.read_at(0, 16)?;
-            assert_eq!(b"alwrittenrtocala", res1.as_slice());
+        let res1 = ws.read_at(0, 16)?;
+        assert_eq!(b"alwrittenrtocala", res1.as_slice());
 
-            assert_eq!(ws.write_at(6, b"again"), (5, 16));
+        assert_eq!(ws.write_at(6, b"again"), (5, 16));
 
-            ws.unload();
+        ws.unload();
 
-            let res2 = ws.read_at(0, 16)?;
-            assert_eq!(b"alwritagainocala", res2.as_slice());
+        let res2 = ws.read_at(0, 16)?;
+        assert_eq!(b"alwritagainocala", res2.as_slice());
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn write_at_beginning() {
-        run(|| {
-            let mut ws = make_test_workspace()?;
+    fn write_at_beginning() -> DenebResult<()> {
+        let mut ws = make_test_workspace()?;
 
-            assert_eq!(ws.write_at(0, b"written"), (7, 16));
+        assert_eq!(ws.write_at(0, b"written"), (7, 16));
 
-            let res = ws.read_at(0, 16)?;
+        let res = ws.read_at(0, 16)?;
 
-            assert_eq!(b"writtenportocala", res.as_slice());
-            assert_eq!(ws.piece_table.len(), 2);
-            assert_eq!(ws.size, 16);
+        assert_eq!(b"writtenportocala", res.as_slice());
+        assert_eq!(ws.piece_table.len(), 2);
+        assert_eq!(ws.size, 16);
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn write_at_end() {
-        run(|| {
-            let mut ws = make_test_workspace()?;
+    fn write_at_end() -> DenebResult<()> {
+        let mut ws = make_test_workspace()?;
 
-            assert_eq!(ws.write_at(9, b"written"), (7, 16));
+        assert_eq!(ws.write_at(9, b"written"), (7, 16));
 
-            let res = ws.read_at(0, 16)?;
+        let res = ws.read_at(0, 16)?;
 
-            assert_eq!(b"alabalapowritten", res.as_slice());
-            assert_eq!(ws.piece_table.len(), 4);
-            assert_eq!(ws.size, 16);
+        assert_eq!(b"alabalapowritten", res.as_slice());
+        assert_eq!(ws.piece_table.len(), 4);
+        assert_eq!(ws.size, 16);
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn write_extends_the_file() {
-        run(|| {
-            let mut ws = make_test_workspace()?;
+    fn write_extends_the_file() -> DenebResult<()> {
+        let mut ws = make_test_workspace()?;
 
-            assert_eq!(ws.write_at(12, b"written"), (7, 19));
+        assert_eq!(ws.write_at(12, b"written"), (7, 19));
 
-            let res = ws.read_at(0, 19)?;
+        let res = ws.read_at(0, 19)?;
 
-            assert_eq!(b"alabalaportowritten", res.as_slice());
-            assert_eq!(ws.piece_table.len(), 4);
-            assert_eq!(ws.size, 19);
+        assert_eq!(b"alabalaportowritten", res.as_slice());
+        assert_eq!(ws.piece_table.len(), 4);
+        assert_eq!(ws.size, 19);
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn append_to_file() {
-        run(|| {
-            let mut ws = make_test_workspace()?;
+    fn append_to_file() -> DenebResult<()> {
+        let mut ws = make_test_workspace()?;
 
-            assert_eq!(ws.write_at(16, b"written"), (7, 23));
+        assert_eq!(ws.write_at(16, b"written"), (7, 23));
 
-            let res = ws.read_at(0, 23)?;
+        let res = ws.read_at(0, 23)?;
 
-            assert_eq!(b"alabalaportocalawritten", res.as_slice());
-            assert_eq!(ws.piece_table.len(), 4);
-            assert_eq!(ws.size, 23);
+        assert_eq!(b"alabalaportocalawritten", res.as_slice());
+        assert_eq!(ws.piece_table.len(), 4);
+        assert_eq!(ws.size, 23);
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]
-    fn write_beyond_end() {
-        run(|| {
-            let mut ws = make_test_workspace()?;
+    fn write_beyond_end() -> DenebResult<()> {
+        let mut ws = make_test_workspace()?;
 
-            assert_eq!(ws.write_at(20, b"written"), (7, 27));
+        assert_eq!(ws.write_at(20, b"written"), (7, 27));
 
-            let res = ws.read_at(0, 27)?;
+        let res = ws.read_at(0, 27)?;
 
-            assert_eq!(
-                [
-                    97, 108, 97, 98, 97, 108, 97, 112, 111, 114, 116, 111, 99, 97, 108, 97, 0, 0,
-                    0, 0, 119, 114, 105, 116, 116, 101, 110,
-                ],
-                res.as_slice()
-            );
-            assert_eq!(ws.piece_table.len(), 5);
-            assert_eq!(ws.size, 27);
+        assert_eq!(
+            [
+                97, 108, 97, 98, 97, 108, 97, 112, 111, 114, 116, 111, 99, 97, 108, 97, 0, 0, 0, 0,
+                119, 114, 105, 116, 116, 101, 110,
+            ],
+            res.as_slice()
+        );
+        assert_eq!(ws.piece_table.len(), 5);
+        assert_eq!(ws.size, 27);
 
-            Ok(())
-        });
+        Ok(())
     }
 
     #[test]

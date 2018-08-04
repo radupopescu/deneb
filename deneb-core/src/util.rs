@@ -32,13 +32,6 @@ pub fn tock(t0: i64) -> i64 {
     precise_time_ns() as i64 - t0
 }
 
-pub fn run<F: Fn() -> DenebResult<()>>(f: F) {
-    if let Err(e) = f() {
-        eprintln!("Error: {}", e);
-        ::std::process::exit(1);
-    }
-}
-
 // Safe wrappers on top of  some libc functions
 pub(crate) fn get_egid() -> gid_t {
     unsafe { getegid() }

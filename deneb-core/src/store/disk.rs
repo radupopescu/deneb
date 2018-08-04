@@ -105,19 +105,15 @@ mod tests {
 
     use super::*;
 
-    use util::run;
-
     #[test]
-    fn diskstore_create_put_get() {
-        run(|| {
-            const BYTES: &[u8] = b"alabalaportocala";
-            let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
-            let mut store = DiskStore::new(temp_dir.path(), 10000)?;
-            let mut v1: &[u8] = BYTES;
-            let descriptors = store.put_file_chunked(&mut v1)?;
-            let v2 = store.get_chunk(&descriptors[0].digest)?;
-            assert_eq!(BYTES, v2.get_slice());
-            Ok(())
-        });
+    fn diskstore_create_put_get() -> DenebResult<()> {
+        const BYTES: &[u8] = b"alabalaportocala";
+        let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
+        let mut store = DiskStore::new(temp_dir.path(), 10000)?;
+        let mut v1: &[u8] = BYTES;
+        let descriptors = store.put_file_chunked(&mut v1)?;
+        let v2 = store.get_chunk(&descriptors[0].digest)?;
+        assert_eq!(BYTES, v2.get_slice());
+        Ok(())
     }
 }
