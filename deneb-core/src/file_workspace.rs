@@ -336,10 +336,10 @@ mod tests {
     use super::*;
 
     use inode::FileAttributes;
-    use store::{Builder, StoreType};
+    use store::{open_store, StoreType};
 
     fn make_test_workspace() -> DenebResult<FileWorkspace> {
-        let mut store = Builder::create(StoreType::InMemory, "/", 10000)?;
+        let mut store = open_store(StoreType::InMemory, "/", 10000)?;
 
         let mut names: Vec<&[u8]> = vec![b"ala", b"bala", b"portocala"];
         let mut chunks = vec![];
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn write_into_empty() -> DenebResult<()> {
-        let store = Builder::create(StoreType::InMemory, "/", 10000)?;
+        let store = open_store(StoreType::InMemory, "/", 10000)?;
 
         let inode = INode {
             attributes: FileAttributes::default(),

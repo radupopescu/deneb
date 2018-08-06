@@ -30,10 +30,10 @@ pub(super) struct LmdbCatalog {
 }
 
 impl LmdbCatalog {
-    pub(super) fn create(path: &Path) -> DenebResult<LmdbCatalog> {
+    pub(super) fn open(path: &Path, create: bool) -> DenebResult<LmdbCatalog> {
         let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
-        {
+        if create {
             let mut writer = env.begin_rw_txn()?;
             // Write catalog format version
             writer.put(
@@ -44,22 +44,9 @@ impl LmdbCatalog {
             )?;
             writer.put(meta, &"max_index", &"1", WriteFlags::empty())?;
             writer.commit()?;
+
+            info!("Created LMDB catalog {:?}.", path);
         }
-
-        info!("Created LMDB catalog {:?}.", path);
-
-        Ok(LmdbCatalog {
-            env,
-            inodes,
-            dir_entries,
-            max_index: 1,
-            meta,
-            version: CATALOG_VERSION,
-        })
-    }
-
-    pub(super) fn open(path: &Path) -> DenebResult<LmdbCatalog> {
-        let (env, inodes, dir_entries, meta) = init_db(&path)?;
 
         let ver = {
             let reader = env.begin_ro_txn()?;
@@ -303,7 +290,7 @@ mod tests {
         if let Ok(prefix) = tmp {
             let catalog_path = prefix.path().to_owned().join("test-lmdb-catalog");
             {
-                let catalog = Builder::create(CatalogType::Lmdb, &catalog_path);
+                let catalog = open_catalog(CatalogType::Lmdb, &catalog_path, true);
                 assert!(catalog.is_ok());
                 if let Ok(mut catalog) = catalog {
                     catalog.show_stats();
@@ -323,7 +310,7 @@ mod tests {
                 }
             }
             {
-                let catalog = Builder::open(CatalogType::Lmdb, &catalog_path);
+                let catalog = open_catalog(CatalogType::Lmdb, &catalog_path, false);
                 assert!(catalog.is_ok());
                 if let Ok(catalog) = catalog {
                     assert_eq!(catalog.get_max_index(), 3);
