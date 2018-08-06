@@ -7,14 +7,14 @@ use std::{
     path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
 };
 
-use catalog::{Builder as CatalogBuilder, Catalog, CatalogType, IndexGenerator};
+use catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
 use dir_workspace::{DirEntry, DirWorkspace};
 use errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
 use file_workspace::FileWorkspace;
 use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
 use manifest::Manifest;
 use populate_with_dir;
-use store::{Builder as StoreBuilder, Store, StoreType};
+use store::{open_store, Store, StoreType};
 use util::{atomic_write, get_egid, get_euid};
 
 mod handle;
@@ -79,7 +79,7 @@ fn init(
     chunk_size: usize,
 ) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)> {
     // Create an object store
-    let mut store = StoreBuilder::create(store_type, work_dir, chunk_size)?;
+    let mut store = open_store(store_type, work_dir, chunk_size)?;
 
     let catalog_root = work_dir.to_path_buf().join("scratch");
     create_dir_all(catalog_root.as_path())?;
@@ -93,7 +93,7 @@ fn init(
     if let Some(sync_dir) = sync_dir {
         {
             //use std::ops::DerefMut;
-            let mut catalog = CatalogBuilder::create(catalog_type, catalog_path.as_path())?;
+            let mut catalog = open_catalog(catalog_type, catalog_path.as_path(), true)?;
             populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
             info!(
                 "Catalog populated with contents of {:?}",
@@ -120,7 +120,7 @@ fn init(
         atomic_write(catalog_path.as_path(), chunk.get_slice())?;
     }
 
-    let catalog = CatalogBuilder::open(catalog_type, catalog_path.as_path())?;
+    let catalog = open_catalog(catalog_type, catalog_path.as_path(), false)?;
     catalog.show_stats();
 
     Ok((catalog, store))

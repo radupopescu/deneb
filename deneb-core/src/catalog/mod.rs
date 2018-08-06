@@ -12,29 +12,15 @@ pub enum CatalogType {
     Lmdb,
 }
 
-/// Describes the interface of catalog builders
-pub struct Builder;
-
-impl Builder {
-    pub fn create<P: AsRef<Path>>(
-        catalog_type: CatalogType,
-        path: P,
-    ) -> DenebResult<Box<dyn Catalog>> {
-        Ok(match catalog_type {
-            CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
-            CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::create(path.as_ref())?),
-        })
-    }
-
-    pub fn open<P: AsRef<Path>>(
-        catalog_type: CatalogType,
-        path: P,
-    ) -> DenebResult<Box<dyn Catalog>> {
-        Ok(match catalog_type {
-            CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
-            CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::open(path.as_ref())?),
-        })
-    }
+pub fn open_catalog<P: AsRef<Path>>(
+    catalog_type: CatalogType,
+    path: P,
+    create: bool,
+) -> DenebResult<Box<dyn Catalog>> {
+    Ok(match catalog_type {
+        CatalogType::InMemory => Box::new(mem::MemCatalog::new()),
+        CatalogType::Lmdb => Box::new(lmdb::LmdbCatalog::open(path.as_ref(), create)?),
+    })
 }
 
 /// Describes the interface of metadata catalogs

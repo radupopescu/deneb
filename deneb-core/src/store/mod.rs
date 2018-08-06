@@ -18,19 +18,15 @@ pub enum StoreType {
     OnDisk,
 }
 
-pub struct Builder;
-
-impl Builder {
-    pub fn create<P: AsRef<Path>>(
-        store_type: StoreType,
-        dir: P,
-        chunk_size: usize,
-    ) -> DenebResult<Box<dyn Store>> {
-        Ok(match store_type {
-            StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
-            StoreType::OnDisk => Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?),
-        })
-    }
+pub fn open_store<P: AsRef<Path>>(
+    store_type: StoreType,
+    dir: P,
+    chunk_size: usize,
+) -> DenebResult<Box<dyn Store>> {
+    Ok(match store_type {
+        StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
+        StoreType::OnDisk => Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?),
+    })
 }
 
 /// Types which can perform IO into repository storage
