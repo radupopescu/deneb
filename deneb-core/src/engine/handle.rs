@@ -4,10 +4,10 @@ use errors::DenebResult;
 use inode::{FileAttributeChanges, FileAttributes, FileType};
 
 use super::{
-    protocol::{make_request, RequestChannel},
+    protocol::{call, cast, RequestChannel},
     requests::{
         CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
-        ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, Unlink, WriteData,
+        ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, Unlink, WriteData, Ping,
     },
     Engine,
 };
@@ -20,7 +20,7 @@ pub struct Handle {
 impl Handle {
     // Client API
     pub fn get_attr(&self, _id: &RequestId, index: u64) -> DenebResult<FileAttributes> {
-        make_request(GetAttr { index }, &self.channel)
+        call(GetAttr { index }, &self.channel)
     }
 
     pub fn set_attr(
@@ -29,7 +29,7 @@ impl Handle {
         index: u64,
         changes: FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        make_request(SetAttr { index, changes }, &self.channel)
+        call(SetAttr { index, changes }, &self.channel)
     }
 
     pub fn lookup(
@@ -38,7 +38,7 @@ impl Handle {
         parent: u64,
         name: &OsStr,
     ) -> DenebResult<Option<FileAttributes>> {
-        make_request(
+        call(
             Lookup {
                 parent,
                 name: name.to_os_string(),
@@ -48,11 +48,11 @@ impl Handle {
     }
 
     pub fn open_dir(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        make_request(OpenDir { index, flags }, &self.channel)
+        call(OpenDir { index, flags }, &self.channel)
     }
 
     pub fn release_dir(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        make_request(ReleaseDir { index, flags }, &self.channel)
+        call(ReleaseDir { index, flags }, &self.channel)
     }
 
     pub fn read_dir(
@@ -61,11 +61,11 @@ impl Handle {
         index: u64,
         offset: i64,
     ) -> DenebResult<Vec<(PathBuf, u64, FileType)>> {
-        make_request(ReadDir { index, offset }, &self.channel)
+        call(ReadDir { index, offset }, &self.channel)
     }
 
     pub fn open_file(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        make_request(OpenFile { index, flags }, &self.channel)
+        call(OpenFile { index, flags }, &self.channel)
     }
 
     pub fn read_data(
@@ -75,7 +75,7 @@ impl Handle {
         offset: i64,
         size: u32,
     ) -> DenebResult<Vec<u8>> {
-        make_request(
+        call(
             ReadData {
                 index,
                 offset,
@@ -92,7 +92,7 @@ impl Handle {
         offset: i64,
         data: &[u8],
     ) -> DenebResult<u32> {
-        make_request(
+        call(
             WriteData {
                 index,
                 offset,
@@ -110,7 +110,7 @@ impl Handle {
         lock_owner: u64,
         flush: bool,
     ) -> DenebResult<()> {
-        make_request(
+        call(
             ReleaseFile {
                 index,
                 flags,
@@ -129,7 +129,7 @@ impl Handle {
         mode: u32,
         flags: u32,
     ) -> DenebResult<(u64, FileAttributes)> {
-        make_request(
+        call(
             CreateFile {
                 parent,
                 name: name.to_owned(),
@@ -147,7 +147,7 @@ impl Handle {
         name: &OsStr,
         mode: u32,
     ) -> DenebResult<FileAttributes> {
-        make_request(
+        call(
             CreateDir {
                 parent,
                 name: name.to_owned(),
@@ -158,7 +158,7 @@ impl Handle {
     }
 
     pub fn unlink(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
-        make_request(
+        call(
             Unlink {
                 parent,
                 name: name.to_owned(),
@@ -168,7 +168,7 @@ impl Handle {
     }
 
     pub fn remove_dir(&self, _id: &RequestId, parent: u64, name: &OsStr) -> DenebResult<()> {
-        make_request(
+        call(
             RemoveDir {
                 parent,
                 name: name.to_owned(),
@@ -185,7 +185,7 @@ impl Handle {
         new_parent: u64,
         new_name: &OsStr,
     ) -> DenebResult<()> {
-        make_request(
+        call(
             Rename {
                 parent,
                 name: name.to_owned(),
@@ -194,6 +194,10 @@ impl Handle {
             },
             &self.channel,
         )
+    }
+
+    pub fn ping(&self) {
+        cast(Ping, &self.channel);
     }
 
     // Private functions

@@ -25,7 +25,7 @@ use self::{
     protocol::{HandlerProxy, Request, RequestHandler},
     requests::{
         CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
-        ReleaseFile, RemoveDir, Rename, SetAttr, Unlink, WriteData,
+        ReleaseFile, RemoveDir, Rename, SetAttr, Unlink, WriteData, Ping,
     },
 };
 
@@ -53,6 +53,8 @@ pub fn start_engine_prebuilt(
         }
         info!("Engine event loop finished.");
     });
+
+    engine_handle.ping();
 
     Ok(engine_handle)
 }
@@ -280,6 +282,13 @@ impl RequestHandler<Rename> for Engine {
                 request.new_name.clone(),
             ))
             .map_err(Error::from)
+    }
+}
+
+impl RequestHandler<Ping> for Engine {
+    fn handle(&mut self, _request: &Ping) -> DenebResult<()> {
+        debug!("Engine received ping request.");
+        Ok(())
     }
 }
 

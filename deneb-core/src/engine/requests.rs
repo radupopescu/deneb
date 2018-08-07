@@ -160,3 +160,9 @@ pub(in engine) struct Rename {
 impl Request for Rename {
     type Reply = ();
 }
+
+pub(in engine) struct Ping;
+
+impl Request for Ping {
+    type Reply = ();
+}
