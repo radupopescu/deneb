@@ -25,7 +25,7 @@ pub struct PackagedRequest<H> {
 
 pub type RequestChannel<H> = SyncSender<PackagedRequest<H>>;
 
-pub fn make_request<R, H>(req: R, ch: &RequestChannel<H>) -> DenebResult<R::Reply>
+pub fn call<R, H>(req: R, ch: &RequestChannel<H>) -> DenebResult<R::Reply>
 where
     R: Request + 'static,
     H: RequestHandler<R> + 'static,
@@ -43,6 +43,22 @@ where
     }
 
     rx.recv()?
+}
+
+pub fn cast<R, H>(req: R, ch: &RequestChannel<H>)
+where
+    R: Request + 'static,
+    H: RequestHandler<R> + 'static,
+{
+    let envelope = PackagedRequest {
+        inner: Box::new(CastRequestProxy {
+            req,
+            _hd: PhantomData,
+        }),
+    };
+    if ch.send(envelope).is_err() {
+        panic!("Could not send request to engine.");
+    }
 }
 
 struct RequestProxy<R, H>
@@ -66,6 +82,26 @@ where
         if self.tx.send(reply).is_err() {
             panic!("Could not send reply after handling request.");
         }
+    }
+}
+
+struct CastRequestProxy<R, H>
+where
+    R: Request,
+    H: RequestHandler<R>,
+{
+    req: R,
+    _hd: PhantomData<fn(&mut H) -> R::Reply>,
+}
+
+impl<R, H> HandlerProxy for CastRequestProxy<R, H>
+where
+    R: Request,
+    H: RequestHandler<R>,
+{
+    type Handler = H;
+    fn run_handler(&self, hd: &mut Self::Handler) {
+        let _ = hd.handle(&self.req);
     }
 }
 
