@@ -1,4 +1,5 @@
 extern crate bincode;
+extern crate crossbeam_channel;
 extern crate data_encoding;
 #[macro_use]
 extern crate failure;

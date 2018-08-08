@@ -1,10 +1,11 @@
+use crossbeam_channel::bounded as channel;
 use failure::{Error, ResultExt};
 use nix::libc::mode_t;
 use time::now_utc;
 
 use std::{
     cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
-    path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
+    path::{Path, PathBuf}, rc::Rc, thread::spawn as tspawn,
 };
 
 use catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
@@ -37,7 +38,7 @@ pub fn start_engine_prebuilt(
     store: Box<dyn Store>,
     queue_size: usize,
 ) -> DenebResult<Handle> {
-    let (tx, rx) = sync_channel(queue_size);
+    let (tx, rx) = channel(queue_size);
     let index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
     let engine_handle = Handle::new(tx);
     let _ = tspawn(move || {
@@ -48,7 +49,7 @@ pub fn start_engine_prebuilt(
             index_generator,
         };
         info!("Starting engine event loop");
-        for request in rx.iter() {
+        for request in &rx {
             request.run_handler(&mut engine);
         }
         info!("Engine event loop finished.");

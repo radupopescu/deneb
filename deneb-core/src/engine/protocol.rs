@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
-use std::sync::mpsc::{sync_channel, SyncSender};
+use crossbeam_channel::{bounded as channel, Sender};
 
-use errors::DenebResult;
+use errors::{EngineError, DenebResult};
 
 pub trait Request: Send {
     type Reply: Send;
@@ -23,14 +23,14 @@ pub struct PackagedRequest<H> {
     inner: Box<HandlerProxy<Handler = H>>,
 }
 
-pub type RequestChannel<H> = SyncSender<PackagedRequest<H>>;
+pub type RequestChannel<H> = Sender<PackagedRequest<H>>;
 
 pub fn call<R, H>(req: R, ch: &RequestChannel<H>) -> DenebResult<R::Reply>
 where
     R: Request + 'static,
     H: RequestHandler<R> + 'static,
 {
-    let (tx, rx) = sync_channel(1);
+    let (tx, rx) = channel(1);
     let envelope = PackagedRequest {
         inner: Box::new(RequestProxy {
             req,
@@ -38,11 +38,9 @@ where
             _hd: PhantomData,
         }),
     };
-    if ch.send(envelope).is_err() {
-        panic!("Could not send request to engine.");
-    }
+    ch.send(envelope);
 
-    rx.recv()?
+    rx.recv().ok_or(EngineError::NoReply)?
 }
 
 pub fn cast<R, H>(req: R, ch: &RequestChannel<H>)
@@ -56,9 +54,7 @@ where
             _hd: PhantomData,
         }),
     };
-    if ch.send(envelope).is_err() {
-        panic!("Could not send request to engine.");
-    }
+    ch.send(envelope);
 }
 
 struct RequestProxy<R, H>
@@ -67,7 +63,7 @@ where
     H: RequestHandler<R>,
 {
     req: R,
-    tx: SyncSender<DenebResult<R::Reply>>,
+    tx: Sender<DenebResult<R::Reply>>,
     _hd: PhantomData<fn(&mut H) -> R::Reply>,
 }
 
@@ -79,9 +75,7 @@ where
     type Handler = H;
     fn run_handler(&self, hd: &mut Self::Handler) {
         let reply = hd.handle(&self.req);
-        if self.tx.send(reply).is_err() {
-            panic!("Could not send reply after handling request.");
-        }
+        self.tx.send(reply);
     }
 }
 

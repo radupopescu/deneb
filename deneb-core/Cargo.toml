@@ -5,6 +5,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [dependencies]
 bincode = "^1.0.0"
+crossbeam-channel = "^0.2.0"
 data-encoding = "^2.1.0"
 failure = "^0.1.0"
 lmdb = "^0.8.0"
