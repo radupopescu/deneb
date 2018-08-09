@@ -16,7 +16,9 @@ use deneb_core::{
 use deneb_fuse::fs::Fs;
 
 use deneb::{
-    logging::init_logger, params::AppParameters, util::{block_signals, set_sigint_handler},
+    logging::init_logger,
+    params::AppParameters,
+    util::{block_signals, set_sigint_handler},
 };
 
 fn main() -> DenebResult<()> {
@@ -53,7 +55,7 @@ fn main() -> DenebResult<()> {
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    let session = Fs::mount(&params.mount_point, handle, &options)?;
+    let session = Fs::mount(&params.mount_point, handle.clone(), &options)?;
 
     // Install a handler for Ctrl-C and wait
     let (tx, rx) = std::sync::mpsc::channel();
@@ -61,6 +63,8 @@ fn main() -> DenebResult<()> {
     rx.recv()?;
 
     info!("Ctrl-C received. Exiting.");
+
+    handle.stop_engine();
 
     // Force unmount the file system
     if params.force_unmount {

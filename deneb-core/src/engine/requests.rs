@@ -166,3 +166,9 @@ pub(in engine) struct Ping;
 impl Request for Ping {
     type Reply = ();
 }
+
+pub(in engine) struct StopEngine;
+
+impl Request for StopEngine {
+    type Reply = ();
+}

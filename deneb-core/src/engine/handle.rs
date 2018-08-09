@@ -1,3 +1,5 @@
+use crossbeam_channel::Receiver;
+
 use std::{ffi::OsStr, path::PathBuf};
 
 use errors::DenebResult;
@@ -6,21 +8,23 @@ use inode::{FileAttributeChanges, FileAttributes, FileType};
 use super::{
     protocol::{call, cast, RequestChannel},
     requests::{
-        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
-        ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, Unlink, WriteData, Ping,
+        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
+        ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine, Unlink,
+        WriteData,
     },
     Engine,
 };
 
 #[derive(Clone)]
 pub struct Handle {
-    channel: RequestChannel<Engine>,
+    cmd_ch: RequestChannel<Engine>,
+    stop_ch: Receiver<()>,
 }
 
 impl Handle {
     // Client API
     pub fn get_attr(&self, _id: &RequestId, index: u64) -> DenebResult<FileAttributes> {
-        call(GetAttr { index }, &self.channel)
+        call(GetAttr { index }, &self.cmd_ch)
     }
 
     pub fn set_attr(
@@ -29,7 +33,7 @@ impl Handle {
         index: u64,
         changes: FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        call(SetAttr { index, changes }, &self.channel)
+        call(SetAttr { index, changes }, &self.cmd_ch)
     }
 
     pub fn lookup(
@@ -43,16 +47,16 @@ impl Handle {
                 parent,
                 name: name.to_os_string(),
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
     pub fn open_dir(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        call(OpenDir { index, flags }, &self.channel)
+        call(OpenDir { index, flags }, &self.cmd_ch)
     }
 
     pub fn release_dir(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        call(ReleaseDir { index, flags }, &self.channel)
+        call(ReleaseDir { index, flags }, &self.cmd_ch)
     }
 
     pub fn read_dir(
@@ -61,11 +65,11 @@ impl Handle {
         index: u64,
         offset: i64,
     ) -> DenebResult<Vec<(PathBuf, u64, FileType)>> {
-        call(ReadDir { index, offset }, &self.channel)
+        call(ReadDir { index, offset }, &self.cmd_ch)
     }
 
     pub fn open_file(&self, _id: &RequestId, index: u64, flags: u32) -> DenebResult<()> {
-        call(OpenFile { index, flags }, &self.channel)
+        call(OpenFile { index, flags }, &self.cmd_ch)
     }
 
     pub fn read_data(
@@ -81,7 +85,7 @@ impl Handle {
                 offset,
                 size,
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -98,7 +102,7 @@ impl Handle {
                 offset,
                 data: data.to_vec(),
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -117,7 +121,7 @@ impl Handle {
                 lock_owner,
                 flush,
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -136,7 +140,7 @@ impl Handle {
                 mode,
                 flags,
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -153,7 +157,7 @@ impl Handle {
                 name: name.to_owned(),
                 mode,
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -163,7 +167,7 @@ impl Handle {
                 parent,
                 name: name.to_owned(),
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -173,7 +177,7 @@ impl Handle {
                 parent,
                 name: name.to_owned(),
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
@@ -192,16 +196,24 @@ impl Handle {
                 new_parent,
                 new_name: new_name.to_owned(),
             },
-            &self.channel,
+            &self.cmd_ch,
         )
     }
 
     pub fn ping(&self) {
-        cast(Ping, &self.channel);
+        cast(Ping, &self.cmd_ch);
+    }
+
+    pub fn stop_engine(&self) {
+        cast(StopEngine, &self.cmd_ch);
+        let _ = self.stop_ch.recv();
     }
 
     // Private functions
-    pub(in engine) fn new(channel: RequestChannel<Engine>) -> Handle {
-        Handle { channel }
+    pub(in engine) fn new(cmd_ch: RequestChannel<Engine>, stop_ch: Receiver<()>) -> Handle {
+        Handle {
+            cmd_ch,
+            stop_ch,
+        }
     }
 }
