@@ -22,7 +22,9 @@ use common::*;
 
 use deneb_core::{
     catalog::{open_catalog, CatalogType},
-    engine::{start_engine, start_engine_prebuilt}, errors::DenebResult, populate_with_dir,
+    engine::{start_engine, start_engine_prebuilt},
+    errors::DenebResult,
+    populate_with_dir,
     store::{open_store, StoreType},
 };
 use deneb_fuse::fs::{Fs, Session};

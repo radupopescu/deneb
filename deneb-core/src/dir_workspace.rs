@@ -46,7 +46,8 @@ impl DirWorkspace {
     }
 
     pub(crate) fn remove_entry(&mut self, name: &Path) {
-        if let Some(idx) = self.entries
+        if let Some(idx) = self
+            .entries
             .iter()
             .enumerate()
             .find(

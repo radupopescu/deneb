@@ -99,9 +99,11 @@ fn visit_dirs(
 
     for entry in read_dir(dir)? {
         let path = (entry?).path();
-        let fname = Path::new(path.as_path()
-            .file_name()
-            .ok_or_else(|| DenebError::InvalidPath(path.clone()))?);
+        let fname = Path::new(
+            path.as_path()
+                .file_name()
+                .ok_or_else(|| DenebError::InvalidPath(path.clone()))?,
+        );
 
         let mut descriptors = if path.is_file() {
             let mut abs_path = dir.to_path_buf();

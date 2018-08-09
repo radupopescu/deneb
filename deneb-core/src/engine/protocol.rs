@@ -1,7 +1,7 @@
-use std::marker::PhantomData;
 use crossbeam_channel::{bounded as channel, Sender};
+use std::marker::PhantomData;
 
-use errors::{EngineError, DenebResult};
+use errors::{DenebResult, EngineError};
 
 pub trait Request: Send {
     type Reply: Send;

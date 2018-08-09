@@ -211,9 +211,6 @@ impl Handle {
 
     // Private functions
     pub(in engine) fn new(cmd_ch: RequestChannel<Engine>, stop_ch: Receiver<()>) -> Handle {
-        Handle {
-            cmd_ch,
-            stop_ch,
-        }
+        Handle { cmd_ch, stop_ch }
     }
 }
