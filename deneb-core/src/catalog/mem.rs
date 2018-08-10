@@ -42,7 +42,8 @@ impl Catalog for MemCatalog {
     }
 
     fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
-        Ok(self.dir_entries
+        Ok(self
+            .dir_entries
             .get(&parent)
             .and_then(|entries| entries.get(name))
             .cloned())
@@ -77,7 +78,8 @@ impl Catalog for MemCatalog {
         });
         dir_entry.entry(name.to_owned()).or_insert(index);
 
-        let inode = self.inodes
+        let inode = self
+            .inodes
             .get_mut(&index)
             .ok_or_else(|| CatalogError::INodeRead(index))?;
 

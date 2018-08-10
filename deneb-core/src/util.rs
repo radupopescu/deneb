@@ -1,5 +1,6 @@
 use nix::{
-    libc::{getegid, geteuid, gid_t, uid_t}, unistd::mkstemp,
+    libc::{getegid, geteuid, gid_t, uid_t},
+    unistd::mkstemp,
 };
 use time::precise_time_ns;
 

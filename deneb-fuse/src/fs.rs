@@ -7,12 +7,14 @@ use nix::libc::{EACCES, EINVAL, ENOENT};
 use nix::mount::{umount2, MntFlags};
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
 use nix::{
-    libc::{unmount, MNT_FORCE}, NixPath,
+    libc::{unmount, MNT_FORCE},
+    NixPath,
 };
 use time::Timespec;
 
 use std::{
-    ffi::OsStr, path::{Path, PathBuf},
+    ffi::OsStr,
+    path::{Path, PathBuf},
 };
 
 use deneb_core::{
@@ -46,7 +48,8 @@ impl<'a> Session<'a> {
     #[cfg(any(target_os = "macos", target_os = "freebsd"))]
     pub fn force_unmount(self) -> Result<(), UnixError> {
         drop(self.fuse_session);
-        let _ = self.mount_point
+        let _ = self
+            .mount_point
             .as_path()
             .with_nix_path(|cstr| unsafe { unmount(cstr.as_ptr(), MNT_FORCE) })?;
         Ok(())
@@ -105,7 +108,8 @@ impl Filesystem for Fs {
     ) {
         let changes =
             FileAttributeChanges::new(mode, uid, gid, size, atime, mtime, crtime, chgtime, flags);
-        match self.engine_handle
+        match self
+            .engine_handle
             .set_attr(&to_request_id(req), ino, changes)
         {
             Ok(attrs) => {
@@ -149,7 +153,8 @@ impl Filesystem for Fs {
     }
 
     fn releasedir(&mut self, req: &Request, _ino: u64, fh: u64, flags: u32, reply: ReplyEmpty) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .release_dir(&to_request_id(req), fh, flags)
         {
             Ok(_) => {
@@ -191,7 +196,8 @@ impl Filesystem for Fs {
     }
 
     fn open(&mut self, req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .open_file(&to_request_id(req), ino, flags)
         {
             Ok(_) => {
@@ -222,7 +228,8 @@ impl Filesystem for Fs {
         size: u32,
         reply: ReplyData,
     ) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .read_data(&to_request_id(req), fh, offset, size)
         {
             Ok(buffer) => {
@@ -245,7 +252,8 @@ impl Filesystem for Fs {
         _flags: u32,
         reply: ReplyWrite,
     ) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .write_data(&to_request_id(req), fh, offset, data)
         {
             Ok(num_bytes_written) => {
@@ -268,7 +276,8 @@ impl Filesystem for Fs {
         flush: bool,
         reply: ReplyEmpty,
     ) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .release_file(&to_request_id(req), fh, flags, lock_owner, flush)
         {
             Ok(_) => {
@@ -290,7 +299,8 @@ impl Filesystem for Fs {
         flags: u32,
         reply: ReplyCreate,
     ) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .create_file(&to_request_id(req), parent, name, mode, flags)
         {
             Ok((ino, attr)) => {
@@ -305,7 +315,8 @@ impl Filesystem for Fs {
     }
 
     fn mkdir(&mut self, req: &Request, parent: u64, name: &OsStr, mode: u32, reply: ReplyEntry) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .create_dir(&to_request_id(req), parent, name, mode)
         {
             Ok(attr) => {
@@ -332,7 +343,8 @@ impl Filesystem for Fs {
     }
 
     fn rmdir(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .remove_dir(&to_request_id(req), parent, name)
         {
             Ok(()) => {
@@ -354,7 +366,8 @@ impl Filesystem for Fs {
         new_name: &OsStr,
         reply: ReplyEmpty,
     ) {
-        match self.engine_handle
+        match self
+            .engine_handle
             .rename(&to_request_id(req), parent, name, new_parent, new_name)
         {
             Ok(()) => {

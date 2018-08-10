@@ -85,8 +85,8 @@ pub enum EngineError {
     SetAttr(u64),
     #[fail(display = "Failed lookup of entry: {:?} in parent: {}", _1, _0)]
     Lookup(u64, OsString),
-    #[fail(display = "Invalid reply received from engine")]
-    InvalidReply,
+    #[fail(display = "No reply received from engine")]
+    NoReply,
     #[fail(display = "Could not open directory: {}", _0)]
     DirOpen(u64),
     #[fail(display = "Could not close directory: {}", _0)]

@@ -1,10 +1,16 @@
+use crossbeam_channel::bounded as channel;
 use failure::{Error, ResultExt};
 use nix::libc::mode_t;
 use time::now_utc;
 
 use std::{
-    cell::RefCell, collections::{HashMap, HashSet}, ffi::OsStr, fs::{create_dir_all, File},
-    path::{Path, PathBuf}, rc::Rc, sync::mpsc::sync_channel, thread::spawn as tspawn,
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    fs::{create_dir_all, File},
+    path::{Path, PathBuf},
+    rc::Rc,
+    thread::spawn as tspawn,
 };
 
 use catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
@@ -24,8 +30,8 @@ mod requests;
 use self::{
     protocol::{HandlerProxy, Request, RequestHandler},
     requests::{
-        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, ReadData, ReadDir, ReleaseDir,
-        ReleaseFile, RemoveDir, Rename, SetAttr, Unlink, WriteData, Ping,
+        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
+        ReleaseDir, ReleaseFile, RemoveDir, Rename, SetAttr, StopEngine, Unlink, WriteData,
     },
 };
 
@@ -37,21 +43,27 @@ pub fn start_engine_prebuilt(
     store: Box<dyn Store>,
     queue_size: usize,
 ) -> DenebResult<Handle> {
-    let (tx, rx) = sync_channel(queue_size);
+    let (cmd_tx, cmd_rx) = channel(queue_size);
+    let (quit_tx, quit_rx) = channel(1);
     let index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
-    let engine_handle = Handle::new(tx);
+    let engine_handle = Handle::new(cmd_tx, quit_rx);
     let _ = tspawn(move || {
         let mut engine = Engine {
             catalog,
             store: Rc::new(RefCell::new(store)),
             workspace: Workspace::new(),
             index_generator,
+            stopped: false,
         };
         info!("Starting engine event loop");
-        for request in rx.iter() {
+        for request in &cmd_rx {
             request.run_handler(&mut engine);
+            if engine.stopped {
+                break;
+            }
         }
         info!("Engine event loop finished.");
+        quit_tx.send(());
     });
 
     engine_handle.ping();
@@ -151,6 +163,7 @@ pub(in engine) struct Engine {
     store: Rc<RefCell<Box<dyn Store>>>,
     workspace: Workspace,
     index_generator: IndexGenerator,
+    stopped: bool,
 }
 
 impl RequestHandler<GetAttr> for Engine {
@@ -292,6 +305,14 @@ impl RequestHandler<Ping> for Engine {
     }
 }
 
+impl RequestHandler<StopEngine> for Engine {
+    fn handle(&mut self, _request: &StopEngine) -> DenebResult<()> {
+        info!("StopEngine request received.");
+        self.stop();
+        Ok(())
+    }
+}
+
 impl Engine {
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
     //       and can't be used inside Entry::or_insert_with
@@ -360,7 +381,8 @@ impl Engine {
     #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
-            let entries = self.catalog
+            let entries = self
+                .catalog
                 .get_dir_entries(index)?
                 .iter()
                 .map(|&(ref name, idx)| {
@@ -406,7 +428,8 @@ impl Engine {
 
     fn read_data(&self, index: u64, offset: i64, size: u32) -> DenebResult<Vec<u8>> {
         let offset = ::std::cmp::max(offset, 0) as usize;
-        let ws = self.workspace
+        let ws = self
+            .workspace
             .files
             .get(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -416,7 +439,8 @@ impl Engine {
     fn write_data(&mut self, index: u64, offset: i64, data: &[u8]) -> DenebResult<u32> {
         let offset = ::std::cmp::max(offset, 0) as usize;
         let (written, new_size) = {
-            let ws = self.workspace
+            let ws = self
+                .workspace
                 .files
                 .get_mut(&index)
                 .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -431,7 +455,8 @@ impl Engine {
     }
 
     fn release_file(&mut self, index: u64) -> DenebResult<()> {
-        let ws = self.workspace
+        let ws = self
+            .workspace
             .files
             .get_mut(&index)
             .ok_or_else(|| WorkspaceError::FileLookup(index))?;
@@ -520,7 +545,8 @@ impl Engine {
         self.open_dir(parent)?;
         if let Some(ws) = self.workspace.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
-            let index = ws.get_entry_index(&pname)
+            let index = ws
+                .get_entry_index(&pname)
                 .ok_or_else(|| DirWorkspaceEntryLookupError {
                     parent,
                     name: name.to_owned(),
@@ -570,7 +596,8 @@ impl Engine {
 
         let new_name = PathBuf::from(new_name);
 
-        let old_entry_type = self.workspace
+        let old_entry_type = self
+            .workspace
             .dirs
             .get(&new_parent)
             .and_then(|ws| ws.get_entry(&new_name))
@@ -587,12 +614,19 @@ impl Engine {
             }
         }
 
-        let ws = self.workspace
+        let ws = self
+            .workspace
             .dirs
             .get_mut(&new_parent)
             .ok_or_else(|| WorkspaceError::DirLookup(new_parent))?;
         ws.add_entry(src_entry.index, new_name.clone(), src_entry.entry_type);
 
         Ok(())
+    }
+
+    fn stop(&mut self) {
+        info!("Engine stopping...");
+        self.stopped = true;
+        info!("Engine stopped.");
     }
 }
