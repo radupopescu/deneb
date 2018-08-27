@@ -26,6 +26,7 @@ use util::{atomic_write, get_egid, get_euid};
 mod handle;
 mod protocol;
 mod requests;
+mod timer;
 
 use self::{
     protocol::{HandlerProxy, Request, RequestHandler},
