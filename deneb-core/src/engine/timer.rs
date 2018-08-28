@@ -1,10 +1,12 @@
+use crossbeam_channel::{unbounded, Sender};
+
 use std::{
-    thread::sleep,
+    thread::{sleep, spawn, JoinHandle},
     time::{Duration, Instant},
 };
 
 struct Event {
-    action: Box<FnMut()>,
+    action: Box<FnMut() + Send>,
     delay: Duration,
     repeat: bool,
 }
@@ -12,7 +14,7 @@ struct Event {
 impl Event {
     fn new<F>(action: F, delay: Duration, repeat: bool) -> Event
     where
-        F: FnMut() + 'static,
+        F: FnMut() + Send + 'static,
     {
         Event {
             action: Box::new(action),
@@ -33,7 +35,7 @@ struct Wheel {
     pos: usize,
 }
 
-enum Resolution {
+pub(crate) enum Resolution {
     Ms,
     TenMs,
     HundredMs,
@@ -92,37 +94,62 @@ fn compute_bucket_id(dt: Duration, pos: usize, nb: usize) -> usize {
     (pos + dt.subsec_millis() as usize) % nb
 }
 
-/*
-struct Timer {
+pub(crate) struct Timer {
     joiner: JoinHandle<()>,
-    tx: Sender<Event>,
+    event_queue: Sender<Event>,
+    quit: Sender<()>,
 }
 
 impl Timer {
-    fn new() -> Timer {
-        let (tx, rx) = unbounded();
+    pub(crate) fn new(resolution: Resolution) -> Timer {
+        let (event_queue, new_events) = unbounded();
+        let (quit_tx, quit_rx) = unbounded();
         let joiner = spawn(move || {
-            let t0 = Instant::now();
-            let timer = tick(dt);
-            for t in &timer {
-                println!("Tick: {:#?}", t.duration_since(t0));
-                if quit.try_recv().is_some() {
+            let mut wheel = Wheel::new(resolution);
+            loop {
+                let t0 = Instant::now();
+                if let Some(_) = quit_rx.try_recv() {
                     break;
                 }
+                while let Some(ev) = new_events.try_recv() {
+                    println!("Adding event");
+                    wheel.schedule(ev);
+                }
+                let triggered = wheel.tick();
+                for mut ev in triggered {
+                    (ev.action)();
+                    if ev.repeat {
+                        wheel.schedule(ev);
+                    }
+                }
+                let t1 = Instant::now();
+                sleep(wheel.tick_time - (t1 - t0));
             }
         });
-        Timer { joiner, tx }
+        Timer {
+            joiner,
+            event_queue,
+            quit: quit_tx,
+        }
     }
 
-    fn schedule(&mut self, init_delay: Duration, tick: Option<Duration>, action:)
+    pub(crate) fn schedule<F>(&mut self, delay: Duration, repeat: bool, action: F)
+    where
+        F: FnMut() + Send + 'static,
+    {
+        let event = Event::new(action, delay, repeat);
+        self.event_queue.send(event);
+    }
+
+    pub(crate) fn stop(self) {
+        self.quit.send(());
+        let _ = self.joiner.join();
+    }
 }
-*/
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use crossbeam_channel::unbounded;
 
     #[test]
     fn wheel_one_shot() {
@@ -180,15 +207,16 @@ mod tests {
         assert_eq!(counter, 2);
     }
 
-    /*
-
     #[test]
-    fn timer_works() {
+    fn timer_one_shot() {
         let (tx, rx) = unbounded();
-        let j = create_timer(Duration::from_millis(10), rx);
-        ::std::thread::sleep(Duration::from_secs(2));
-        tx.send(());
-        let _ = j.join();
+        let mut timer = Timer::new(Resolution::Ms);
+        timer.schedule(Duration::from_millis(1), false, move || {
+            tx.send(1);
+        });
+        let mut sum = 0;
+        rx.for_each(|v| sum += v);
+        timer.stop();
+        assert_eq!(sum, 1);
     }
-    */
 }
