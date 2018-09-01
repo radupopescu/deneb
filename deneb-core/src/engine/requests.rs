@@ -161,6 +161,12 @@ impl Request for Rename {
     type Reply = ();
 }
 
+pub(in engine) struct TryCommit;
+
+impl Request for TryCommit {
+    type Reply = ();
+}
+
 pub(in engine) struct Ping;
 
 impl Request for Ping {

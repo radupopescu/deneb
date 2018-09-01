@@ -11,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     thread::spawn as tspawn,
+    time::Duration,
 };
 
 use catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
@@ -32,8 +33,10 @@ use self::{
     protocol::{HandlerProxy, Request, RequestHandler},
     requests::{
         CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
-        ReleaseDir, ReleaseFile, RemoveDir, Rename, SetAttr, StopEngine, Unlink, WriteData,
+        ReleaseDir, ReleaseFile, RemoveDir, Rename, SetAttr, StopEngine, TryCommit, Unlink,
+        WriteData,
     },
+    timer::{Resolution, Timer},
 };
 
 pub use self::{handle::Handle, requests::RequestId};
@@ -47,7 +50,8 @@ pub fn start_engine_prebuilt(
     let (cmd_tx, cmd_rx) = channel(queue_size);
     let (quit_tx, quit_rx) = channel(1);
     let index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
-    let engine_handle = Handle::new(cmd_tx, quit_rx);
+    let engine_hd = Handle::new(cmd_tx, quit_rx);
+    let timer_engine_hd = engine_hd.clone();
     let _ = tspawn(move || {
         let mut engine = Engine {
             catalog,
@@ -56,6 +60,10 @@ pub fn start_engine_prebuilt(
             index_generator,
             stopped: false,
         };
+        let mut timer = Timer::new(Resolution::Second);
+        timer.schedule(Duration::from_secs(5), true, move || {
+            timer_engine_hd.try_commit();
+        });
         info!("Starting engine event loop");
         for request in &cmd_rx {
             request.run_handler(&mut engine);
@@ -64,12 +72,13 @@ pub fn start_engine_prebuilt(
             }
         }
         info!("Engine event loop finished.");
+        timer.stop();
         quit_tx.send(());
     });
 
-    engine_handle.ping();
+    engine_hd.ping();
 
-    Ok(engine_handle)
+    Ok(engine_hd)
 }
 
 /// Start the engine using catalog and store builders
@@ -296,6 +305,13 @@ impl RequestHandler<Rename> for Engine {
                 request.new_name.clone(),
             ))
             .map_err(Error::from)
+    }
+}
+
+impl RequestHandler<TryCommit> for Engine {
+    fn handle(&mut self, _request: &TryCommit) -> DenebResult<()> {
+        trace!("Engine will commit workspace");
+        Ok(())
     }
 }
 
