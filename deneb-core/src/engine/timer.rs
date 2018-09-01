@@ -1,6 +1,7 @@
 use crossbeam_channel::{unbounded, Sender};
 
 use std::{
+    collections::{HashMap, LinkedList},
     thread::{sleep, spawn, JoinHandle},
     time::{Duration, Instant},
 };
@@ -30,7 +31,7 @@ struct ScheduledEvent {
 }
 
 struct Wheel {
-    buckets: Vec<Vec<ScheduledEvent>>,
+    buckets: HashMap<usize, LinkedList<ScheduledEvent>>,
     tick_time: Duration,
     pos: usize,
 }
@@ -50,9 +51,9 @@ impl Wheel {
             Resolution::HundredMs => (10, Duration::from_millis(100)),
             Resolution::Second => (1, Duration::from_secs(1)),
         };
-        let mut buckets = vec![];
-        for _ in 0..num_buckets {
-            buckets.push(vec![]);
+        let mut buckets = HashMap::new();
+        for idx in 0..num_buckets {
+            buckets.insert(idx, LinkedList::new());
         }
         Wheel {
             buckets,
@@ -64,27 +65,27 @@ impl Wheel {
     fn schedule(&mut self, event: Event) {
         let rounds = event.delay.as_secs() as i64;
         let bucket_id = compute_bucket_id(event.delay, self.pos, self.buckets.len());
-        println!("Schedule: rounds: {}, bucket_id: {}", rounds, bucket_id);
-        self.buckets[bucket_id].push(ScheduledEvent { event, rounds })
+        if let Some(b) = self.buckets.get_mut(&bucket_id) {
+            b.push_front(ScheduledEvent { event, rounds });
+        }
     }
 
     #[must_use]
-    fn tick(&mut self) -> Vec<Event> {
-        let mut expired = vec![];
-        let mut to_delete = vec![];
-
-        let bucket = &mut self.buckets[self.pos];
-        for (idx, e) in bucket.iter_mut().enumerate() {
-            if e.rounds <= 0 {
-                to_delete.push(idx);
+    fn tick(&mut self) -> LinkedList<Event> {
+        let mut expired = LinkedList::new();
+        let mut kept = LinkedList::new();
+        if let Some(bucket) = self.buckets.remove(&self.pos) {
+            for mut e in bucket.into_iter() {
+                if e.rounds > 0 {
+                    e.rounds -= 1;
+                    kept.push_front(e);
+                } else {
+                    expired.push_front(e.event);
+                }
             }
-            e.rounds -= 1;
         }
-        for idx in to_delete {
-            let ev = bucket.remove(idx);
-            expired.push(ev.event);
-        }
-        self.pos += 1;
+        self.buckets.insert(self.pos, kept);
+        self.pos = (self.pos + 1) % self.buckets.len();
 
         expired
     }
@@ -112,7 +113,6 @@ impl Timer {
                     break;
                 }
                 while let Some(ev) = new_events.try_recv() {
-                    println!("Adding event");
                     wheel.schedule(ev);
                 }
                 let triggered = wheel.tick();
@@ -123,7 +123,10 @@ impl Timer {
                     }
                 }
                 let t1 = Instant::now();
-                sleep(wheel.tick_time - (t1 - t0));
+                let dt = t1 - t0;
+                if wheel.tick_time > dt {
+                    sleep(wheel.tick_time - dt);
+                }
             }
         });
         Timer {
@@ -157,7 +160,6 @@ mod tests {
         let (tx, rx) = unbounded();
         let event = Event::new(
             move || {
-                println!("Increment counter");
                 tx.send(());
             },
             Duration::from_millis(1),
@@ -181,7 +183,6 @@ mod tests {
         let (tx, rx) = unbounded();
         let event = Event::new(
             move || {
-                println!("Increment counter");
                 tx.send(());
             },
             Duration::from_millis(1),
@@ -218,5 +219,37 @@ mod tests {
         rx.for_each(|v| sum += v);
         timer.stop();
         assert_eq!(sum, 1);
+    }
+
+    #[test]
+    fn timer_multiple_one_shot() {
+        let (tx, rx) = unbounded();
+        let mut timer = Timer::new(Resolution::TenMs);
+        let num_events = 5;
+        for _ in 0..num_events {
+            let txc = tx.clone();
+            timer.schedule(Duration::from_millis(5), false, move || {
+                txc.send(1);
+            });
+        }
+        drop(tx);
+        let mut sum = 0;
+        rx.for_each(|v| sum += v);
+        timer.stop();
+        assert_eq!(sum, num_events);
+    }
+
+    #[test]
+    fn timer_repeat() {
+        let (tx, rx) = unbounded();
+        let mut timer = Timer::new(Resolution::HundredMs);
+        timer.schedule(Duration::from_millis(100), true, move || {
+            tx.send(1);
+        });
+        ::std::thread::sleep(Duration::from_secs(1));
+        timer.stop();
+        let mut sum = 0;
+        rx.for_each(|v| sum += v);
+        assert_eq!(sum, 10);
     }
 }
