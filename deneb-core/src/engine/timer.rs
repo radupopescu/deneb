@@ -279,4 +279,30 @@ mod tests {
         let mut sum = 0;
         rx.for_each(|v| sum += v);
     }
+
+    #[test]
+    fn timer_check_order() {
+        enum Op {
+            Sum(usize),
+            Mul(usize),
+        }
+
+        let (tx, rx) = unbounded();
+        let txc = tx.clone();
+        let mut timer = Timer::new(Resolution::Ms);
+        timer.schedule(Duration::from_millis(5), false, move || {
+            tx.send(Op::Sum(1));
+        });
+        timer.schedule(Duration::from_millis(1), false, move || {
+            txc.send(Op::Mul(2));
+        });
+
+        let mut res = 1;
+        rx.for_each(|v| match v {
+            Op::Sum(x) => res += x,
+            Op::Mul(x) => res *= x,
+        });
+
+        assert_eq!(res, (1 * 2) + 1);
+    }
 }
