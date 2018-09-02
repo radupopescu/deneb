@@ -6,6 +6,96 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Resolution of the timer
+#[allow(dead_code)]
+pub(crate) enum Resolution {
+    Ms,
+    TenMs,
+    HundredMs,
+    Second,
+}
+
+/// A type that can be used to run actions after a specified delay
+///
+/// The `Timer` type is an implementation of the Hashed Wheel
+/// Timer data structure:
+///     http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf
+///
+/// Tasks can be scheduled with the timer to run after a specified
+/// delay. When the timer is constructed, a background thread is
+/// spawned to manage the scheduling and expiration of the actions.
+///
+/// This is not a precise timer. The delays specified when
+/// scheduling actions can be slightly exceeded.
+pub(crate) struct Timer {
+    joiner: JoinHandle<()>,
+    event_queue: Sender<Event>,
+    quit: Sender<()>,
+}
+
+impl Timer {
+    /// Construct a new `Timer` instance
+    ///
+    /// This function takes a `Resolution` parameter which gives
+    /// the tick length of the timer and the number of "buckets"
+    /// in a second. For example, Resolution::HundredMs gives a
+    /// tick length of 100ms, with ten buckets per second.
+    pub(crate) fn new(resolution: Resolution) -> Timer {
+        let (event_queue, new_events) = unbounded();
+        let (quit_tx, quit_rx) = unbounded();
+        let joiner = spawn(move || {
+            let mut wheel = Wheel::new(resolution);
+            loop {
+                let t0 = Instant::now();
+                if let Some(_) = quit_rx.try_recv() {
+                    break;
+                }
+                while let Some(ev) = new_events.try_recv() {
+                    wheel.schedule(ev);
+                }
+                let triggered = wheel.tick();
+                for mut ev in triggered {
+                    (ev.action)();
+                    if ev.repeat {
+                        wheel.schedule(ev);
+                    }
+                }
+                let t1 = Instant::now();
+                let dt = t1 - t0;
+                if wheel.tick_time > dt {
+                    sleep(wheel.tick_time - dt);
+                }
+            }
+        });
+        Timer {
+            joiner,
+            event_queue,
+            quit: quit_tx,
+        }
+    }
+
+    /// Schedule an action to run after a delay
+    ///
+    /// If `repeat` is true, the action will be repeated after successive
+    /// waits of length `delay`.
+    pub(crate) fn schedule<F>(&mut self, delay: Duration, repeat: bool, action: F)
+    where
+        F: FnMut() + Send + 'static,
+    {
+        let event = Event::new(action, delay, repeat);
+        self.event_queue.send(event);
+    }
+
+    /// Stop the timer
+    ///
+    /// This stops the timer loop and joins the background thread. After
+    /// calling `stop`, the timer is consumed and can no longer be used.
+    pub(crate) fn stop(self) {
+        self.quit.send(());
+        let _ = self.joiner.join();
+    }
+}
+
 struct Event {
     action: Box<FnMut() + Send>,
     delay: Duration,
@@ -34,14 +124,6 @@ struct Wheel {
     buckets: HashMap<usize, LinkedList<ScheduledEvent>>,
     tick_time: Duration,
     pos: usize,
-}
-
-#[allow(dead_code)]
-pub(crate) enum Resolution {
-    Ms,
-    TenMs,
-    HundredMs,
-    Second,
 }
 
 impl Wheel {
@@ -94,61 +176,6 @@ impl Wheel {
 
 fn compute_bucket_id(dt: Duration, pos: usize, nb: usize) -> usize {
     (pos + dt.subsec_millis() as usize) % nb
-}
-
-pub(crate) struct Timer {
-    joiner: JoinHandle<()>,
-    event_queue: Sender<Event>,
-    quit: Sender<()>,
-}
-
-impl Timer {
-    pub(crate) fn new(resolution: Resolution) -> Timer {
-        let (event_queue, new_events) = unbounded();
-        let (quit_tx, quit_rx) = unbounded();
-        let joiner = spawn(move || {
-            let mut wheel = Wheel::new(resolution);
-            loop {
-                let t0 = Instant::now();
-                if let Some(_) = quit_rx.try_recv() {
-                    break;
-                }
-                while let Some(ev) = new_events.try_recv() {
-                    wheel.schedule(ev);
-                }
-                let triggered = wheel.tick();
-                for mut ev in triggered {
-                    (ev.action)();
-                    if ev.repeat {
-                        wheel.schedule(ev);
-                    }
-                }
-                let t1 = Instant::now();
-                let dt = t1 - t0;
-                if wheel.tick_time > dt {
-                    sleep(wheel.tick_time - dt);
-                }
-            }
-        });
-        Timer {
-            joiner,
-            event_queue,
-            quit: quit_tx,
-        }
-    }
-
-    pub(crate) fn schedule<F>(&mut self, delay: Duration, repeat: bool, action: F)
-    where
-        F: FnMut() + Send + 'static,
-    {
-        let event = Event::new(action, delay, repeat);
-        self.event_queue.send(event);
-    }
-
-    pub(crate) fn stop(self) {
-        self.quit.send(());
-        let _ = self.joiner.join();
-    }
 }
 
 #[cfg(test)]
