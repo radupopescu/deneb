@@ -9,8 +9,8 @@ use super::{
     protocol::{call, cast, RequestChannel},
     requests::{
         CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
-        ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine, Unlink,
-        WriteData,
+        ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine, TryCommit,
+        Unlink, WriteData,
     },
     Engine,
 };
@@ -198,6 +198,10 @@ impl Handle {
             },
             &self.cmd_ch,
         )
+    }
+
+    pub fn try_commit(&self) {
+        cast(TryCommit, &self.cmd_ch);
     }
 
     pub fn ping(&self) {
