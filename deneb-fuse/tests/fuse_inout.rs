@@ -92,7 +92,7 @@ fn init_test<'a>(
             let mut catalog = open_catalog(CatalogType::InMemory, &work_dir, true)?;
             populate_with_dir(&mut *catalog, &mut *store, input, chunk_size)?;
             let handle = start_engine_prebuilt(catalog, store, 1000)?;
-            Fs::mount(&mount_point, handle, &options)
+            Fs::spawn_mount(&mount_point, handle, &options)
         }
         TestType::OnDisk => {
             let handle = start_engine(
@@ -103,7 +103,7 @@ fn init_test<'a>(
                 chunk_size,
                 1000,
             )?;
-            Fs::mount(&mount_point, handle, &options)
+            Fs::spawn_mount(&mount_point, handle, &options)
         }
     }
 }

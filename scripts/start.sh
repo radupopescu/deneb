@@ -4,12 +4,16 @@ usage() { echo "Usage: $0 [-s] [-l off|error|warn|info|debug|trace] PREFIX_DIR" 
 
 do_sync=false
 force_unmount=false
+background=false
 log_level=info
 
-while getopts ":fsl:" o; do
+while getopts ":fbsl:" o; do
     case "${o}" in
         f)
             force_unmount=true
+            ;;
+        b)
+            background=true
             ;;
         s)
             do_sync=true
@@ -35,6 +39,9 @@ fi
 mkdir -p $prefix/{internal,mount,data}
 
 args="-w $prefix/internal -m $prefix/mount -l $log_level"
+if [ x"$background" = x"false" ]; then
+    args="--foreground $args"
+fi
 if [ x"$do_sync" = x"true" ]; then
     args="-s $prefix/data $args"
 fi

@@ -62,6 +62,10 @@ pub struct AppParameters {
         short = "f", long = "force_unmount", help = "Force unmount the file system on exit"
     )]
     pub force_unmount: bool,
+    #[structopt(
+        long = "foreground", help = "Stay in the foreground, don't fork"
+    )]
+    pub foreground: bool,
 }
 
 impl AppParameters {

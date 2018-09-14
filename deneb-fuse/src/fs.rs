@@ -1,5 +1,5 @@
 use fuse::{
-    spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate,
+    mount, spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate,
     ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
 };
 use nix::libc::{EACCES, EINVAL, ENOENT};
@@ -61,7 +61,7 @@ pub struct Fs {
 }
 
 impl<'a> Fs {
-    pub fn mount<P: AsRef<Path>>(
+    pub fn spawn_mount<P: AsRef<Path>>(
         mount_point: &P,
         engine_handle: Handle,
         options: &[&OsStr],
@@ -72,6 +72,15 @@ impl<'a> Fs {
                 .map(|s| Session::new(s, mount_point))
                 .map_err(|e| e.into())
         }
+    }
+
+    pub fn mount<P: AsRef<Path>>(
+        mount_point: &P,
+        engine_handle: Handle,
+        options: &[&OsStr],
+    ) -> DenebResult<()> {
+        let fs = Fs { engine_handle };
+        mount(fs, mount_point, options).map_err(|e| e.into())
     }
 }
 

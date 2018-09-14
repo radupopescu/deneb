@@ -18,18 +18,27 @@ use deneb_fuse::fs::Fs;
 use deneb::{
     logging::init_logger,
     params::AppParameters,
-    util::{block_signals, set_sigint_handler},
+    util::{block_signals, fork, set_sigint_handler},
 };
 
 fn main() -> DenebResult<()> {
+    let params = AppParameters::read();
+
+    // If not instructed to stay in the foreground, do a double-fork
+    // and exit in the parent and child processes. Only the grandchild
+    // process is allowed to continue
+    if !params.foreground {
+        if !fork(true) {
+            return Ok(());
+        }
+    }
+
     // Block the signals in SigSet on the current and all future threads. Should be run before
     // spawning any new threads.
     block_signals().context("Could not block signals in current thread")?;
 
     // Initialize deneb-core
     deneb_core::init()?;
-
-    let params = AppParameters::read();
 
     init_logger(params.log_level).context("Could not initialize logger")?;
 
@@ -55,21 +64,27 @@ fn main() -> DenebResult<()> {
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    let session = Fs::mount(&params.mount_point, handle.clone(), &options)?;
 
-    // Install a handler for Ctrl-C and wait
-    let (tx, rx) = std::sync::mpsc::channel();
-    let _th = set_sigint_handler(tx);
-    rx.recv()?;
+    if params.foreground {
+        let session = Fs::spawn_mount(&params.mount_point, handle.clone(), &options)?;
 
-    info!("Ctrl-C received. Exiting.");
+        // Install a handler for Ctrl-C and wait
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _th = set_sigint_handler(tx);
+        rx.recv()?;
 
-    handle.stop_engine();
+        info!("Ctrl-C received. Exiting.");
 
-    // Force unmount the file system
-    if params.force_unmount {
-        info!("Force unmounting the file system.");
-        session.force_unmount()?;
+        handle.stop_engine();
+
+        // Force unmount the file system
+        if params.force_unmount {
+            info!("Force unmounting the file system.");
+            session.force_unmount()?;
+        }
+    } else {
+        Fs::mount(&params.mount_point, handle.clone(), &options)?;
+        handle.stop_engine();
     }
 
     Ok(())
