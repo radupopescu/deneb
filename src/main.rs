@@ -16,18 +16,18 @@ use deneb_core::{
 use deneb_fuse::fs::Fs;
 
 use deneb::{
+    app::App,
     logging::init_logger,
-    params::AppParameters,
     util::{block_signals, fork, set_sigint_handler},
 };
 
 fn main() -> DenebResult<()> {
-    let params = AppParameters::read();
+    let app = App::init()?;
 
     // If not instructed to stay in the foreground, do a double-fork
     // and exit in the parent and child processes. Only the grandchild
     // process is allowed to continue
-    if !params.foreground {
+    if !app.parameters.foreground {
         if !fork(true) {
             return Ok(());
         }
@@ -40,23 +40,23 @@ fn main() -> DenebResult<()> {
     // Initialize deneb-core
     deneb_core::init()?;
 
-    init_logger(params.log_level).context("Could not initialize logger")?;
+    init_logger(app.parameters.log_level).context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
-    info!("Log level: {}", params.log_level);
-    info!("Work dir: {:?}", params.work_dir);
-    info!("Mount point: {:?}", params.mount_point);
-    info!("Chunk size: {:?}", params.chunk_size);
-    info!("Sync dir: {:?}", params.sync_dir);
-    info!("Force unmount: {}", params.force_unmount);
+    info!("Log level: {}", app.parameters.log_level);
+    info!("Work dir: {:?}", app.directories.workspace);
+    info!("Mount point: {:?}", app.directories.mount_point);
+    info!("Chunk size: {:?}", app.parameters.chunk_size);
+    info!("Sync dir: {:?}", app.parameters.sync_dir);
+    info!("Force unmount: {}", app.parameters.force_unmount);
 
     // Create the file system data structure
     let handle = start_engine(
         CatalogType::Lmdb,
         StoreType::OnDisk,
-        &params.work_dir,
-        params.sync_dir,
-        params.chunk_size,
+        &app.directories.workspace,
+        app.parameters.sync_dir,
+        app.parameters.chunk_size,
         1000,
     )?;
 
@@ -65,8 +65,8 @@ fn main() -> DenebResult<()> {
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
 
-    if params.foreground {
-        let session = Fs::spawn_mount(&params.mount_point, handle.clone(), &options)?;
+    if app.parameters.foreground {
+        let session = Fs::spawn_mount(&app.directories.mount_point, handle.clone(), &options)?;
 
         // Install a handler for Ctrl-C and wait
         let (tx, rx) = std::sync::mpsc::channel();
@@ -78,12 +78,12 @@ fn main() -> DenebResult<()> {
         handle.stop_engine();
 
         // Force unmount the file system
-        if params.force_unmount {
+        if app.parameters.force_unmount {
             info!("Force unmounting the file system.");
             session.force_unmount()?;
         }
     } else {
-        Fs::mount(&params.mount_point, handle.clone(), &options)?;
+        Fs::mount(&app.directories.mount_point, handle.clone(), &options)?;
         handle.stop_engine();
     }
 
