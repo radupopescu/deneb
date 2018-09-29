@@ -16,7 +16,7 @@ use deneb_fuse::fs::Fs;
 use deneb::{
     app::App,
     logging::init_logger,
-    util::{block_signals, fork, set_sigint_handler},
+    util::{block_signals, fork, set_signal_handler},
 };
 
 fn main() -> DenebResult<()> {
@@ -69,7 +69,7 @@ fn main() -> DenebResult<()> {
 
         // Install a handler for Ctrl-C and wait
         let (tx, rx) = std::sync::mpsc::channel();
-        let _th = set_sigint_handler(tx);
+        let _th = set_signal_handler(tx);
         rx.recv()?;
 
         info!("Ctrl-C received. Exiting.");

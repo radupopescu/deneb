@@ -1,6 +1,6 @@
 use nix::{
     sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal},
-    unistd::{fork as nix_fork, ForkResult}
+    unistd::{fork as nix_fork, ForkResult},
 };
 
 use std::sync::mpsc::Sender;
@@ -11,16 +11,21 @@ use deneb_core::errors::UnixError;
 pub fn block_signals() -> Result<(), UnixError> {
     let mut sigs = SigSet::empty();
     sigs.add(Signal::SIGINT);
+    sigs.add(Signal::SIGTERM);
+    sigs.add(Signal::SIGHUP);
     pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&sigs), None)?;
     Ok(())
 }
 
-pub fn set_sigint_handler(tx: Sender<()>) -> JoinHandle<()> {
+pub fn set_signal_handler(tx: Sender<()>) -> JoinHandle<()> {
     spawn(move || {
         let mut sigs = SigSet::empty();
         sigs.add(Signal::SIGINT);
+        sigs.add(Signal::SIGTERM);
+        sigs.add(Signal::SIGHUP);
         if let Ok(sig) = sigs.wait() {
-            if let Signal::SIGINT = sig {
+            println!("Received signal: {:?}", sig);
+            if sig == Signal::SIGINT || sig == Signal::SIGTERM || sig == Signal::SIGHUP {
                 let _ = tx.send(());
             }
         }
@@ -34,18 +39,18 @@ pub fn set_sigint_handler(tx: Sender<()>) -> JoinHandle<()> {
 /// grandchild process from any console groups.
 pub fn fork(twice: bool) -> bool {
     match nix_fork() {
-        Ok(ForkResult::Parent { .. }) => { false },
+        Ok(ForkResult::Parent { .. }) => false,
         Ok(ForkResult::Child) => {
             if twice {
                 match nix_fork() {
-                    Ok(ForkResult::Parent { .. }) => { false },
-                    Ok(ForkResult::Child) => { true },
+                    Ok(ForkResult::Parent { .. }) => false,
+                    Ok(ForkResult::Child) => true,
                     Err(_) => panic!("Fork failed!"),
                 }
             } else {
                 true
             }
-        },
+        }
         Err(_) => panic!("Fork failed!"),
     }
 }
