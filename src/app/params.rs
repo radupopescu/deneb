@@ -1,13 +1,17 @@
-use log::LevelFilter;
 use structopt::StructOpt;
+use {log::LevelFilter, toml};
 
-use std::path::PathBuf;
+use std::{
+    fs::{File, OpenOptions},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
 
-use deneb_core::errors::DenebError;
+use deneb_core::errors::{DenebError, DenebResult};
 
-#[derive(StructOpt)]
+#[derive(Debug, StructOpt)]
 #[structopt(about = "Flew into the light of Deneb")]
-pub struct Parameters {
+pub(super) struct CommandLineParameters {
     #[structopt(
         short = "n",
         long = "instance_name",
@@ -32,18 +36,15 @@ pub struct Parameters {
     #[structopt(
         short = "l",
         long = "log_level",
-        default_value = "info",
         parse(try_from_str = "parse_log_level_str"),
         help = "Logging level (off|error|warn|info|debug|trace)"
     )]
-    pub log_level: LevelFilter,
-    // Default chunk size: 4 MB
+    pub log_level: Option<LevelFilter>,
     #[structopt(
         long = "chunk_size",
-        default_value = "4194304",
         help = "Default chunk size for storing files"
     )]
-    pub chunk_size: usize,
+    pub chunk_size: Option<usize>,
     #[structopt(
         short = "s",
         long = "sync_dir",
@@ -64,30 +65,49 @@ pub struct Parameters {
     pub foreground: bool,
 }
 
-impl Parameters {
-    pub fn read() -> Parameters {
-        Parameters::from_args()
+impl CommandLineParameters {
+    pub(super) fn read() -> CommandLineParameters {
+        CommandLineParameters::from_args()
     }
 }
 
 #[derive(Deserialize, Serialize)]
 pub(super) struct ConfigFileParameters {
     pub(super) mount_point: Option<PathBuf>,
-    #[serde(default = "default_log_level")]
-    pub(super) log_level: LevelFilter,
-    #[serde(default = "default_chunk_size")]
-    pub(super) chunk_size: usize,
+    pub(super) log_level: Option<LevelFilter>,
+    pub(super) chunk_size: Option<usize>,
 }
 
-fn default_log_level() -> LevelFilter {
-    LevelFilter::Info
+impl ConfigFileParameters {
+    pub(super) fn load<P: AsRef<Path>>(file_name: P) -> DenebResult<ConfigFileParameters> {
+        let cfg = if file_name.as_ref().exists() {
+            let mut f = File::open(file_name)?;
+            let mut contents = String::new();
+            f.read_to_string(&mut contents)?;
+            toml::from_str(&contents)?
+        } else {
+            ConfigFileParameters {
+                mount_point: None,
+                log_level: None,
+                chunk_size: None,
+            }
+        };
+        Ok(cfg)
+    }
+
+    pub(super) fn save<P: AsRef<Path>>(&self, file_name: P) -> DenebResult<()> {
+        let new_cfg_file = toml::to_string(&self)?;
+        let mut f = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(file_name)?;
+        f.write_all(new_cfg_file.as_bytes())?;
+        Ok(())
+    }
 }
 
-fn default_chunk_size() -> usize {
-    4194304
-}
-
-fn parse_log_level_str(s: &str) -> Result<LevelFilter, DenebError> {
+pub(super) fn parse_log_level_str(s: &str) -> Result<LevelFilter, DenebError> {
     match s {
         "off" => Ok(LevelFilter::Off),
         "error" => Ok(LevelFilter::Error),

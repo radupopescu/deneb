@@ -27,7 +27,7 @@ fn main() -> DenebResult<()> {
     // If not instructed to stay in the foreground, do a double-fork
     // and exit in the parent and child processes. Only the grandchild
     // process is allowed to continue
-    if !app.parameters.foreground {
+    if !app.settings.foreground {
         if !fork(true) {
             return Ok(());
         }
@@ -40,23 +40,23 @@ fn main() -> DenebResult<()> {
     // Initialize deneb-core
     deneb_core::init()?;
 
-    init_logger(app.parameters.log_level).context("Could not initialize logger")?;
+    init_logger(app.settings.log_level).context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
-    info!("Log level: {}", app.parameters.log_level);
+    info!("Log level: {}", app.settings.log_level);
     info!("Work dir: {:?}", app.directories.workspace);
     info!("Mount point: {:?}", app.directories.mount_point);
-    info!("Chunk size: {:?}", app.parameters.chunk_size);
-    info!("Sync dir: {:?}", app.parameters.sync_dir);
-    info!("Force unmount: {}", app.parameters.force_unmount);
+    info!("Chunk size: {:?}", app.settings.chunk_size);
+    info!("Sync dir: {:?}", app.settings.sync_dir);
+    info!("Force unmount: {}", app.settings.force_unmount);
 
     // Create the file system data structure
     let handle = start_engine(
         CatalogType::Lmdb,
         StoreType::OnDisk,
         &app.directories.workspace,
-        app.parameters.sync_dir,
-        app.parameters.chunk_size,
+        app.settings.sync_dir,
+        app.settings.chunk_size,
         1000,
     )?;
 
@@ -65,7 +65,7 @@ fn main() -> DenebResult<()> {
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
 
-    if app.parameters.foreground {
+    if app.settings.foreground {
         let session = Fs::spawn_mount(&app.directories.mount_point, handle.clone(), &options)?;
 
         // Install a handler for Ctrl-C and wait
@@ -78,7 +78,7 @@ fn main() -> DenebResult<()> {
         handle.stop_engine();
 
         // Force unmount the file system
-        if app.parameters.force_unmount {
+        if app.settings.force_unmount {
             info!("Force unmounting the file system.");
             session.force_unmount()?;
         }
