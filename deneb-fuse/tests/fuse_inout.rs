@@ -14,7 +14,7 @@ use copy_dir::copy_dir;
 use quickcheck::{QuickCheck, StdGen};
 use tempdir::TempDir;
 
-use std::{ffi::OsStr, fs::create_dir_all, path::Path};
+use std::{fs::create_dir_all, path::Path};
 
 mod common;
 
@@ -80,10 +80,7 @@ fn init_test<'a>(
     create_dir_all(&mount_point)?;
     let work_dir = prefix.join("internal");
 
-    let options = ["-o", "negative_vncache"]
-        .iter()
-        .map(|o| o.as_ref())
-        .collect::<Vec<&OsStr>>();
+    let options = Fs::make_options(&[format!("Deneb:test"), format!("test")]);
 
     match test_type {
         TestType::InMemory => {

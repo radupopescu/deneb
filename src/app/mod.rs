@@ -43,6 +43,10 @@ impl App {
             directories,
         })
     }
+
+    pub fn fs_name(&self) -> String {
+        format!("{}:{}", application(), self.settings.instance_name)
+    }
 }
 
 pub struct Settings {

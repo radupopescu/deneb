@@ -8,8 +8,6 @@ extern crate deneb_fuse;
 
 use failure::ResultExt;
 
-use std::ffi::OsStr;
-
 use deneb_core::{
     catalog::CatalogType, engine::start_engine, errors::DenebResult, store::StoreType,
 };
@@ -55,15 +53,16 @@ fn main() -> DenebResult<()> {
         CatalogType::Lmdb,
         StoreType::OnDisk,
         &app.directories.workspace,
-        app.settings.sync_dir,
+        app.settings.sync_dir.clone(),
         app.settings.chunk_size,
         1000,
     )?;
 
-    let options = ["-o", "negative_vncache"]
-        .iter()
-        .map(|o| o.as_ref())
-        .collect::<Vec<&OsStr>>();
+    let options = Fs::make_options(&[
+        format!("negative_vncache"),
+        format!("fsname={}", app.fs_name()),
+        format!("volname={}", app.settings.instance_name),
+    ]);
 
     if app.settings.foreground {
         let session = Fs::spawn_mount(&app.directories.mount_point, handle.clone(), &options)?;
