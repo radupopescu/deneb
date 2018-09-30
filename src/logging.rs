@@ -1,18 +1,51 @@
+use failure::err_msg;
 use log::LevelFilter;
-use log4rs::append::console::ConsoleAppender;
-use log4rs::config::{Appender, Config, Root};
+use log4rs::{
+    append::{
+        console::ConsoleAppender,
+        rolling_file::{
+            policy::compound::{
+                roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy,
+            },
+            RollingFileAppender,
+        },
+    },
+    config::{Appender, Config, Root},
+};
+
+use std::path::Path;
 
 use deneb_core::errors::DenebResult;
 
-pub fn init_logger(log_level: LevelFilter) -> DenebResult<()> {
+const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10 MB
+const MAX_NUM_LOGS: u32 = 5;
+
+pub fn init_logger(level: LevelFilter, foreground: bool, dir: &Path) -> DenebResult<()> {
     let stdout = ConsoleAppender::builder().build();
+    let policy = Box::new(CompoundPolicy::new(
+        Box::new(SizeTrigger::new(MAX_LOG_SIZE)),
+        Box::new(
+            FixedWindowRoller::builder()
+                .base(0)
+                .build(
+                    dir.join("deneb.log.{}.gz")
+                        .to_str()
+                        .ok_or(err_msg("Invalid log rotation pattern."))?,
+                    MAX_NUM_LOGS,
+                ).map_err(|_| err_msg("Could not configure log rotation."))?,
+        ),
+    ));
+    let log_file = RollingFileAppender::builder().build(dir.join("deneb.log"), policy)?;
+
+    let mut root_builder = Root::builder().appender("log_file");
+    if foreground {
+        root_builder = root_builder.appender("stdout");
+    }
 
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
-        .build(Root::builder()
-               .appender("stdout")
-               // Just enable all logging levels for now
-               .build(log_level))?;
+        .appender(Appender::builder().build("log_file", Box::new(log_file)))
+        .build(root_builder.build(level))?;
 
     ::log4rs::init_config(config)?;
 

@@ -38,7 +38,11 @@ fn main() -> DenebResult<()> {
     // Initialize deneb-core
     deneb_core::init()?;
 
-    init_logger(app.settings.log_level).context("Could not initialize logger")?;
+    init_logger(
+        app.settings.log_level,
+        app.settings.foreground,
+        &app.directories.log,
+    ).context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
     info!("Log level: {}", app.settings.log_level);
@@ -67,12 +71,10 @@ fn main() -> DenebResult<()> {
     if app.settings.foreground {
         let session = Fs::spawn_mount(&app.directories.mount_point, handle.clone(), &options)?;
 
-        // Install a handler for Ctrl-C and wait
+        // Install a signal handler for SIGINT, SIGHUP and SIGTERM, and wait
         let (tx, rx) = std::sync::mpsc::channel();
         let _th = set_signal_handler(tx);
         rx.recv()?;
-
-        info!("Ctrl-C received. Exiting.");
 
         handle.stop_engine();
 
