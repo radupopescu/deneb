@@ -8,7 +8,7 @@ mod params;
 use self::params::{CommandLineParameters, ConfigFileParameters};
 
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
-const DEFAULT_CHUNK_SIZE: usize = 4194304;
+const DEFAULT_CHUNK_SIZE: usize = 4_194_304;
 
 pub struct App {
     pub settings: Settings,
@@ -120,10 +120,10 @@ pub struct Directories {
 impl Directories {
     fn with_name(instance_name: &str) -> DenebResult<Directories> {
         let dirs = ProjectDirs::from(qualifier(), organization(), application())
-            .ok_or(err_msg("Unable to create application directories."))?;
+            .ok_or_else(|| err_msg("Unable to create application directories."))?;
 
         let mount_point = home_dir()
-            .ok_or(err_msg("Unable to obtain home directory."))?
+            .ok_or_else(|| err_msg("Unable to obtain home directory."))?
             .join(application())
             .join(instance_name);
 

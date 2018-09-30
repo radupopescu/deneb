@@ -37,6 +37,7 @@ pub fn set_signal_handler(tx: Sender<()>) -> JoinHandle<()> {
 /// Calling fork with twice == true will perform a second
 /// fork in the child process to completely detach the
 /// grandchild process from any console groups.
+#[allow(match_wild_err_arm)]
 pub fn fork(twice: bool) -> bool {
     match nix_fork() {
         Ok(ForkResult::Parent { .. }) => false,

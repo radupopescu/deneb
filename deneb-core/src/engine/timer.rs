@@ -8,6 +8,7 @@ use std::{
 
 /// Resolution of the timer
 #[allow(dead_code)]
+#[derive(Clone, Copy)]
 pub(crate) enum Resolution {
     Ms,
     TenMs,
@@ -47,7 +48,7 @@ impl Timer {
             let mut wheel = Wheel::new(resolution);
             loop {
                 let t0 = Instant::now();
-                if let Some(_) = quit_rx.try_recv() {
+                if quit_rx.try_recv().is_some() {
                     break;
                 }
                 while let Some(ev) = new_events.try_recv() {
@@ -158,7 +159,7 @@ impl Wheel {
         let mut expired = LinkedList::new();
         let mut kept = LinkedList::new();
         if let Some(bucket) = self.buckets.remove(&self.pos) {
-            for mut e in bucket.into_iter() {
+            for mut e in bucket {
                 if e.rounds > 0 {
                     e.rounds -= 1;
                     kept.push_front(e);
@@ -196,7 +197,7 @@ mod tests {
         wheel.schedule(event);
         assert_eq!(wheel.tick().len(), 0);
         let evs = wheel.tick();
-        for mut e in evs.into_iter() {
+        for mut e in evs {
             (e.action)();
         }
         let mut counter = 0;
@@ -219,14 +220,14 @@ mod tests {
         wheel.schedule(event);
         assert_eq!(wheel.tick().len(), 0);
         let evs1 = wheel.tick();
-        for mut e in evs1.into_iter() {
+        for mut e in evs1 {
             (e.action)();
             wheel.schedule(e);
         }
 
         assert_eq!(wheel.tick().len(), 0);
         let evs2 = wheel.tick();
-        for mut e in evs2.into_iter() {
+        for mut e in evs2 {
             (e.action)();
         }
 
@@ -303,6 +304,7 @@ mod tests {
             Op::Mul(x) => res *= x,
         });
 
-        assert_eq!(res, (1 * 2) + 1);
+        // (1 * 2) + 1
+        assert_eq!(res, 3);
     }
 }

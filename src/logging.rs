@@ -30,7 +30,7 @@ pub fn init_logger(level: LevelFilter, foreground: bool, dir: &Path) -> DenebRes
                 .build(
                     dir.join("deneb.log.{}.gz")
                         .to_str()
-                        .ok_or(err_msg("Invalid log rotation pattern."))?,
+                        .ok_or_else(|| err_msg("Invalid log rotation pattern."))?,
                     MAX_NUM_LOGS,
                 ).map_err(|_| err_msg("Could not configure log rotation."))?,
         ),

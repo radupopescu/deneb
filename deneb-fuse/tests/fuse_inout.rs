@@ -80,7 +80,7 @@ fn init_test<'a>(
     create_dir_all(&mount_point)?;
     let work_dir = prefix.join("internal");
 
-    let options = Fs::make_options(&[format!("Deneb:test"), format!("test")]);
+    let options = Fs::make_options(&["Deneb:test".to_string(), "test".to_string()]);
 
     match test_type {
         TestType::InMemory => {

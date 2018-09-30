@@ -25,10 +25,8 @@ fn main() -> DenebResult<()> {
     // If not instructed to stay in the foreground, do a double-fork
     // and exit in the parent and child processes. Only the grandchild
     // process is allowed to continue
-    if !app.settings.foreground {
-        if !fork(true) {
-            return Ok(());
-        }
+    if !app.settings.foreground && !fork(true) {
+        return Ok(());
     }
 
     // Block the signals in SigSet on the current and all future threads. Should be run before
@@ -63,7 +61,7 @@ fn main() -> DenebResult<()> {
     )?;
 
     let options = Fs::make_options(&[
-        format!("negative_vncache"),
+        "negative_vncache".to_string(),
         format!("fsname={}", app.fs_name()),
         format!("volname={}", app.settings.instance_name),
     ]);
