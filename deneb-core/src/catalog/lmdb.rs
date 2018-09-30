@@ -158,8 +158,7 @@ impl Catalog for LmdbCatalog {
                 &format!("{}", index),
                 &buffer,
                 WriteFlags::empty(),
-            )
-            .context(CatalogError::INodeWrite(index))?;
+            ).context(CatalogError::INodeWrite(index))?;
 
         if index > max_index {
             writer.put(
@@ -199,8 +198,7 @@ impl Catalog for LmdbCatalog {
                     &format!("{}", parent),
                     &buffer,
                     WriteFlags::empty(),
-                )
-                .context(CatalogError::DEntryWrite(parent))?;
+                ).context(CatalogError::DEntryWrite(parent))?;
 
             // Retrieve inode of index
             let buffer = {
@@ -222,8 +220,7 @@ impl Catalog for LmdbCatalog {
                     &format!("{}", index),
                     &buffer,
                     WriteFlags::empty(),
-                )
-                .context(CatalogError::INodeWrite(index))?;
+                ).context(CatalogError::INodeWrite(index))?;
         }
         writer.commit()?;
         Ok(())

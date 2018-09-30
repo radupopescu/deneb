@@ -57,8 +57,7 @@ impl DirWorkspace {
                         name: ref ename, ..
                     },
                 )| ename == name,
-            )
-            .map(|(idx, _)| idx)
+            ).map(|(idx, _)| idx)
         {
             self.entries.remove(idx as usize);
         }

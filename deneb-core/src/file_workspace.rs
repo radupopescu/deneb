@@ -48,8 +48,7 @@ impl FileWorkspace {
                     offset: 0,
                     size: chunk_size,
                 }
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
         trace!(
             "New workspace for inode {} - size: {}, num_chunks: {}",
             inode.attributes.index,
