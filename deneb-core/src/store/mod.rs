@@ -2,9 +2,9 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 
-use cas::{hash, read_chunks, Digest};
-use errors::DenebResult;
-use inode::ChunkDescriptor;
+use crate::cas::{hash, read_chunks, Digest};
+use crate::errors::DenebResult;
+use crate::inode::ChunkDescriptor;
 
 mod chunk;
 pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};

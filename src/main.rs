@@ -40,7 +40,8 @@ fn main() -> DenebResult<()> {
         app.settings.log_level,
         app.settings.foreground,
         &app.directories.log,
-    ).context("Could not initialize logger")?;
+    )
+    .context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
     info!("Log level: {}", app.settings.log_level);

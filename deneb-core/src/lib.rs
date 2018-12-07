@@ -105,7 +105,7 @@ fn visit_dirs(
                 .ok_or_else(|| DenebError::InvalidPath(path.clone()))?,
         );
 
-        let mut descriptors = if path.is_file() {
+        let descriptors = if path.is_file() {
             let mut abs_path = dir.to_path_buf();
             abs_path.push(fname);
             let mut f = File::open(abs_path)?;
@@ -128,7 +128,8 @@ fn visit_dirs(
                 &path,
                 index,
                 dir_index,
-            ).context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
+            )
+            .context(DenebError::DirectoryVisit(dir.to_path_buf()))?;
         }
     }
     Ok(())

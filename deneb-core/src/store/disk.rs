@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use std::path::{Path, PathBuf};
 
-use cas::Digest;
-use errors::{DenebResult, StoreError};
-use util::atomic_write;
+use crate::cas::Digest;
+use crate::errors::{DenebResult, StoreError};
+use crate::util::atomic_write;
 
 use super::{Chunk, MmapChunk, Store};
 

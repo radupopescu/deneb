@@ -1,5 +1,4 @@
-use structopt::StructOpt;
-use {log::LevelFilter, toml};
+use {log::LevelFilter, structopt::StructOpt, toml};
 
 use std::{
     fs::{File, OpenOptions},
@@ -40,10 +39,7 @@ pub(super) struct CommandLineParameters {
         help = "Logging level (off|error|warn|info|debug|trace)"
     )]
     pub log_level: Option<LevelFilter>,
-    #[structopt(
-        long = "chunk_size",
-        help = "Default chunk size for storing files"
-    )]
+    #[structopt(long = "chunk_size", help = "Default chunk size for storing files")]
     pub chunk_size: Option<usize>,
     #[structopt(
         short = "s",
@@ -58,10 +54,7 @@ pub(super) struct CommandLineParameters {
         help = "Force unmount the file system on exit"
     )]
     pub force_unmount: bool,
-    #[structopt(
-        long = "foreground",
-        help = "Stay in the foreground, don't fork"
-    )]
+    #[structopt(long = "foreground", help = "Stay in the foreground, don't fork")]
     pub foreground: bool,
 }
 

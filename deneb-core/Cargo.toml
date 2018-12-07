@@ -2,6 +2,7 @@
 name = "deneb-core"
 version = "0.1.0"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
+edition = "2018"
 
 [dependencies]
 bincode = "^1.0.0"

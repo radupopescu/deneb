@@ -1,16 +1,16 @@
-use bincode::{deserialize, serialize};
-use failure::ResultExt;
-use lmdb::{
+use ::lmdb::{
     Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError, Transaction,
     WriteFlags,
 };
+use bincode::{deserialize, serialize};
+use failure::ResultExt;
 use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
 
 use std::collections::BTreeMap;
 use std::str::from_utf8;
 
 use super::*;
-use errors::CatalogError;
+use crate::errors::CatalogError;
 
 const MAX_CATALOG_SIZE: usize = 100 * 1024 * 1024; // 100MB
 const MAX_CATALOG_READERS: u32 = 100;
@@ -158,7 +158,8 @@ impl Catalog for LmdbCatalog {
                 &format!("{}", index),
                 &buffer,
                 WriteFlags::empty(),
-            ).context(CatalogError::INodeWrite(index))?;
+            )
+            .context(CatalogError::INodeWrite(index))?;
 
         if index > max_index {
             writer.put(
@@ -198,7 +199,8 @@ impl Catalog for LmdbCatalog {
                     &format!("{}", parent),
                     &buffer,
                     WriteFlags::empty(),
-                ).context(CatalogError::DEntryWrite(parent))?;
+                )
+                .context(CatalogError::DEntryWrite(parent))?;
 
             // Retrieve inode of index
             let buffer = {
@@ -220,7 +222,8 @@ impl Catalog for LmdbCatalog {
                     &format!("{}", index),
                     &buffer,
                     WriteFlags::empty(),
-                ).context(CatalogError::INodeWrite(index))?;
+                )
+                .context(CatalogError::INodeWrite(index))?;
         }
         writer.commit()?;
         Ok(())
@@ -278,7 +281,7 @@ mod tests {
 
     use super::*;
 
-    use inode::FileAttributes;
+    use crate::inode::FileAttributes;
 
     #[test]
     fn lmdb_catalog_create_then_reopen() {

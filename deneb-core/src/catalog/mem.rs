@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use inode::INode;
+use crate::inode::INode;
 
 use super::*;
-use errors::CatalogError;
+use crate::errors::CatalogError;
 
 #[derive(Default)]
 pub(super) struct MemCatalog {
@@ -57,7 +57,8 @@ impl Catalog for MemCatalog {
                     .iter()
                     .map(|(name, index)| (name.to_owned(), *index))
                     .collect::<Vec<(PathBuf, u64)>>()
-            }).ok_or_else(|| CatalogError::DEntryRead(parent).into())
+            })
+            .ok_or_else(|| CatalogError::DEntryRead(parent).into())
     }
 
     fn add_inode(&mut self, inode: INode) -> DenebResult<()> {

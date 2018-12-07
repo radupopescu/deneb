@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use errors::{DenebError, DenebResult};
+use crate::errors::{DenebError, DenebResult};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);

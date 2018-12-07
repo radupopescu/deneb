@@ -1,6 +1,6 @@
 use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc};
 
-use {
+use crate::{
     cas::Digest,
     errors::DenebResult,
     inode::{ChunkDescriptor, INode},
@@ -48,7 +48,8 @@ impl FileWorkspace {
                     offset: 0,
                     size: chunk_size,
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         trace!(
             "New workspace for inode {} - size: {}, num_chunks: {}",
             inode.attributes.index,
@@ -189,7 +190,7 @@ impl FileWorkspace {
                 PieceTarget::Lower(chunk_index) => {
                     let mut lower = self.lower.borrow_mut();
                     lower.load_chunk(chunk_index)?;
-                    let mut chunk = &lower.chunks[&chunk_index];
+                    let chunk = &lower.chunks[&chunk_index];
                     let slice = chunk.get_slice();
                     buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
                 }
@@ -334,8 +335,8 @@ fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) 
 mod tests {
     use super::*;
 
-    use inode::FileAttributes;
-    use store::{open_store, StoreType};
+    use crate::inode::FileAttributes;
+    use crate::store::{open_store, StoreType};
 
     fn make_test_workspace() -> DenebResult<FileWorkspace> {
         let mut store = open_store(StoreType::InMemory, "/", 10000)?;

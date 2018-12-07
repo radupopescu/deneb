@@ -16,6 +16,8 @@ readme = "README.md"
 keywords = ["filesystem", "merkle-tree", "fuse", "distributed-file-system"]
 categories = ["filesystem"]
 
+edition = "2018"
+
 [badges]
 travis-ci = { repository = "radupopescu/deneb", branch = "master" }
 

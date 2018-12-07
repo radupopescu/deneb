@@ -6,7 +6,7 @@ use std::cmp::{max, min};
 use std::i32;
 use std::u16;
 
-use cas::Digest;
+use crate::cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum FileType {

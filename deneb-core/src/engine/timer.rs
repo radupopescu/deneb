@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use errors::EngineError;
+use crate::errors::EngineError;
 
 /// Resolution of the timer
 #[allow(dead_code)]
@@ -86,7 +86,10 @@ impl Timer {
         F: FnMut() + Send + 'static,
     {
         let event = Event::new(action, delay, repeat);
-        self.event_queue.send(event).map_err(|_| EngineError::Send).unwrap();
+        self.event_queue
+            .send(event)
+            .map_err(|_| EngineError::Send)
+            .unwrap();
     }
 
     /// Stop the timer

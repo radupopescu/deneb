@@ -9,7 +9,7 @@ use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
 
-use errors::{DenebResult, UnixError};
+use crate::errors::{DenebResult, UnixError};
 
 /// Atomically writes a buffer to a file
 ///

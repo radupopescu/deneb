@@ -2,7 +2,7 @@ use memmap::Mmap;
 
 use std::{fs::File, path::PathBuf};
 
-use {cas::Digest, errors::DenebResult};
+use crate::{cas::Digest, errors::DenebResult};
 
 /// An trait for accessing the contents of chunks stored in a repository
 ///
@@ -101,7 +101,7 @@ mod tests {
 
     use super::{Chunk, MemChunk, MmapChunk};
 
-    use cas::hash;
+    use crate::cas::hash;
 
     #[test]
     fn mmap_chunk() {
@@ -110,7 +110,7 @@ mod tests {
         let tmp = TempDir::new("chunks");
         if let Ok(tmp) = tmp {
             let fname = tmp.path().join("c1");
-            let mut f = OpenOptions::new()
+            let f = OpenOptions::new()
                 .write(true)
                 .read(true)
                 .create(true)
