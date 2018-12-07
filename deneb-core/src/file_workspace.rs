@@ -270,7 +270,7 @@ impl Lower {
     }
 
     // Load a single chunk
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn load_chunk(&mut self, index: usize) -> DenebResult<()> {
         let digest = self.digests[index];
         if !self.chunks.contains_key(&index) {

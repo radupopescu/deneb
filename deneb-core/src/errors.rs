@@ -92,6 +92,8 @@ pub enum EngineError {
         _0
     )]
     Lookup(u64, OsString),
+    #[fail(display = "Could not send message over channel")]
+    Send,
     #[fail(display = "No reply received from engine")]
     NoReply,
     #[fail(display = "Could not open directory: {}", _0)]

@@ -73,7 +73,7 @@ pub fn start_engine_prebuilt(
         }
         info!("Engine event loop finished.");
         timer.stop();
-        quit_tx.send(());
+        quit_tx.send(()).map_err(|_| EngineError::Send).unwrap();
     });
 
     engine_hd.ping();
@@ -331,7 +331,7 @@ impl RequestHandler<StopEngine> for Engine {
 impl Engine {
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
     //       and can't be used inside Entry::or_insert_with
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn get_inode(&mut self, index: u64) -> DenebResult<INode> {
         if !self.workspace.inodes.contains_key(&index) {
             let inode = self.catalog.get_inode(index)?;
@@ -393,7 +393,7 @@ impl Engine {
 
     // Note: We perform inefficient double lookups since Catalog::get_dir_entries returns
     //       a Result and can't be used inside Entry::or_insert_with
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
             let entries = self
@@ -429,7 +429,7 @@ impl Engine {
 
     // Note: We perform inefficient double lookups since Catalog::get_inode returns
     //       a Result and can't be used inside Entry::or_insert_with
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn open_file(&mut self, index: u64, _flags: u32) -> DenebResult<()> {
         if !self.workspace.files.contains_key(&index) {
             let inode = self.get_inode(index)?;
