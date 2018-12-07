@@ -9,7 +9,6 @@ extern crate nix;
 #[macro_use]
 extern crate serde_derive;
 extern crate structopt;
-#[macro_use]
 extern crate structopt_derive;
 extern crate toml;
 

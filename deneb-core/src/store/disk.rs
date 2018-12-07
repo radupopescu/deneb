@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use std::path::{Path, PathBuf};
 
-use cas::Digest;
-use errors::{DenebResult, StoreError};
-use util::atomic_write;
+use crate::cas::Digest;
+use crate::errors::{DenebResult, StoreError};
+use crate::util::atomic_write;
 
 use super::{Chunk, MmapChunk, Store};
 
@@ -35,7 +35,7 @@ pub(super) struct DiskStore {
 }
 
 impl DiskStore {
-    pub(super) fn new(dir: &Path, chunk_size: usize) -> DenebResult<DiskStore> {
+    pub(super) fn try_new(dir: &Path, chunk_size: usize) -> DenebResult<DiskStore> {
         let root_dir = dir;
         let object_dir = root_dir.join(OBJECT_PATH);
 
@@ -81,7 +81,7 @@ impl Store for DiskStore {
             //       function can be called with true as a last parameter, ensuring that the
             //       unpacked chunk files are deleted when the last reference to the chunk
             //       goes away.
-            let chunk = MmapChunk::new(*digest, file_stats.st_size as usize, full_path, false)?;
+            let chunk = MmapChunk::try_new(*digest, file_stats.st_size as usize, full_path, false)?;
             cache.put(*digest, Arc::new(chunk));
             cache
                 .get(digest)
@@ -109,7 +109,7 @@ mod tests {
     fn diskstore_create_put_get() -> DenebResult<()> {
         const BYTES: &[u8] = b"alabalaportocala";
         let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
-        let mut store = DiskStore::new(temp_dir.path(), 10000)?;
+        let mut store = DiskStore::try_new(temp_dir.path(), 10000)?;
         let mut v1: &[u8] = BYTES;
         let descriptors = store.put_file_chunked(&mut v1)?;
         let v2 = store.get_chunk(&descriptors[0].digest)?;

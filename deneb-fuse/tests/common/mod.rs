@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use quickcheck::{Arbitrary, Gen};
+use quickcheck::{Arbitrary, Gen, RngCore};
 use rand::{thread_rng, Rng};
-use uuid::Uuid;
+use uuid::{adapter::Simple, Uuid};
 
 use std::fs::{create_dir_all, remove_dir_all, File};
 use std::io::{BufReader, Read};
@@ -21,7 +21,7 @@ pub enum DirEntry {
 impl DirEntry {
     fn arbitrary_rec<G: Gen>(g: &mut G, current_depth: usize) -> DirEntry {
         let max_size = g.size();
-        let name = Uuid::new_v4().simple().to_string();
+        let name = Simple::from_uuid(Uuid::new_v4()).to_string();
         match g.gen_range(0, 2) {
             0 => {
                 let file_size = g.gen_range(0, max_size * 100);

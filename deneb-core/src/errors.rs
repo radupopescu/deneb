@@ -59,10 +59,7 @@ pub enum CatalogError {
     DEntrySerialization(u64),
     #[fail(display = "INode deserialization error for index: {}", _0)]
     INodeDeserialization(u64),
-    #[fail(
-        display = "Dir entry deserialization error for index: {}",
-        _0
-    )]
+    #[fail(display = "Dir entry deserialization error for index: {}", _0)]
     DEntryDeserialization(u64),
     #[fail(display = "INode read error for index: {}", _0)]
     INodeRead(u64),
@@ -86,12 +83,10 @@ pub enum EngineError {
     GetAttr(u64),
     #[fail(display = "Failed to set file attributes for: {}", _0)]
     SetAttr(u64),
-    #[fail(
-        display = "Failed lookup of entry: {:?} in parent: {}",
-        _1,
-        _0
-    )]
+    #[fail(display = "Failed lookup of entry: {:?} in parent: {}", _1, _0)]
     Lookup(u64, OsString),
+    #[fail(display = "Could not send message over channel")]
+    Send,
     #[fail(display = "No reply received from engine")]
     NoReply,
     #[fail(display = "Could not open directory: {}", _0)]
@@ -118,10 +113,7 @@ pub enum EngineError {
     RemoveDir(u64, OsString),
     #[fail(
         display = "Could not rename entry {:?} at {} to {:?} at {}",
-        _1,
-        _0,
-        _3,
-        _2
+        _1, _0, _3, _2
     )]
     Rename(u64, OsString, u64, OsString),
     #[fail(display = "Access error for: {}", _0)]
@@ -141,8 +133,7 @@ pub enum WorkspaceError {
 #[derive(Debug, Fail)]
 #[fail(
     display = "DirWorkspace lookup error at parent {} for entry {:?}",
-    parent,
-    name
+    parent, name
 )]
 pub struct DirWorkspaceEntryLookupError {
     pub parent: u64,

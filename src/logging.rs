@@ -32,7 +32,8 @@ pub fn init_logger(level: LevelFilter, foreground: bool, dir: &Path) -> DenebRes
                         .to_str()
                         .ok_or_else(|| err_msg("Invalid log rotation pattern."))?,
                     MAX_NUM_LOGS,
-                ).map_err(|_| err_msg("Could not configure log rotation."))?,
+                )
+                .map_err(|_| err_msg("Could not configure log rotation."))?,
         ),
     ));
     let log_file = RollingFileAppender::builder().build(dir.join("deneb.log"), policy)?;

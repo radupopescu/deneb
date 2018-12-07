@@ -6,6 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::errors::EngineError;
+
 /// Resolution of the timer
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -48,10 +50,10 @@ impl Timer {
             let mut wheel = Wheel::new(resolution);
             loop {
                 let t0 = Instant::now();
-                if quit_rx.try_recv().is_some() {
+                if quit_rx.try_recv().is_ok() {
                     break;
                 }
-                while let Some(ev) = new_events.try_recv() {
+                while let Ok(ev) = new_events.try_recv() {
                     wheel.schedule(ev);
                 }
                 let triggered = wheel.tick();
@@ -84,7 +86,10 @@ impl Timer {
         F: FnMut() + Send + 'static,
     {
         let event = Event::new(action, delay, repeat);
-        self.event_queue.send(event);
+        self.event_queue
+            .send(event)
+            .map_err(|_| EngineError::Send)
+            .unwrap();
     }
 
     /// Stop the timer
@@ -92,7 +97,7 @@ impl Timer {
     /// This stops the timer loop and joins the background thread. After
     /// calling `stop`, the timer is consumed and can no longer be used.
     pub(crate) fn stop(self) {
-        self.quit.send(());
+        self.quit.send(()).map_err(|_| EngineError::Send).unwrap();
         let _ = self.joiner.join();
     }
 }
@@ -189,7 +194,7 @@ mod tests {
         let (tx, rx) = unbounded();
         let event = Event::new(
             move || {
-                tx.send(());
+                tx.send(()).map_err(|_| EngineError::Send).unwrap();
             },
             Duration::from_millis(1),
             false,
@@ -201,7 +206,7 @@ mod tests {
             (e.action)();
         }
         let mut counter = 0;
-        rx.for_each(|_| counter += 1);
+        rx.iter().for_each(|_| counter += 1);
 
         assert_eq!(counter, 1);
     }
@@ -212,7 +217,7 @@ mod tests {
         let (tx, rx) = unbounded();
         let event = Event::new(
             move || {
-                tx.send(());
+                tx.send(()).map_err(|_| EngineError::Send).unwrap();
             },
             Duration::from_millis(1),
             false,
@@ -232,7 +237,7 @@ mod tests {
         }
 
         let mut counter = 0;
-        rx.for_each(|_| counter += 1);
+        rx.iter().for_each(|_| counter += 1);
 
         assert_eq!(counter, 2);
     }
@@ -242,10 +247,10 @@ mod tests {
         let (tx, rx) = unbounded();
         let mut timer = Timer::new(Resolution::Ms);
         timer.schedule(Duration::from_millis(1), false, move || {
-            tx.send(1);
+            tx.send(1).map_err(|_| EngineError::Send).unwrap();
         });
         let mut sum = 0;
-        rx.for_each(|v| sum += v);
+        rx.iter().for_each(|v| sum += v);
         timer.stop();
         assert_eq!(sum, 1);
     }
@@ -258,12 +263,12 @@ mod tests {
         for _ in 0..num_events {
             let txc = tx.clone();
             timer.schedule(Duration::from_millis(5), false, move || {
-                txc.send(1);
+                txc.send(1).map_err(|_| EngineError::Send).unwrap();
             });
         }
         drop(tx);
         let mut sum = 0;
-        rx.for_each(|v| sum += v);
+        rx.iter().for_each(|v| sum += v);
         timer.stop();
         assert_eq!(sum, num_events);
     }
@@ -273,12 +278,12 @@ mod tests {
         let (tx, rx) = unbounded();
         let mut timer = Timer::new(Resolution::HundredMs);
         timer.schedule(Duration::from_millis(100), true, move || {
-            tx.send(1);
+            tx.send(1).map_err(|_| EngineError::Send).unwrap();
         });
         ::std::thread::sleep(Duration::from_secs(1));
         timer.stop();
         let mut sum = 0;
-        rx.for_each(|v| sum += v);
+        rx.iter().for_each(|v| sum += v);
     }
 
     #[test]
@@ -292,14 +297,14 @@ mod tests {
         let txc = tx.clone();
         let mut timer = Timer::new(Resolution::Ms);
         timer.schedule(Duration::from_millis(5), false, move || {
-            tx.send(Op::Sum(1));
+            tx.send(Op::Sum(1)).map_err(|_| EngineError::Send).unwrap();
         });
         timer.schedule(Duration::from_millis(1), false, move || {
-            txc.send(Op::Mul(2));
+            txc.send(Op::Mul(2)).map_err(|_| EngineError::Send).unwrap();
         });
 
         let mut res = 1;
-        rx.for_each(|v| match v {
+        rx.iter().for_each(|v| match v {
             Op::Sum(x) => res += x,
             Op::Mul(x) => res *= x,
         });

@@ -1,7 +1,7 @@
 use crossbeam_channel::{bounded as channel, Sender};
 use std::marker::PhantomData;
 
-use errors::{DenebResult, EngineError};
+use crate::errors::{DenebResult, EngineError};
 
 pub trait Request: Send {
     type Reply: Send;
@@ -38,9 +38,9 @@ where
             _hd: PhantomData,
         }),
     };
-    ch.send(envelope);
+    ch.send(envelope).map_err(|_| EngineError::Send).unwrap();;
 
-    rx.recv().ok_or(EngineError::NoReply)?
+    rx.recv().map_err(|_| EngineError::NoReply)?
 }
 
 pub fn cast<R, H>(req: R, ch: &RequestChannel<H>)
@@ -54,7 +54,7 @@ where
             _hd: PhantomData,
         }),
     };
-    ch.send(envelope);
+    ch.send(envelope).map_err(|_| EngineError::Send).unwrap();
 }
 
 struct RequestProxy<R, H>
@@ -75,7 +75,7 @@ where
     type Handler = H;
     fn run_handler(&self, hd: &mut Self::Handler) {
         let reply = hd.handle(&self.req);
-        self.tx.send(reply);
+        self.tx.send(reply).map_err(|_| EngineError::Send).unwrap();
     }
 }
 

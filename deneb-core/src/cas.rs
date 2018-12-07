@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use errors::{DenebError, DenebResult};
+use crate::errors::{DenebError, DenebResult};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);
@@ -112,8 +112,8 @@ fn hash_buf(buffer: &[u8]) -> (Digest, Vec<u8>) {
 
 #[cfg(test)]
 mod tests {
-    use quickcheck::{QuickCheck, StdGen, TestResult};
-    use rand::{thread_rng, Rng};
+    use quickcheck::{QuickCheck, RngCore, StdGen, TestResult};
+    use rand::thread_rng;
 
     use super::*;
 

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc};
 
-use {
+use crate::{
     cas::Digest,
     errors::DenebResult,
     inode::{ChunkDescriptor, INode},
@@ -32,11 +32,11 @@ impl FileWorkspace {
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(
+    pub(crate) fn try_new(
         inode: &INode,
         store: &Rc<RefCell<Box<dyn Store>>>,
     ) -> DenebResult<FileWorkspace> {
-        let lower = Lower::new(inode.chunks.as_slice(), store)?;
+        let lower = Lower::try_new(inode.chunks.as_slice(), store)?;
         let piece_table = inode
             .chunks
             .iter()
@@ -48,7 +48,8 @@ impl FileWorkspace {
                     offset: 0,
                     size: chunk_size,
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
         trace!(
             "New workspace for inode {} - size: {}, num_chunks: {}",
             inode.attributes.index,
@@ -189,7 +190,7 @@ impl FileWorkspace {
                 PieceTarget::Lower(chunk_index) => {
                     let mut lower = self.lower.borrow_mut();
                     lower.load_chunk(chunk_index)?;
-                    let mut chunk = &lower.chunks[&chunk_index];
+                    let chunk = &lower.chunks[&chunk_index];
                     let slice = chunk.get_slice();
                     buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
                 }
@@ -254,7 +255,7 @@ struct Lower {
 
 impl Lower {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(
+    fn try_new(
         chunk_descriptors: &[ChunkDescriptor],
         store: &Rc<RefCell<Box<dyn Store>>>,
     ) -> DenebResult<Lower> {
@@ -270,7 +271,7 @@ impl Lower {
     }
 
     // Load a single chunk
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn load_chunk(&mut self, index: usize) -> DenebResult<()> {
         let digest = self.digests[index];
         if !self.chunks.contains_key(&index) {
@@ -334,8 +335,8 @@ fn piece_idx_for_offset(offset: usize, piece_table: &[Piece]) -> (usize, usize) 
 mod tests {
     use super::*;
 
-    use inode::FileAttributes;
-    use store::{open_store, StoreType};
+    use crate::inode::FileAttributes;
+    use crate::store::{open_store, StoreType};
 
     fn make_test_workspace() -> DenebResult<FileWorkspace> {
         let mut store = open_store(StoreType::InMemory, "/", 10000)?;
@@ -348,7 +349,7 @@ mod tests {
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))
+        FileWorkspace::try_new(&inode, &Rc::new(RefCell::new(store)))
     }
 
     #[test]
@@ -372,7 +373,7 @@ mod tests {
             attributes: FileAttributes::default(),
             chunks: vec![],
         };
-        let mut ws = FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))?;
+        let mut ws = FileWorkspace::try_new(&inode, &Rc::new(RefCell::new(store)))?;
 
         assert_eq!(ws.write_at(0, b"written"), (7, 7));
 

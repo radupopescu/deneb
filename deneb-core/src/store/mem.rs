@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use cas::Digest;
-use errors::{DenebResult, StoreError};
+use crate::cas::Digest;
+use crate::errors::{DenebResult, StoreError};
 
 use super::{Chunk, MemChunk, Store};
 

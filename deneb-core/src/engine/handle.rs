@@ -2,8 +2,8 @@ use crossbeam_channel::Receiver;
 
 use std::{ffi::OsStr, path::PathBuf};
 
-use errors::DenebResult;
-use inode::{FileAttributeChanges, FileAttributes, FileType};
+use crate::errors::DenebResult;
+use crate::inode::{FileAttributeChanges, FileAttributes, FileType};
 
 use super::{
     protocol::{call, cast, RequestChannel},
@@ -214,7 +214,7 @@ impl Handle {
     }
 
     // Private functions
-    pub(in engine) fn new(cmd_ch: RequestChannel<Engine>, stop_ch: Receiver<()>) -> Handle {
+    pub(in crate::engine) fn new(cmd_ch: RequestChannel<Engine>, stop_ch: Receiver<()>) -> Handle {
         Handle { cmd_ch, stop_ch }
     }
 }

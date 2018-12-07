@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use inode::FileType;
+use crate::inode::FileType;
 
 #[derive(Clone, Debug)]
 pub(crate) struct DirWorkspace {
@@ -57,7 +57,8 @@ impl DirWorkspace {
                         name: ref ename, ..
                     },
                 )| ename == name,
-            ).map(|(idx, _)| idx)
+            )
+            .map(|(idx, _)| idx)
         {
             self.entries.remove(idx as usize);
         }

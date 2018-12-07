@@ -18,7 +18,7 @@ use std::{fs::create_dir_all, path::Path};
 
 mod common;
 
-use common::*;
+use crate::common::*;
 
 use deneb_core::{
     catalog::{open_catalog, CatalogType},

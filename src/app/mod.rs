@@ -81,7 +81,8 @@ impl Settings {
                     .mount_point
                     .get_or_insert(dirs.mount_point.clone())
                     .to_owned(),
-            ).to_owned();
+            )
+            .to_owned();
         dirs.mount_point = mount_point.clone();
 
         let log_level = *cmd_line

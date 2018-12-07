@@ -2,9 +2,9 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Arc;
 
-use cas::{hash, read_chunks, Digest};
-use errors::DenebResult;
-use inode::ChunkDescriptor;
+use crate::cas::{hash, read_chunks, Digest};
+use crate::errors::DenebResult;
+use crate::inode::ChunkDescriptor;
 
 mod chunk;
 pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};
@@ -25,7 +25,7 @@ pub fn open_store<P: AsRef<Path>>(
 ) -> DenebResult<Box<dyn Store>> {
     Ok(match store_type {
         StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
-        StoreType::OnDisk => Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?),
+        StoreType::OnDisk => Box::new(disk::DiskStore::try_new(dir.as_ref(), chunk_size)?),
     })
 }
 

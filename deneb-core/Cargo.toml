@@ -2,19 +2,20 @@
 name = "deneb-core"
 version = "0.1.0"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
+edition = "2018"
 
 [dependencies]
 bincode = "^1.0.0"
-crossbeam-channel = "^0.2.0"
+crossbeam-channel = "^0.3.0"
 data-encoding = "^2.1.0"
 failure = "^0.1.0"
 lmdb = "^0.8.0"
 lmdb-sys = "^0.8.0"
 lru = "^0.1.0"
 log = "^0.4.0"
-memmap = "^0.6.0"
-nix = "^0.11.0"
-rust_sodium = "^0.9.0"
+memmap = "^0.7.0"
+nix = "^0.12.0"
+rust_sodium = "^0.10.0"
 serde = "^1.0.0"
 serde_bytes = "^0.10.0"
 serde_derive = "^1.0.0"
@@ -22,6 +23,6 @@ time = "^0.1.0"
 toml = "^0.4.0"
 
 [dev-dependencies]
-quickcheck = "^0.6.0"
-rand = "^0.4.0"
+quickcheck = "^0.7.0"
+rand = "^0.6.0"
 tempdir = "^0.3.0"

@@ -6,7 +6,7 @@ use std::cmp::{max, min};
 use std::i32;
 use std::u16;
 
-use cas::Digest;
+use crate::cas::Digest;
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum FileType {
@@ -151,7 +151,7 @@ pub struct FileAttributeChanges {
 }
 
 impl FileAttributeChanges {
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mode: Option<u32>,
         uid: Option<u32>,

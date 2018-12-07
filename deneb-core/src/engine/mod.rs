@@ -14,15 +14,15 @@ use std::{
     time::Duration,
 };
 
-use catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
-use dir_workspace::{DirEntry, DirWorkspace};
-use errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
-use file_workspace::FileWorkspace;
-use inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
-use manifest::Manifest;
-use populate_with_dir;
-use store::{open_store, Store, StoreType};
-use util::{atomic_write, get_egid, get_euid};
+use crate::catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
+use crate::dir_workspace::{DirEntry, DirWorkspace};
+use crate::errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
+use crate::file_workspace::FileWorkspace;
+use crate::inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
+use crate::manifest::Manifest;
+use crate::populate_with_dir;
+use crate::store::{open_store, Store, StoreType};
+use crate::util::{atomic_write, get_egid, get_euid};
 
 mod handle;
 mod protocol;
@@ -73,7 +73,7 @@ pub fn start_engine_prebuilt(
         }
         info!("Engine event loop finished.");
         timer.stop();
-        quit_tx.send(());
+        quit_tx.send(()).map_err(|_| EngineError::Send).unwrap();
     });
 
     engine_hd.ping();
@@ -168,7 +168,7 @@ impl Workspace {
     }
 }
 
-pub(in engine) struct Engine {
+pub(in crate::engine) struct Engine {
     catalog: Box<dyn Catalog>,
     store: Rc<RefCell<Box<dyn Store>>>,
     workspace: Workspace,
@@ -262,7 +262,8 @@ impl RequestHandler<CreateFile> for Engine {
             .context(EngineError::FileCreate(
                 request.parent,
                 request.name.clone(),
-            )).map_err(Error::from)
+            ))
+            .map_err(Error::from)
     }
 }
 
@@ -297,12 +298,14 @@ impl RequestHandler<Rename> for Engine {
             &request.name,
             request.new_parent,
             &request.new_name,
-        ).context(EngineError::Rename(
+        )
+        .context(EngineError::Rename(
             request.parent,
             request.name.clone(),
             request.new_parent,
             request.new_name.clone(),
-        )).map_err(Error::from)
+        ))
+        .map_err(Error::from)
     }
 }
 
@@ -331,7 +334,7 @@ impl RequestHandler<StopEngine> for Engine {
 impl Engine {
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
     //       and can't be used inside Entry::or_insert_with
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn get_inode(&mut self, index: u64) -> DenebResult<INode> {
         if !self.workspace.inodes.contains_key(&index) {
             let inode = self.catalog.get_inode(index)?;
@@ -393,7 +396,7 @@ impl Engine {
 
     // Note: We perform inefficient double lookups since Catalog::get_dir_entries returns
     //       a Result and can't be used inside Entry::or_insert_with
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.workspace.dirs.contains_key(&index) {
             let entries = self
@@ -406,7 +409,8 @@ impl Engine {
                     } else {
                         panic!("Fatal engine error. Could not retrieve inode {}", idx)
                     }
-                }).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
             self.workspace
                 .dirs
                 .insert(index, DirWorkspace::new(&entries));
@@ -429,13 +433,13 @@ impl Engine {
 
     // Note: We perform inefficient double lookups since Catalog::get_inode returns
     //       a Result and can't be used inside Entry::or_insert_with
-    #[cfg_attr(feature = "cargo-clippy", allow(map_entry))]
+    #[allow(clippy::map_entry)]
     fn open_file(&mut self, index: u64, _flags: u32) -> DenebResult<()> {
         if !self.workspace.files.contains_key(&index) {
             let inode = self.get_inode(index)?;
             self.workspace
                 .files
-                .insert(index, FileWorkspace::new(&inode, &self.store)?);
+                .insert(index, FileWorkspace::try_new(&inode, &self.store)?);
         }
         Ok(())
     }
@@ -503,7 +507,7 @@ impl Engine {
         self.workspace.inodes.insert(index, inode.clone());
 
         // Create new file workspace
-        let ws = FileWorkspace::new(&inode, &self.store)?;
+        let ws = FileWorkspace::try_new(&inode, &self.store)?;
         self.workspace.files.insert(index, ws);
 
         // Update the parent directory workspace
