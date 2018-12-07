@@ -435,7 +435,7 @@ impl Engine {
             let inode = self.get_inode(index)?;
             self.workspace
                 .files
-                .insert(index, FileWorkspace::new(&inode, &self.store)?);
+                .insert(index, FileWorkspace::try_new(&inode, &self.store)?);
         }
         Ok(())
     }
@@ -503,7 +503,7 @@ impl Engine {
         self.workspace.inodes.insert(index, inode.clone());
 
         // Create new file workspace
-        let ws = FileWorkspace::new(&inode, &self.store)?;
+        let ws = FileWorkspace::try_new(&inode, &self.store)?;
         self.workspace.files.insert(index, ws);
 
         // Update the parent directory workspace

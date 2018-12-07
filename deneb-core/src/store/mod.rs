@@ -25,7 +25,7 @@ pub fn open_store<P: AsRef<Path>>(
 ) -> DenebResult<Box<dyn Store>> {
     Ok(match store_type {
         StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
-        StoreType::OnDisk => Box::new(disk::DiskStore::new(dir.as_ref(), chunk_size)?),
+        StoreType::OnDisk => Box::new(disk::DiskStore::try_new(dir.as_ref(), chunk_size)?),
     })
 }
 

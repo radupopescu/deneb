@@ -23,7 +23,7 @@ pub(crate) struct MmapChunk {
 }
 
 impl MmapChunk {
-    pub(crate) fn new(
+    pub(crate) fn try_new(
         digest: Digest,
         size: usize,
         disk_path: PathBuf,
@@ -117,7 +117,7 @@ mod tests {
                 .open(&fname);
             if let Ok(mut f) = f {
                 let _ = f.write(MSG);
-                let cnk = MmapChunk::new(hash(MSG), MSG.len(), fname.clone(), true);
+                let cnk = MmapChunk::try_new(hash(MSG), MSG.len(), fname.clone(), true);
                 if let Ok(cnk) = cnk {
                     let cnk = Box::new(cnk);
                     assert_eq!(MSG, cnk.get_slice());

@@ -32,11 +32,11 @@ impl FileWorkspace {
     /// `inode`. The function takes a reference-counted pointer to a
     /// `Store` object which is used by the underlying `Chunks` making
     /// up the lower, immutable, layer
-    pub(crate) fn new(
+    pub(crate) fn try_new(
         inode: &INode,
         store: &Rc<RefCell<Box<dyn Store>>>,
     ) -> DenebResult<FileWorkspace> {
-        let lower = Lower::new(inode.chunks.as_slice(), store)?;
+        let lower = Lower::try_new(inode.chunks.as_slice(), store)?;
         let piece_table = inode
             .chunks
             .iter()
@@ -254,7 +254,7 @@ struct Lower {
 
 impl Lower {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
-    fn new(
+    fn try_new(
         chunk_descriptors: &[ChunkDescriptor],
         store: &Rc<RefCell<Box<dyn Store>>>,
     ) -> DenebResult<Lower> {
@@ -348,7 +348,7 @@ mod tests {
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))
+        FileWorkspace::try_new(&inode, &Rc::new(RefCell::new(store)))
     }
 
     #[test]
@@ -372,7 +372,7 @@ mod tests {
             attributes: FileAttributes::default(),
             chunks: vec![],
         };
-        let mut ws = FileWorkspace::new(&inode, &Rc::new(RefCell::new(store)))?;
+        let mut ws = FileWorkspace::try_new(&inode, &Rc::new(RefCell::new(store)))?;
 
         assert_eq!(ws.write_at(0, b"written"), (7, 7));
 
