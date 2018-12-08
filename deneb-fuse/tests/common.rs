@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use failure::bail;
 use quickcheck::{Arbitrary, Gen, RngCore};
 use rand::{thread_rng, Rng};
 use uuid::{adapter::Simple, Uuid};

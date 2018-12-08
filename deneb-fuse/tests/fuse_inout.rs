@@ -1,5 +1,4 @@
 extern crate copy_dir;
-#[macro_use]
 extern crate failure;
 extern crate log;
 extern crate quickcheck;
