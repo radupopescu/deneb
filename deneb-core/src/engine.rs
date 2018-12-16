@@ -14,15 +14,17 @@ use std::{
     time::Duration,
 };
 
-use crate::catalog::{open_catalog, Catalog, CatalogType, IndexGenerator};
-use crate::dir_workspace::{DirEntry, DirWorkspace};
-use crate::errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError};
-use crate::file_workspace::FileWorkspace;
-use crate::inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode};
-use crate::manifest::Manifest;
-use crate::populate_with_dir;
-use crate::store::{open_store, Store, StoreType};
-use crate::util::{atomic_write, get_egid, get_euid};
+use crate::{
+    catalog::{open_catalog, Catalog, CatalogType, IndexGenerator},
+    dir_workspace::{DirEntry, DirWorkspace},
+    errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError},
+    file_workspace::FileWorkspace,
+    inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode},
+    manifest::Manifest,
+    populate_with_dir,
+    store::{open_store, Store, StoreType},
+    util::{atomic_write, get_egid, get_euid},
+};
 
 mod handle;
 mod protocol;
@@ -32,9 +34,8 @@ mod timer;
 use self::{
     protocol::{HandlerProxy, Request, RequestHandler},
     requests::{
-        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
-        ReleaseDir, ReleaseFile, RemoveDir, Rename, SetAttr, StopEngine, TryCommit, Unlink,
-        WriteData,
+        Commit, CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
+        ReleaseDir, ReleaseFile, RemoveDir, Rename, SetAttr, StopEngine, Unlink, WriteData,
     },
     timer::{Resolution, Timer},
 };
@@ -62,7 +63,7 @@ pub fn start_engine_prebuilt(
         };
         let mut timer = Timer::new(Resolution::Second);
         timer.schedule(Duration::from_secs(5), true, move || {
-            timer_engine_hd.try_commit();
+            timer_engine_hd.commit();
         });
         info!("Starting engine event loop");
         for request in &cmd_rx {
@@ -76,7 +77,7 @@ pub fn start_engine_prebuilt(
         quit_tx.send(()).map_err(|_| EngineError::Send).unwrap();
     });
 
-    engine_hd.ping();
+    let _ = engine_hd.ping();
 
     Ok(engine_hd)
 }
@@ -309,17 +310,17 @@ impl RequestHandler<Rename> for Engine {
     }
 }
 
-impl RequestHandler<TryCommit> for Engine {
-    fn handle(&mut self, _request: &TryCommit) -> DenebResult<()> {
+impl RequestHandler<Commit> for Engine {
+    fn handle(&mut self, _request: &Commit) -> DenebResult<()> {
         trace!("Engine will commit workspace");
         Ok(())
     }
 }
 
 impl RequestHandler<Ping> for Engine {
-    fn handle(&mut self, _request: &Ping) -> DenebResult<()> {
+    fn handle(&mut self, _request: &Ping) -> DenebResult<String> {
         debug!("Engine received ping request.");
-        Ok(())
+        Ok("Pong".to_string())
     }
 }
 

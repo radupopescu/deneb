@@ -161,16 +161,16 @@ impl Request for Rename {
     type Reply = ();
 }
 
-pub(in crate::engine) struct TryCommit;
+pub(in crate::engine) struct Commit;
 
-impl Request for TryCommit {
+impl Request for Commit {
     type Reply = ();
 }
 
 pub(in crate::engine) struct Ping;
 
 impl Request for Ping {
-    type Reply = ();
+    type Reply = String;
 }
 
 pub(in crate::engine) struct StopEngine;

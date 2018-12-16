@@ -37,6 +37,7 @@ required-features = ["fuse_module"]
 deneb-core = { path = "deneb-core" }
 deneb-fuse = { path = "deneb-fuse", optional = true }
 
+bincode = "^1.0.0"
 directories = "^1.0.0"
 dirs = "^1.0.0"
 failure = "^0.1.0"

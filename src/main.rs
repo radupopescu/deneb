@@ -16,6 +16,7 @@ use deneb_fuse::fs::Fs;
 use deneb::{
     app::App,
     logging::init_logger,
+    talk::{listen, Command},
     util::{block_signals, fork, set_signal_handler},
 };
 
@@ -60,6 +61,17 @@ fn main() -> DenebResult<()> {
         app.settings.chunk_size,
         1000,
     )?;
+
+    // Start a listener for commands received from deneb-cli
+    let handle2 = handle.clone();
+    listen(app.directories.workspace.join("cmd.sock"), move |cmd| {
+        match cmd {
+            Command::Status => {}
+            Command::Ping => return handle2.ping(),
+            Command::Commit => {}
+        }
+        Ok("".to_string())
+    })?;
 
     let options = Fs::make_options(&[
         "negative_vncache".to_string(),

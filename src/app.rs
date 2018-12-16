@@ -4,8 +4,8 @@ use std::{fs::create_dir_all, path::PathBuf};
 
 use deneb_core::errors::DenebResult;
 
-mod params;
-use self::params::{CommandLineParameters, ConfigFileParameters};
+mod config;
+use self::config::{CommandLine, ConfigFile};
 
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304;
@@ -19,7 +19,7 @@ impl App {
     pub fn init() -> DenebResult<App> {
         // Read application parameters, configure directories etc.
 
-        let mut cmd_line = CommandLineParameters::read();
+        let mut cmd_line = CommandLine::read();
         let mut directories = Directories::with_name(&cmd_line.instance_name)?;
 
         if let Some(config_dir) = cmd_line.config_dir.clone() {
@@ -28,7 +28,7 @@ impl App {
         }
 
         let config_file_name = directories.config.join("config.toml");
-        let mut cfg_file = ConfigFileParameters::load(&config_file_name)?;
+        let mut cfg_file = ConfigFile::load(&config_file_name)?;
 
         let settings = Settings::merge(&mut cmd_line, &mut cfg_file, &mut directories);
 
@@ -62,8 +62,8 @@ pub struct Settings {
 
 impl Settings {
     fn merge(
-        cmd_line: &mut CommandLineParameters,
-        cfg_file: &mut ConfigFileParameters,
+        cmd_line: &mut CommandLine,
+        cfg_file: &mut ConfigFile,
         dirs: &mut Directories,
     ) -> Settings {
         let instance_name = cmd_line.instance_name.clone();
@@ -119,7 +119,7 @@ pub struct Directories {
 }
 
 impl Directories {
-    fn with_name(instance_name: &str) -> DenebResult<Directories> {
+    pub fn with_name(instance_name: &str) -> DenebResult<Directories> {
         let dirs = ProjectDirs::from(qualifier(), organization(), application())
             .ok_or_else(|| err_msg("Unable to create application directories."))?;
 

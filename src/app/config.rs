@@ -10,7 +10,7 @@ use deneb_core::errors::{DenebError, DenebResult};
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Flew into the light of Deneb")]
-pub(super) struct CommandLineParameters {
+pub(super) struct CommandLine {
     #[structopt(
         short = "n",
         long = "instance_name",
@@ -58,28 +58,28 @@ pub(super) struct CommandLineParameters {
     pub foreground: bool,
 }
 
-impl CommandLineParameters {
-    pub(super) fn read() -> CommandLineParameters {
-        CommandLineParameters::from_args()
+impl CommandLine {
+    pub(super) fn read() -> CommandLine {
+        CommandLine::from_args()
     }
 }
 
 #[derive(Deserialize, Serialize)]
-pub(super) struct ConfigFileParameters {
+pub(super) struct ConfigFile {
     pub(super) mount_point: Option<PathBuf>,
     pub(super) log_level: Option<LevelFilter>,
     pub(super) chunk_size: Option<usize>,
 }
 
-impl ConfigFileParameters {
-    pub(super) fn load<P: AsRef<Path>>(file_name: P) -> DenebResult<ConfigFileParameters> {
+impl ConfigFile {
+    pub(super) fn load<P: AsRef<Path>>(file_name: P) -> DenebResult<ConfigFile> {
         let cfg = if file_name.as_ref().exists() {
             let mut f = File::open(file_name)?;
             let mut contents = String::new();
             f.read_to_string(&mut contents)?;
             toml::from_str(&contents)?
         } else {
-            ConfigFileParameters {
+            ConfigFile {
                 mount_point: None,
                 log_level: None,
                 chunk_size: None,

@@ -8,9 +8,9 @@ use crate::inode::{FileAttributeChanges, FileAttributes, FileType};
 use super::{
     protocol::{call, cast, RequestChannel},
     requests::{
-        CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
-        ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine, TryCommit,
-        Unlink, WriteData,
+        Commit, CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
+        ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine, Unlink,
+        WriteData,
     },
     Engine,
 };
@@ -200,12 +200,12 @@ impl Handle {
         )
     }
 
-    pub fn try_commit(&self) {
-        cast(TryCommit, &self.cmd_ch);
+    pub fn commit(&self) {
+        cast(Commit, &self.cmd_ch);
     }
 
-    pub fn ping(&self) {
-        cast(Ping, &self.cmd_ch);
+    pub fn ping(&self) -> DenebResult<String> {
+        call(Ping, &self.cmd_ch)
     }
 
     pub fn stop_engine(&self) {
