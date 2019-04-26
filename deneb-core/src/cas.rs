@@ -121,7 +121,7 @@ mod tests {
     fn digest_to_string_and_back() {
         let digest = hash("some_key".as_ref());
         let serialized = digest.to_string();
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         assert_eq!(serialized, "41bcc5cb17c49e80e1f20fde666dedad51bc35f146051da2689419948c07a4974e65be08e41fc194126a3e162aee9165271a32119e0cd369e587cf519a68e293");
 
         let deserialized = digest_from_slice(serialized.as_bytes());
