@@ -1,18 +1,19 @@
-use crossbeam_channel::Receiver;
-
-use std::{ffi::OsStr, path::PathBuf};
-
-use crate::errors::DenebResult;
-use crate::inode::{FileAttributeChanges, FileAttributes, FileType};
-
-use super::{
-    protocol::{call, cast, RequestChannel},
-    requests::{
-        Commit, CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData, ReadDir,
-        ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine, Unlink,
-        WriteData,
+use {
+    super::{
+        protocol::{call, cast, RequestChannel},
+        requests::{
+            Commit, CreateDir, CreateFile, GetAttr, Lookup, OpenDir, OpenFile, Ping, ReadData,
+            ReadDir, ReleaseDir, ReleaseFile, RemoveDir, Rename, RequestId, SetAttr, StopEngine,
+            Unlink, WriteData,
+        },
+        Engine,
     },
-    Engine,
+    crate::{
+        errors::DenebResult,
+        inode::{FileAttributeChanges, FileAttributes, FileType},
+    },
+    crossbeam_channel::Receiver,
+    std::{ffi::OsStr, path::PathBuf},
 };
 
 #[derive(Clone)]

@@ -1,17 +1,20 @@
-use lru::LruCache;
-use nix::sys::stat::stat;
-
-use std::cell::RefCell;
-use std::fs::create_dir_all;
-use std::sync::Arc;
-
-use std::path::{Path, PathBuf};
-
-use crate::cas::Digest;
-use crate::errors::{DenebResult, StoreError};
-use crate::util::atomic_write;
-
-use super::{Chunk, MmapChunk, Store};
+use {
+    super::{Chunk, MmapChunk, Store},
+    crate::{
+        cas::Digest,
+        errors::{DenebResult, StoreError},
+        util::atomic_write,
+    },
+    log::trace,
+    lru::LruCache,
+    nix::sys::stat::stat,
+    std::{
+        cell::RefCell,
+        fs::create_dir_all,
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
+};
 
 const OBJECT_PATH: &str = "data";
 const PREFIX_SIZE: usize = 2;

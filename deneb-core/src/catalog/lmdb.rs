@@ -1,16 +1,16 @@
-use ::lmdb::{
-    Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError, Transaction,
-    WriteFlags,
+use {
+    super::*,
+    crate::errors::CatalogError,
+    ::lmdb::{
+        Database, DatabaseFlags, Environment, EnvironmentFlags, Error as LmdbError, Transaction,
+        WriteFlags,
+    },
+    bincode::{deserialize, serialize},
+    failure::ResultExt,
+    lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat},
+    log::info,
+    std::{collections::BTreeMap, str::from_utf8},
 };
-use bincode::{deserialize, serialize};
-use failure::ResultExt;
-use lmdb_sys::{mdb_env_info, mdb_env_stat, MDB_envinfo, MDB_stat};
-
-use std::collections::BTreeMap;
-use std::str::from_utf8;
-
-use super::*;
-use crate::errors::CatalogError;
 
 const MAX_CATALOG_SIZE: usize = 100 * 1024 * 1024; // 100MB
 const MAX_CATALOG_READERS: u32 = 100;

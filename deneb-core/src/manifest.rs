@@ -1,13 +1,10 @@
-use time::Tm;
-use toml::{from_str, to_string};
-
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
-
-use crate::cas::Digest;
-use crate::errors::DenebResult;
-use crate::util::atomic_write;
+use {
+    crate::{cas::Digest, errors::DenebResult, util::atomic_write},
+    serde::{Deserialize, Serialize},
+    std::{fs::File, io::Read, path::Path},
+    time::Tm,
+    toml::{from_str, to_string},
+};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {

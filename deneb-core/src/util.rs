@@ -1,15 +1,17 @@
-use nix::{
-    libc::{getegid, geteuid, gid_t, uid_t},
-    unistd::mkstemp,
+use {
+    crate::errors::{DenebResult, UnixError},
+    nix::{
+        libc::{getegid, geteuid, gid_t, uid_t},
+        unistd::mkstemp,
+    },
+    std::{
+        fs::{remove_file, rename, File},
+        io::Write,
+        os::unix::io::FromRawFd,
+        path::{Path, PathBuf},
+    },
+    time::precise_time_ns,
 };
-use time::precise_time_ns;
-
-use std::fs::{remove_file, rename, File};
-use std::io::Write;
-use std::os::unix::io::FromRawFd;
-use std::path::{Path, PathBuf};
-
-use crate::errors::{DenebResult, UnixError};
 
 /// Atomically writes a buffer to a file
 ///

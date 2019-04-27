@@ -1,19 +1,9 @@
-extern crate copy_dir;
-extern crate failure;
-extern crate log;
-extern crate quickcheck;
-extern crate rand;
-extern crate tempdir;
-extern crate uuid;
-
-extern crate deneb_core;
-extern crate deneb_fuse;
-
-use copy_dir::copy_dir;
-use quickcheck::{QuickCheck, StdGen};
-use tempdir::TempDir;
-
-use std::{fs::create_dir_all, path::Path};
+use {
+    copy_dir::copy_dir,
+    quickcheck::{QuickCheck, StdGen},
+    std::{fs::create_dir_all, path::Path},
+    tempdir::TempDir,
+};
 
 mod common;
 

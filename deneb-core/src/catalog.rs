@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-
-use crate::errors::DenebResult;
-use crate::inode::INode;
+use {
+    crate::{errors::DenebResult, inode::INode},
+    std::path::{Path, PathBuf},
+};
 
 mod lmdb;
 mod mem;

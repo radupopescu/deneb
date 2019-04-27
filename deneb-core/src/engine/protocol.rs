@@ -1,7 +1,8 @@
-use crossbeam_channel::{bounded as channel, Sender};
-use std::marker::PhantomData;
-
-use crate::errors::{DenebResult, EngineError};
+use {
+    crate::errors::{DenebResult, EngineError},
+    crossbeam_channel::{bounded as channel, Sender},
+    std::marker::PhantomData,
+};
 
 pub trait Request: Send {
     type Reply: Send;

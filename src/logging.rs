@@ -1,21 +1,22 @@
-use failure::err_msg;
-use log::LevelFilter;
-use log4rs::{
-    append::{
-        console::ConsoleAppender,
-        rolling_file::{
-            policy::compound::{
-                roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy,
+use {
+    deneb_core::errors::DenebResult,
+    failure::err_msg,
+    log::LevelFilter,
+    log4rs::{
+        append::{
+            console::ConsoleAppender,
+            rolling_file::{
+                policy::compound::{
+                    roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger,
+                    CompoundPolicy,
+                },
+                RollingFileAppender,
             },
-            RollingFileAppender,
         },
+        config::{Appender, Config, Root},
     },
-    config::{Appender, Config, Root},
+    std::path::Path,
 };
-
-use std::path::Path;
-
-use deneb_core::errors::DenebResult;
 
 const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10 MB
 const MAX_NUM_LOGS: u32 = 5;

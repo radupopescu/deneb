@@ -1,6 +1,7 @@
-use std::path::{Path, PathBuf};
-
-use crate::inode::FileType;
+use {
+    crate::inode::FileType,
+    std::path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct DirWorkspace {

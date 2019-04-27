@@ -1,12 +1,16 @@
-use nix::libc::mode_t;
-use nix::sys::stat::{FileStat, SFlag};
-use time::Timespec;
-
-use std::cmp::{max, min};
-use std::i32;
-use std::u16;
-
-use crate::cas::Digest;
+use {
+    crate::cas::Digest,
+    nix::{
+        libc::mode_t,
+        sys::stat::{FileStat, SFlag},
+    },
+    serde::{Deserialize, Serialize},
+    std::{
+        cmp::{max, min},
+        i32, u16,
+    },
+    time::Timespec,
+};
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum FileType {

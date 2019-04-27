@@ -1,11 +1,11 @@
-use structopt::StructOpt;
-
-use deneb::{
-    app::Directories,
-    talk::{ask, Command},
+use {
+    structopt::StructOpt,
+    deneb::{
+        app::Directories,
+        talk::{ask, Command},
+    },
+    deneb_core::errors::DenebResult,
 };
-
-use deneb_core::errors::DenebResult;
 
 #[derive(StructOpt)]
 #[structopt(about = "Deneb CLI tool")]

@@ -1,9 +1,13 @@
-use {log::LevelFilter, structopt::StructOpt, toml};
-
-use std::{
-    fs::{File, OpenOptions},
-    io::{Read, Write},
-    path::{Path, PathBuf},
+use {
+    log::LevelFilter,
+    serde::{Deserialize, Serialize},
+    std::{
+        fs::{File, OpenOptions},
+        io::{Read, Write},
+        path::{Path, PathBuf},
+    },
+    structopt::StructOpt,
+    toml,
 };
 
 use deneb_core::errors::{DenebError, DenebResult};
@@ -54,7 +58,10 @@ pub(super) struct CommandLine {
         help = "Force unmount the file system on exit"
     )]
     pub force_unmount: bool,
-    #[structopt(long = "auto_commit_interval", help = "Auto commit interval in seconds (0 means disabled)")]
+    #[structopt(
+        long = "auto_commit_interval",
+        help = "Auto commit interval in seconds (0 means disabled)"
+    )]
     pub auto_commit_interval: Option<usize>,
     #[structopt(long = "foreground", help = "Stay in the foreground, don't fork")]
     pub foreground: bool,

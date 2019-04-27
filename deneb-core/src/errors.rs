@@ -1,8 +1,9 @@
-use failure::Error;
-use nix;
-
-use std::ffi::OsString;
-use std::path::PathBuf;
+use {
+    failure::{Error, Fail},
+    log::error,
+    nix,
+    std::{ffi::OsString, path::PathBuf},
+};
 
 pub type DenebResult<T> = ::std::result::Result<T, ::failure::Error>;
 

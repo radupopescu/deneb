@@ -1,25 +1,17 @@
-extern crate deneb;
-extern crate failure;
-#[macro_use]
-extern crate log;
-
-extern crate deneb_core;
-extern crate deneb_fuse;
-
-use crossbeam_channel::bounded as channel;
-
-use failure::ResultExt;
-
-use deneb_core::{
-    catalog::CatalogType, engine::start_engine, errors::DenebResult, store::StoreType,
-};
-use deneb_fuse::fs::Fs;
-
-use deneb::{
-    app::App,
-    logging::init_logger,
-    talk::{listen, Command},
-    util::{block_signals, fork, set_signal_handler},
+use {
+    crossbeam_channel::bounded as channel,
+    deneb::{
+        app::App,
+        logging::init_logger,
+        talk::{listen, Command},
+        util::{block_signals, fork, set_signal_handler},
+    },
+    deneb_core::{
+        catalog::CatalogType, engine::start_engine, errors::DenebResult, store::StoreType,
+    },
+    deneb_fuse::fs::Fs,
+    failure::ResultExt,
+    log::info,
 };
 
 fn main() -> DenebResult<()> {

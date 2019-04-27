@@ -1,14 +1,12 @@
 use {
     crossbeam_channel::Sender,
+    deneb_core::errors::UnixError,
     nix::{
         sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal},
         unistd::{fork as nix_fork, ForkResult},
     },
+    std::thread::{spawn, JoinHandle},
 };
-
-use std::thread::{spawn, JoinHandle};
-
-use deneb_core::errors::UnixError;
 
 pub fn block_signals() -> Result<(), UnixError> {
     let mut sigs = SigSet::empty();

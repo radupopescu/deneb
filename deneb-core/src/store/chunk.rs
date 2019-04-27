@@ -1,8 +1,9 @@
-use memmap::Mmap;
-
-use std::{fs::File, path::PathBuf};
-
-use crate::{cas::Digest, errors::DenebResult};
+use {
+    crate::{cas::Digest, errors::DenebResult},
+    log::trace,
+    memmap::Mmap,
+    std::{fs::File, path::PathBuf},
+};
 
 /// An trait for accessing the contents of chunks stored in a repository
 ///

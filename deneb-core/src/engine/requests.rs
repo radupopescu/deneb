@@ -1,8 +1,8 @@
-use std::{ffi::OsString, path::PathBuf};
-
-use crate::inode::{FileAttributeChanges, FileAttributes, FileType};
-
-use super::protocol::Request;
+use {
+    super::protocol::Request,
+    crate::inode::{FileAttributeChanges, FileAttributes, FileType},
+    std::{ffi::OsString, path::PathBuf},
+};
 
 pub struct RequestId {
     pub unique_id: u64,

@@ -1,40 +1,17 @@
-extern crate bincode;
-extern crate crossbeam_channel;
-extern crate data_encoding;
-#[macro_use]
-extern crate failure;
-extern crate lmdb;
-extern crate lmdb_sys;
-#[macro_use]
-extern crate log;
-extern crate lru;
-extern crate memmap;
-extern crate nix;
-extern crate rust_sodium;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate time;
-extern crate toml;
-
-#[cfg(test)]
-extern crate quickcheck;
-#[cfg(test)]
-extern crate rand;
-#[cfg(test)]
-extern crate tempdir;
-
-use failure::ResultExt;
-
-use nix::sys::stat::lstat;
-
-use std::fs::{read_dir, File};
-use std::path::Path;
-
-use self::catalog::{Catalog, IndexGenerator};
-use self::errors::{DenebError, DenebResult};
-use self::inode::{FileAttributes, INode};
-use self::store::Store;
+use {
+    crate::{
+        catalog::{Catalog, IndexGenerator},
+        errors::{DenebError, DenebResult},
+        inode::{FileAttributes, INode},
+        store::Store,
+    },
+    failure::{Fail, ResultExt},
+    nix::sys::stat::lstat,
+    std::{
+        fs::{read_dir, File},
+        path::Path,
+    },
+};
 
 pub mod cas;
 pub mod catalog;

@@ -1,8 +1,3 @@
-use fuse::{
-    mount, spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate,
-    ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite, Request,
-};
-use nix::libc::{EACCES, EINVAL, ENOENT};
 #[cfg(target_os = "linux")]
 use nix::mount::{umount2, MntFlags};
 #[cfg(any(target_os = "macos", target_os = "freebsd"))]
@@ -10,18 +5,24 @@ use nix::{
     libc::{unmount, MNT_FORCE},
     NixPath,
 };
-use time::Timespec;
-
-use std::{
-    ffi::OsStr,
-    iter::Iterator,
-    path::{Path, PathBuf},
-};
-
-use deneb_core::{
-    engine::{Handle, RequestId},
-    errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
-    inode::{FileAttributeChanges, FileAttributes, FileType as FT},
+use {
+    deneb_core::{
+        engine::{Handle, RequestId},
+        errors::{print_error_with_causes, DenebResult, EngineError, UnixError},
+        inode::{FileAttributeChanges, FileAttributes, FileType as FT},
+    },
+    fuse::{
+        mount, spawn_mount, BackgroundSession, FileAttr, FileType, Filesystem, ReplyAttr,
+        ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyWrite,
+        Request,
+    },
+    nix::libc::{EACCES, EINVAL, ENOENT},
+    std::{
+        ffi::OsStr,
+        iter::Iterator,
+        path::{Path, PathBuf},
+    },
+    time::Timespec,
 };
 
 pub struct Session<'a> {

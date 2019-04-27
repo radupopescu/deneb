@@ -1,11 +1,14 @@
-use {directories::ProjectDirs, dirs::home_dir, failure::err_msg, log::LevelFilter};
-
-use std::{fs::create_dir_all, path::PathBuf};
-
-use deneb_core::errors::DenebResult;
+use {
+    self::config::{CommandLine, ConfigFile},
+    deneb_core::errors::DenebResult,
+    directories::ProjectDirs,
+    dirs::home_dir,
+    failure::err_msg,
+    log::{info, LevelFilter},
+    std::{fs::create_dir_all, path::PathBuf},
+};
 
 mod config;
-use self::config::{CommandLine, ConfigFile};
 
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304;

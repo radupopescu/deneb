@@ -1,14 +1,15 @@
-use std::io::Read;
-use std::path::Path;
-use std::sync::Arc;
+use {
+    crate::{
+        cas::{hash, read_chunks, Digest},
+        errors::DenebResult,
+        inode::ChunkDescriptor,
+    },
+    std::{io::Read, path::Path, sync::Arc},
+};
 
-use crate::cas::{hash, read_chunks, Digest};
-use crate::errors::DenebResult;
-use crate::inode::ChunkDescriptor;
-
-mod chunk;
 pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};
 
+mod chunk;
 mod disk;
 mod mem;
 

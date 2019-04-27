@@ -1,12 +1,13 @@
-use data_encoding::HEXLOWER;
-use rust_sodium::crypto::hash::hash as sodium_hash;
-use rust_sodium::crypto::hash::sha512::Digest as SodiumDigest;
-use serde::de::{Error, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use std::fmt::{Display, Formatter, Result as FmtResult};
-
-use crate::errors::{DenebError, DenebResult};
+use {
+    crate::errors::{DenebError, DenebResult},
+    data_encoding::HEXLOWER,
+    rust_sodium::crypto::hash::{hash as sodium_hash, sha512::Digest as SodiumDigest},
+    serde::{
+        de::{Error, Visitor},
+        Deserialize, Deserializer, Serialize, Serializer,
+    },
+    std::fmt::{Display, Formatter, Result as FmtResult},
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Digest(SodiumDigest);

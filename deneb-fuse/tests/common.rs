@@ -1,17 +1,21 @@
 #![allow(dead_code)]
 
-use failure::bail;
-use quickcheck::{Arbitrary, Gen, RngCore};
-use rand::{thread_rng, Rng};
-use uuid::{adapter::Simple, Uuid};
-
-use std::fs::{create_dir_all, remove_dir_all, File};
-use std::io::{BufReader, Read};
-use std::path::{Path, PathBuf};
-
-use deneb_core::cas::hash;
-use deneb_core::errors::DenebResult;
-use deneb_core::util::atomic_write;
+use {
+    deneb_core::{
+        cas::hash,
+        errors::DenebResult,
+        util::atomic_write,
+    },
+    failure::bail,
+    quickcheck::{Arbitrary, Gen, RngCore},
+    rand::{thread_rng, Rng},
+    std::{
+        fs::{create_dir_all, remove_dir_all, File},
+        io::{BufReader, Read},
+        path::{Path, PathBuf},
+    },
+    uuid::{adapter::Simple, Uuid},
+};
 
 #[derive(Clone, Debug)]
 pub enum DirEntry {

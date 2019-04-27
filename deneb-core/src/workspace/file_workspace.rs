@@ -1,10 +1,12 @@
-use std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc};
-
-use crate::{
-    cas::Digest,
-    errors::DenebResult,
-    inode::{ChunkDescriptor, INode},
-    store::{Chunk, Store},
+use {
+    crate::{
+        cas::Digest,
+        errors::DenebResult,
+        inode::{ChunkDescriptor, INode},
+        store::{Chunk, Store},
+    },
+    log::trace,
+    std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc},
 };
 
 /// A type which offers read/write operations on a file in the repository

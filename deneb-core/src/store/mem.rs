@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use crate::cas::Digest;
-use crate::errors::{DenebResult, StoreError};
-
-use super::{Chunk, MemChunk, Store};
+use {
+    super::{Chunk, MemChunk, Store},
+    crate::{
+        cas::Digest,
+        errors::{DenebResult, StoreError},
+    },
+    std::{collections::HashMap, sync::Arc},
+};
 
 #[derive(Default)]
 pub(super) struct MemStore {

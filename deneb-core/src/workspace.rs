@@ -12,6 +12,7 @@ use {
         util::{get_egid, get_euid},
     },
     failure::ResultExt,
+    log::info,
     nix::libc::mode_t,
     std::{
         cell::RefCell,

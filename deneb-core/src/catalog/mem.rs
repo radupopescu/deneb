@@ -1,10 +1,12 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-
-use crate::inode::INode;
-
-use super::*;
-use crate::errors::CatalogError;
+use {
+    super::*,
+    crate::{errors::CatalogError, inode::INode},
+    log::info,
+    std::{
+        collections::HashMap,
+        path::{Path, PathBuf},
+    },
+};
 
 #[derive(Default)]
 pub(super) struct MemCatalog {

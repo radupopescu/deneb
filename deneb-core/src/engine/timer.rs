@@ -1,12 +1,12 @@
-use crossbeam_channel::{unbounded, Sender};
-
-use std::{
-    collections::{HashMap, LinkedList},
-    thread::{sleep, spawn, JoinHandle},
-    time::{Duration, Instant},
+use {
+    crate::errors::EngineError,
+    crossbeam_channel::{unbounded, Sender},
+    std::{
+        collections::{HashMap, LinkedList},
+        thread::{sleep, spawn, JoinHandle},
+        time::{Duration, Instant},
+    },
 };
-
-use crate::errors::EngineError;
 
 /// Resolution of the timer
 #[allow(dead_code)]
