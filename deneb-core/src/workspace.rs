@@ -5,11 +5,13 @@ pub(in crate) use file_workspace::*;
 
 use {
     crate::{
-        catalog::{Catalog, IndexGenerator},
+        catalog::{open_catalog, Catalog, CatalogType, IndexGenerator},
         errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError},
         inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode},
-        store::Store,
-        util::{get_egid, get_euid},
+        manifest::Manifest,
+        populate_with_dir,
+        store::{open_store, Store, StoreType},
+        util::{atomic_write, get_egid, get_euid},
     },
     failure::ResultExt,
     log::info,
@@ -18,6 +20,7 @@ use {
         cell::RefCell,
         collections::{HashMap, HashSet},
         ffi::OsStr,
+        fs::{create_dir_all, File},
         path::PathBuf,
         rc::Rc,
     },
@@ -36,19 +39,70 @@ pub(in crate) struct Workspace {
 
 impl Workspace {
     pub(in crate) fn new(
-        catalog: Box<dyn Catalog>,
-        store: Rc<RefCell<Box<dyn Store>>>,
-    ) -> Workspace {
+        catalog_type: CatalogType,
+        store_type: StoreType,
+        work_dir: PathBuf,
+        sync_dir: Option<PathBuf>,
+        chunk_size: usize,
+    ) -> DenebResult<Workspace> {
+        // Create an object store
+        let mut store = open_store(store_type, &work_dir, chunk_size)?;
+
+        let catalog_root = work_dir.join("scratch");
+        create_dir_all(catalog_root.as_path())?;
+        let catalog_path = catalog_root.join("current_catalog");
+        info!("Catalog path: {:?}", catalog_path);
+
+        let manifest_path = work_dir.to_path_buf().join("manifest");
+        info!("Manifest path: {:?}", manifest_path);
+
+        // Create the file metadata catalog and populate it with the contents of "sync_dir"
+        if let Some(sync_dir) = sync_dir {
+            {
+                //use std::ops::DerefMut;
+                let mut catalog = open_catalog(catalog_type, catalog_path.as_path(), true)?;
+                populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
+                info!(
+                    "Catalog populated with contents of {:?}",
+                    sync_dir.as_path()
+                );
+            }
+
+            // Save the generated catalog as a content-addressed chunk in the store.
+            let mut f = File::open(catalog_path.as_path())?;
+            let chunk_descriptor = store.put_file(&mut f)?;
+
+            // Create and save the repository manifest
+            let manifest = Manifest::new(chunk_descriptor.digest, None, now_utc());
+            manifest.save(manifest_path.as_path())?;
+        }
+
+        // Load the repository manifest
+        let manifest = Manifest::load(manifest_path.as_path())?;
+
+        // Get the catalog out of storage and open it
+        {
+            let root_hash = manifest.root_hash;
+            let chunk = store.get_chunk(&root_hash)?;
+            atomic_write(catalog_path.as_path(), chunk.get_slice())?;
+        }
+
+        let catalog = open_catalog(catalog_type, catalog_path.as_path(), false)?;
+        catalog.show_stats();
+
         let index_generator = IndexGenerator::starting_at(catalog.get_max_index());
-        Workspace {
+
+        let ws = Workspace {
             catalog,
-            store,
+            store: Rc::new(RefCell::new(store)),
             index_generator,
             dirs: HashMap::new(),
             files: HashMap::new(),
             inodes: HashMap::new(),
             deleted_inodes: HashSet::new(),
-        }
+        };
+
+        Ok(ws)
     }
 
     // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
@@ -95,7 +149,11 @@ impl Workspace {
         Ok(attrs)
     }
 
-    pub(in crate) fn lookup(&mut self, parent: u64, name: &OsStr) -> DenebResult<Option<FileAttributes>> {
+    pub(in crate) fn lookup(
+        &mut self,
+        parent: u64,
+        name: &OsStr,
+    ) -> DenebResult<Option<FileAttributes>> {
         let index = if let Some(ws) = self.dirs.get(&parent) {
             ws.get_entries()
                 .iter()
@@ -167,7 +225,12 @@ impl Workspace {
         ws.read_at(offset, size as usize)
     }
 
-    pub(in crate) fn write_data(&mut self, index: u64, offset: i64, data: &[u8]) -> DenebResult<u32> {
+    pub(in crate) fn write_data(
+        &mut self,
+        index: u64,
+        offset: i64,
+        data: &[u8],
+    ) -> DenebResult<u32> {
         let offset = ::std::cmp::max(offset, 0) as usize;
         let (written, new_size) = {
             let ws = self
@@ -233,7 +296,12 @@ impl Workspace {
         Ok((index, attributes))
     }
 
-    pub(in crate) fn create_dir(&mut self, parent: u64, name: &OsStr, mode: u32) -> DenebResult<FileAttributes> {
+    pub(in crate) fn create_dir(
+        &mut self,
+        parent: u64,
+        name: &OsStr,
+        mode: u32,
+    ) -> DenebResult<FileAttributes> {
         let index = self.index_generator.get_next();
 
         // Create new inode

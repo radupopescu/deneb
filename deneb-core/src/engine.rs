@@ -8,26 +8,19 @@ use {
         },
     },
     crate::{
-        catalog::{open_catalog, Catalog, CatalogType},
+        catalog::CatalogType,
         errors::{DenebResult, EngineError},
-        manifest::Manifest,
-        populate_with_dir,
-        store::{open_store, Store, StoreType},
-        util::atomic_write,
+        store::StoreType,
         workspace::Workspace,
     },
     crossbeam_channel::bounded as channel,
     failure::{Error, ResultExt},
     log::{debug, info},
     std::{
-        cell::RefCell,
-        fs::{create_dir_all, File},
-        path::{Path, PathBuf},
-        rc::Rc,
-        thread::spawn as tspawn,
+        path::PathBuf,
+        thread::{spawn, JoinHandle},
         time::Duration,
     },
-    time::now_utc,
     timer::{Resolution, Timer},
 };
 
@@ -39,9 +32,12 @@ mod requests;
 mod timer;
 
 /// Start engine with pre-built catalog and store
-pub fn start_engine_prebuilt(
-    catalog: Box<dyn Catalog>,
-    store: Box<dyn Store>,
+pub fn start_engine(
+    catalog_type: CatalogType,
+    store_type: StoreType,
+    work_dir: PathBuf,
+    sync_dir: Option<PathBuf>,
+    chunk_size: usize,
     cmd_queue_size: usize,
     auto_commit_interval: usize,
 ) -> DenebResult<Handle> {
@@ -49,9 +45,13 @@ pub fn start_engine_prebuilt(
     let (quit_tx, quit_rx) = channel(1);
     let engine_hd = Handle::new(cmd_tx, quit_rx);
     let timer_engine_hd = engine_hd.clone();
-    let _ = tspawn(move || {
+    let _: JoinHandle<DenebResult<()>> = spawn(move || {
+        let ws = Workspace::new(catalog_type, store_type, work_dir, sync_dir, chunk_size);
+        if ws.is_err() {
+            panic!("Could not initialize workspace. Engine will not start.");
+        }
         let mut engine = Engine {
-            workspace: Workspace::new(catalog, Rc::new(RefCell::new(store))),
+            workspace: ws?,
             stopped: false,
         };
         let timer = if auto_commit_interval > 0 {
@@ -79,81 +79,13 @@ pub fn start_engine_prebuilt(
             timer.stop();
         }
         quit_tx.send(()).map_err(|_| EngineError::Send).unwrap();
+
+        Ok(())
     });
 
     let _ = engine_hd.ping();
 
     Ok(engine_hd)
-}
-
-/// Start the engine using catalog and store builders
-pub fn start_engine(
-    catalog_type: CatalogType,
-    store_type: StoreType,
-    work_dir: &Path,
-    sync_dir: Option<PathBuf>,
-    chunk_size: usize,
-    cmd_queue_size: usize,
-    auto_commit_interval: usize,
-) -> DenebResult<Handle> {
-    let (catalog, store) = init(catalog_type, store_type, work_dir, sync_dir, chunk_size)?;
-
-    start_engine_prebuilt(catalog, store, cmd_queue_size, auto_commit_interval)
-}
-
-fn init(
-    catalog_type: CatalogType,
-    store_type: StoreType,
-    work_dir: &Path,
-    sync_dir: Option<PathBuf>,
-    chunk_size: usize,
-) -> DenebResult<(Box<dyn Catalog>, Box<dyn Store>)> {
-    // Create an object store
-    let mut store = open_store(store_type, work_dir, chunk_size)?;
-
-    let catalog_root = work_dir.to_path_buf().join("scratch");
-    create_dir_all(catalog_root.as_path())?;
-    let catalog_path = catalog_root.join("current_catalog");
-    info!("Catalog path: {:?}", catalog_path);
-
-    let manifest_path = work_dir.to_path_buf().join("manifest");
-    info!("Manifest path: {:?}", manifest_path);
-
-    // Create the file metadata catalog and populate it with the contents of "sync_dir"
-    if let Some(sync_dir) = sync_dir {
-        {
-            //use std::ops::DerefMut;
-            let mut catalog = open_catalog(catalog_type, catalog_path.as_path(), true)?;
-            populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
-            info!(
-                "Catalog populated with contents of {:?}",
-                sync_dir.as_path()
-            );
-        }
-
-        // Save the generated catalog as a content-addressed chunk in the store.
-        let mut f = File::open(catalog_path.as_path())?;
-        let chunk_descriptor = store.put_file(&mut f)?;
-
-        // Create and save the repository manifest
-        let manifest = Manifest::new(chunk_descriptor.digest, None, now_utc());
-        manifest.save(manifest_path.as_path())?;
-    }
-
-    // Load the repository manifest
-    let manifest = Manifest::load(manifest_path.as_path())?;
-
-    // Get the catalog out of storage and open it
-    {
-        let root_hash = manifest.root_hash;
-        let chunk = store.get_chunk(&root_hash)?;
-        atomic_write(catalog_path.as_path(), chunk.get_slice())?;
-    }
-
-    let catalog = open_catalog(catalog_type, catalog_path.as_path(), false)?;
-    catalog.show_stats();
-
-    Ok((catalog, store))
 }
 
 pub(in crate::engine) struct Engine {

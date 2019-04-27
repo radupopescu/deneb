@@ -1,22 +1,16 @@
 use {
+    crate::common::*,
     copy_dir::copy_dir,
+    deneb_core::{
+        catalog::CatalogType, engine::start_engine, errors::DenebResult, store::StoreType,
+    },
+    deneb_fuse::fs::{Fs, Session},
     quickcheck::{QuickCheck, StdGen},
     std::{fs::create_dir_all, path::Path},
     tempdir::TempDir,
 };
 
 mod common;
-
-use crate::common::*;
-
-use deneb_core::{
-    catalog::{open_catalog, CatalogType},
-    engine::{start_engine, start_engine_prebuilt},
-    errors::DenebResult,
-    populate_with_dir,
-    store::{open_store, StoreType},
-};
-use deneb_fuse::fs::{Fs, Session};
 
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304; // 4MB default;
 
@@ -71,28 +65,27 @@ fn init_test<'a>(
 
     let options = Fs::make_options(&["Deneb:test".to_string(), "test".to_string()]);
 
-    match test_type {
-        TestType::InMemory => {
-            // The paths given to the in-memory builders doesn't matter
-            let mut store = open_store(StoreType::InMemory, &work_dir, chunk_size)?;
-            let mut catalog = open_catalog(CatalogType::InMemory, &work_dir, true)?;
-            populate_with_dir(&mut *catalog, &mut *store, input, chunk_size)?;
-            let handle = start_engine_prebuilt(catalog, store, 1000, 0)?;
-            Fs::spawn_mount(&mount_point, handle, &options)
-        }
-        TestType::OnDisk => {
-            let handle = start_engine(
-                CatalogType::Lmdb,
-                StoreType::OnDisk,
-                &work_dir,
-                Some(input.to_owned()),
-                chunk_size,
-                1000,
-                0,
-            )?;
-            Fs::spawn_mount(&mount_point, handle, &options)
-        }
-    }
+    let handle = match test_type {
+        TestType::InMemory => start_engine(
+            CatalogType::InMemory,
+            StoreType::InMemory,
+            work_dir,
+            Some(input.to_owned()),
+            chunk_size,
+            1000,
+            0,
+        ),
+        TestType::OnDisk => start_engine(
+            CatalogType::Lmdb,
+            StoreType::OnDisk,
+            work_dir,
+            Some(input.to_owned()),
+            chunk_size,
+            1000,
+            0,
+        ),
+    }?;
+    Fs::spawn_mount(&mount_point, handle, &options)
 }
 
 // Simple integration test

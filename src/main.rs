@@ -45,7 +45,7 @@ fn main() -> DenebResult<()> {
     let handle = start_engine(
         CatalogType::Lmdb,
         StoreType::OnDisk,
-        &app.directories.workspace,
+        app.directories.workspace.clone(),
         app.settings.sync_dir.clone(),
         app.settings.chunk_size,
         1000,
