@@ -41,9 +41,10 @@ pub use self::{handle::Handle, requests::RequestId};
 pub fn start_engine_prebuilt(
     catalog: Box<dyn Catalog>,
     store: Box<dyn Store>,
-    queue_size: usize,
+    cmd_queue_size: usize,
+    auto_commit_interval: usize,
 ) -> DenebResult<Handle> {
-    let (cmd_tx, cmd_rx) = channel(queue_size);
+    let (cmd_tx, cmd_rx) = channel(cmd_queue_size);
     let (quit_tx, quit_rx) = channel(1);
     let engine_hd = Handle::new(cmd_tx, quit_rx);
     let timer_engine_hd = engine_hd.clone();
@@ -52,10 +53,19 @@ pub fn start_engine_prebuilt(
             workspace: Workspace::new(catalog, Rc::new(RefCell::new(store))),
             stopped: false,
         };
-        let mut timer = Timer::new(Resolution::Second);
-        timer.schedule(Duration::from_secs(30), true, move || {
-            let _ = timer_engine_hd.commit();
-        });
+        let timer = if auto_commit_interval > 0 {
+            let mut t = Timer::new(Resolution::Second);
+            t.schedule(
+                Duration::from_secs(auto_commit_interval as u64),
+                true,
+                move || {
+                    let _ = timer_engine_hd.commit();
+                },
+            );
+            Some(t)
+        } else {
+            None
+        };
         info!("Starting engine event loop");
         for request in &cmd_rx {
             request.run_handler(&mut engine);
@@ -64,7 +74,9 @@ pub fn start_engine_prebuilt(
             }
         }
         info!("Engine event loop finished.");
-        timer.stop();
+        if let Some(timer) = timer {
+            timer.stop();
+        }
         quit_tx.send(()).map_err(|_| EngineError::Send).unwrap();
     });
 
@@ -80,11 +92,12 @@ pub fn start_engine(
     work_dir: &Path,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
-    queue_size: usize,
+    cmd_queue_size: usize,
+    auto_commit_interval: usize,
 ) -> DenebResult<Handle> {
     let (catalog, store) = init(catalog_type, store_type, work_dir, sync_dir, chunk_size)?;
 
-    start_engine_prebuilt(catalog, store, queue_size)
+    start_engine_prebuilt(catalog, store, cmd_queue_size, auto_commit_interval)
 }
 
 fn init(

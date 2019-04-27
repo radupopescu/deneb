@@ -47,12 +47,7 @@ fn main() -> DenebResult<()> {
     .context("Could not initialize logger")?;
 
     info!("Welcome to Deneb!");
-    info!("Log level: {}", app.settings.log_level);
-    info!("Work dir: {:?}", app.directories.workspace);
-    info!("Mount point: {:?}", app.directories.mount_point);
-    info!("Chunk size: {:?}", app.settings.chunk_size);
-    info!("Sync dir: {:?}", app.settings.sync_dir);
-    info!("Force unmount: {}", app.settings.force_unmount);
+    app.print_settings();
 
     // Create the file system data structure
     let handle = start_engine(
@@ -62,6 +57,7 @@ fn main() -> DenebResult<()> {
         app.settings.sync_dir.clone(),
         app.settings.chunk_size,
         1000,
+        app.settings.auto_commit_interval,
     )?;
 
     // Start a listener for commands received from deneb-cli

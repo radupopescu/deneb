@@ -54,6 +54,8 @@ pub(super) struct CommandLine {
         help = "Force unmount the file system on exit"
     )]
     pub force_unmount: bool,
+    #[structopt(long = "auto_commit_interval", help = "Auto commit interval in seconds (0 means disabled)")]
+    pub auto_commit_interval: Option<usize>,
     #[structopt(long = "foreground", help = "Stay in the foreground, don't fork")]
     pub foreground: bool,
 }
@@ -69,6 +71,7 @@ pub(super) struct ConfigFile {
     pub(super) mount_point: Option<PathBuf>,
     pub(super) log_level: Option<LevelFilter>,
     pub(super) chunk_size: Option<usize>,
+    pub(super) auto_commit_interval: Option<usize>,
 }
 
 impl ConfigFile {
@@ -83,6 +86,7 @@ impl ConfigFile {
                 mount_point: None,
                 log_level: None,
                 chunk_size: None,
+                auto_commit_interval: None,
             }
         };
         Ok(cfg)

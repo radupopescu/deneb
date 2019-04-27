@@ -9,6 +9,7 @@ use self::config::{CommandLine, ConfigFile};
 
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304;
+const DEFAULT_AUTO_COMMIT_INTERVAL: usize = 300; // 5 min interval
 
 pub struct App {
     pub settings: Settings,
@@ -44,6 +45,23 @@ impl App {
         })
     }
 
+    pub fn print_settings(&self) {
+        info!("Log level: {}", self.settings.log_level);
+        info!("Work dir: {:?}", self.directories.workspace);
+        info!("Mount point: {:?}", self.directories.mount_point);
+        info!("Chunk size: {:?}", self.settings.chunk_size);
+        info!("Sync dir: {:?}", self.settings.sync_dir);
+        info!("Force unmount: {}", self.settings.force_unmount);
+        if self.settings.auto_commit_interval > 0 {
+            info!(
+                "Auto commit interval: {}",
+                self.settings.auto_commit_interval
+            );
+        } else {
+            info!("Auto commit disabled");
+        }
+    }
+
     pub fn fs_name(&self) -> String {
         format!("{}:{}", application(), self.settings.instance_name)
     }
@@ -57,6 +75,7 @@ pub struct Settings {
     pub chunk_size: usize,
     pub sync_dir: Option<PathBuf>,
     pub force_unmount: bool,
+    pub auto_commit_interval: usize,
     pub foreground: bool,
 }
 
@@ -93,6 +112,12 @@ impl Settings {
             .chunk_size
             .get_or_insert(*cfg_file.chunk_size.get_or_insert(DEFAULT_CHUNK_SIZE));
 
+        let auto_commit_interval = *cmd_line.auto_commit_interval.get_or_insert(
+            *cfg_file
+                .auto_commit_interval
+                .get_or_insert(DEFAULT_AUTO_COMMIT_INTERVAL),
+        );
+
         let sync_dir = cmd_line.sync_dir.clone();
         let force_unmount = cmd_line.force_unmount;
         let foreground = cmd_line.foreground;
@@ -105,6 +130,7 @@ impl Settings {
             chunk_size,
             sync_dir,
             force_unmount,
+            auto_commit_interval,
             foreground,
         }
     }
