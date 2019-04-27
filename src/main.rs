@@ -6,6 +6,8 @@ extern crate log;
 extern crate deneb_core;
 extern crate deneb_fuse;
 
+use crossbeam_channel::bounded as channel;
+
 use failure::ResultExt;
 
 use deneb_core::{
@@ -83,7 +85,7 @@ fn main() -> DenebResult<()> {
         let session = Fs::spawn_mount(&app.directories.mount_point, handle.clone(), &options)?;
 
         // Install a signal handler for SIGINT, SIGHUP and SIGTERM, and wait
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = channel(1);
         let _th = set_signal_handler(tx);
         rx.recv()?;
 

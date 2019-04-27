@@ -1,5 +1,6 @@
 #![recursion_limit = "1024"]
 
+extern crate crossbeam_channel;
 #[macro_use]
 extern crate log;
 #[macro_use]

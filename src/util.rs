@@ -1,9 +1,11 @@
-use nix::{
-    sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal},
-    unistd::{fork as nix_fork, ForkResult},
+use {
+    crossbeam_channel::Sender,
+    nix::{
+        sys::signal::{pthread_sigmask, SigSet, SigmaskHow, Signal},
+        unistd::{fork as nix_fork, ForkResult},
+    },
 };
 
-use std::sync::mpsc::Sender;
 use std::thread::{spawn, JoinHandle};
 
 use deneb_core::errors::UnixError;
