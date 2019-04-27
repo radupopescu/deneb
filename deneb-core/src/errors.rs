@@ -33,8 +33,6 @@ pub enum DenebError {
     DirectoryVisit(PathBuf),
     #[fail(display = "Invalid path encountered: {:?}", _0)]
     InvalidPath(PathBuf),
-    #[fail(display = "Index generator error")]
-    IndexGenerator,
     #[fail(display = "Digest read error")]
     DigestFromSlice,
 }
@@ -118,6 +116,8 @@ pub enum EngineError {
     Rename(u64, OsString, u64, OsString),
     #[fail(display = "Access error for: {}", _0)]
     Access(u64),
+    #[fail(display = "Workspace commit error")]
+    Commit,
 }
 
 #[derive(Debug, Fail)]

@@ -164,7 +164,7 @@ impl Request for Rename {
 pub(in crate::engine) struct Commit;
 
 impl Request for Commit {
-    type Reply = ();
+    type Reply = String;
 }
 
 pub(in crate::engine) struct Ping;

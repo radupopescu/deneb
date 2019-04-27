@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::errors::{DenebError, DenebResult};
+use crate::errors::DenebResult;
 use crate::inode::INode;
 
 mod lmdb;
@@ -53,12 +53,8 @@ impl Default for IndexGenerator {
 }
 
 impl IndexGenerator {
-    pub fn starting_at(i0: u64) -> Result<IndexGenerator, DenebError> {
-        if i0 > 0 {
-            Ok(IndexGenerator { current_index: i0 })
-        } else {
-            Err(DenebError::IndexGenerator)
-        }
+    pub fn starting_at(i0: u64) -> IndexGenerator {
+        IndexGenerator { current_index: i0 }
     }
 
     pub fn get_next(&mut self) -> u64 {

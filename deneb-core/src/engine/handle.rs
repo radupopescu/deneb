@@ -200,8 +200,8 @@ impl Handle {
         )
     }
 
-    pub fn commit(&self) {
-        cast(Commit, &self.cmd_ch);
+    pub fn commit(&self) -> DenebResult<String> {
+        call(Commit, &self.cmd_ch)
     }
 
     pub fn ping(&self) -> DenebResult<String> {

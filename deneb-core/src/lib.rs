@@ -45,8 +45,7 @@ pub mod manifest;
 pub mod store;
 pub mod util;
 
-mod dir_workspace;
-mod file_workspace;
+mod workspace;
 
 #[derive(Debug, Fail)]
 pub enum DenebCoreInitError {
@@ -71,7 +70,7 @@ pub fn populate_with_dir(
     catalog.add_inode(INode::new(attrs, vec![]))?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
-    let mut index_generator = IndexGenerator::starting_at(catalog.get_max_index())?;
+    let mut index_generator = IndexGenerator::starting_at(catalog.get_max_index());
     visit_dirs(
         catalog,
         store,
