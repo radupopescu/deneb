@@ -11,7 +11,7 @@ use {
         catalog::CatalogType,
         errors::{DenebResult, EngineError},
         store::StoreType,
-        workspace::Workspace,
+        workspace::{Workspace, CommitSummary},
     },
     crossbeam_channel::bounded as channel,
     failure::{Error, ResultExt},
@@ -251,7 +251,7 @@ impl RequestHandler<Rename> for Engine {
 }
 
 impl RequestHandler<Commit> for Engine {
-    fn handle(&mut self, _request: &Commit) -> DenebResult<String> {
+    fn handle(&mut self, _request: &Commit) -> DenebResult<CommitSummary> {
         debug!("Engine received commit request.");
         self.workspace
             .commit()

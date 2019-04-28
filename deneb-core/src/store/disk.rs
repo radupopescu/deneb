@@ -10,7 +10,8 @@ use {
     nix::sys::stat::stat,
     std::{
         cell::RefCell,
-        fs::create_dir_all,
+        fs::{create_dir_all, File, OpenOptions},
+        io::{Read, Write},
         path::{Path, PathBuf},
         sync::Arc,
     },
@@ -32,7 +33,7 @@ const CACHE_MAX_OBJECTS: usize = 100;
 /// "`root_dir`/data/ab/cdefg123456"
 pub(super) struct DiskStore {
     chunk_size: usize,
-    _root_dir: PathBuf,
+    root_dir: PathBuf,
     object_dir: PathBuf,
     cache: RefCell<LruCache<Digest, Arc<dyn Chunk>>>,
 }
@@ -47,7 +48,7 @@ impl DiskStore {
 
         Ok(DiskStore {
             chunk_size,
-            _root_dir: root_dir.to_owned(),
+            root_dir: root_dir.to_owned(),
             object_dir,
             cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)),
         })
@@ -70,7 +71,7 @@ impl Store for DiskStore {
         self.chunk_size
     }
 
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>> {
+    fn chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>> {
         let mut cache = self.cache.borrow_mut();
         if cache.contains(digest) {
             cache
@@ -100,6 +101,38 @@ impl Store for DiskStore {
         trace!("Chunk written: {:?}", full_path);
         Ok(())
     }
+
+    fn read_special_file(&self, file_name: &Path) -> DenebResult<Vec<u8>> {
+        let mut body = Vec::new();
+        let full_path = self.root_dir.join(file_name);
+        let mut f = File::open(full_path.to_owned())?;
+        f.read_to_end(&mut body)?;
+        trace!("Special file read: {:?}", full_path);
+        Ok(body)
+    }
+
+    fn write_special_file(
+        &mut self,
+        file_name: &Path,
+        data: &mut dyn Read,
+        append: bool,
+    ) -> DenebResult<()> {
+        let mut body = Vec::new();
+        data.read_to_end(&mut body)?;
+        let full_path = self.root_dir.join(file_name);
+        if append {
+            let mut f = OpenOptions::new()
+                .write(true)
+                .append(true)
+                .create(true)
+                .open(&full_path)?;
+            f.write_all(&body)?;
+        } else {
+            atomic_write(full_path.as_path(), body.as_slice())?;
+        }
+        trace!("Special file written: {:?}", full_path);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -115,8 +148,8 @@ mod tests {
         let mut store = DiskStore::try_new(temp_dir.path(), 10000)?;
         let mut v1: &[u8] = BYTES;
         let descriptors = store.put_file_chunked(&mut v1)?;
-        let v2 = store.get_chunk(&descriptors[0].digest)?;
-        assert_eq!(BYTES, v2.get_slice());
+        let v2 = store.chunk(&descriptors[0].digest)?;
+        assert_eq!(BYTES, v2.slice());
         Ok(())
     }
 }

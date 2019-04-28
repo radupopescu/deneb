@@ -1,6 +1,9 @@
 use {
     super::protocol::Request,
-    crate::inode::{FileAttributeChanges, FileAttributes, FileType},
+    crate::{
+        inode::{FileAttributeChanges, FileAttributes, FileType},
+        workspace::CommitSummary,
+    },
     std::{ffi::OsString, path::PathBuf},
 };
 
@@ -164,7 +167,7 @@ impl Request for Rename {
 pub(in crate::engine) struct Commit;
 
 impl Request for Commit {
-    type Reply = String;
+    type Reply = CommitSummary;
 }
 
 pub(in crate::engine) struct Ping;

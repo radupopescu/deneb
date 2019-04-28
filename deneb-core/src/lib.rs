@@ -44,10 +44,10 @@ pub fn populate_with_dir(
     chunk_size: usize,
 ) -> DenebResult<()> {
     let attrs = FileAttributes::with_stats(lstat(dir)?, 1);
-    catalog.add_inode(INode::new(attrs, vec![]))?;
+    catalog.add_inode(&INode::new(attrs, vec![]))?;
 
     let mut buffer = vec![0 as u8; chunk_size as usize];
-    let mut index_generator = IndexGenerator::starting_at(catalog.get_max_index());
+    let mut index_generator = IndexGenerator::starting_at(catalog.max_index());
     visit_dirs(
         catalog,
         store,
@@ -90,9 +90,9 @@ fn visit_dirs(
             Vec::new()
         };
 
-        let index = index_generator.get_next();
+        let index = index_generator.next();
         let attrs = FileAttributes::with_stats(lstat(&path)?, index);
-        catalog.add_inode(INode::new(attrs, descriptors))?;
+        catalog.add_inode(&INode::new(attrs, descriptors))?;
         catalog.add_dir_entry(dir_index, fname, index)?;
 
         if path.is_dir() {

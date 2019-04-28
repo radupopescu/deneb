@@ -202,7 +202,8 @@ impl Handle {
     }
 
     pub fn commit(&self) -> DenebResult<String> {
-        call(Commit, &self.cmd_ch)
+        let summary = call(Commit, &self.cmd_ch)?;
+        Ok(format!("{}", summary))
     }
 
     pub fn ping(&self) -> DenebResult<String> {

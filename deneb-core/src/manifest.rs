@@ -3,29 +3,25 @@ use {
     serde::{Deserialize, Serialize},
     std::{fs::File, io::Read, path::Path},
     time::Tm,
-    toml::{from_str, to_string},
 };
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Manifest {
     pub root_hash: Digest,
-    // Note: may need to be changed to previous_manifest (store old manifests as CA chunks)
-    pub previous_root_hash: Option<Digest>,
     #[serde(with = "serde_tm")]
     pub timestamp: Tm,
 }
 
 impl Manifest {
-    pub fn new(hash: Digest, previous_hash: Option<Digest>, timestamp: Tm) -> Manifest {
+    pub fn new(hash: Digest, timestamp: Tm) -> Manifest {
         Manifest {
             root_hash: hash,
-            previous_root_hash: previous_hash,
             timestamp,
         }
     }
 
     pub fn save(&self, manifest_file: &Path) -> DenebResult<()> {
-        let m = to_string(self)?;
+        let m = toml::to_string(self)?;
         atomic_write(manifest_file, m.as_bytes())?;
         Ok(())
     }
@@ -34,7 +30,15 @@ impl Manifest {
         let mut f = File::open(manifest_file)?;
         let mut m = String::new();
         let _ = f.read_to_string(&mut m)?;
-        from_str(m.as_str()).map_err(|e| e.into())
+        toml::from_str(m.as_str()).map_err(|e| e.into())
+    }
+
+    pub fn serialize(&self) -> DenebResult<Vec<u8>> {
+        toml::to_vec(self).map_err(|e| e.into())
+    }
+
+    pub fn deserialize(s: &[u8]) -> DenebResult<Manifest> {
+        toml::from_slice(s).map_err(|e| e.into())
     }
 }
 
@@ -91,7 +95,7 @@ mod tests {
     fn manifest_serde() {
         let fake_stuff = vec![0 as u8; 100];
         let digest = hash(fake_stuff.as_slice());
-        let mut manifest = Manifest::new(digest, None, now_utc());
+        let mut manifest = Manifest::new(digest, now_utc());
         // Set to zero the fields which are not serialized
         {
             let ts = &mut manifest.timestamp;
@@ -121,7 +125,7 @@ mod tests {
         if let Ok(prefix) = tmp {
             let fake_stuff = vec![0 as u8; 100];
             let digest = hash(fake_stuff.as_slice());
-            let mut manifest1 = Manifest::new(digest, None, now_utc());
+            let mut manifest1 = Manifest::new(digest, now_utc());
             {
                 let ts = &mut manifest1.timestamp;
                 ts.tm_yday = 0;

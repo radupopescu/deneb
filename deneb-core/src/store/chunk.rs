@@ -10,7 +10,7 @@ use {
 pub trait Chunk: Send + Sync {
     /// Return the content of the chunk in a slice
     ///
-    fn get_slice(&self) -> &[u8];
+    fn slice(&self) -> &[u8];
 
     fn size(&self) -> usize;
 }
@@ -55,7 +55,7 @@ impl Drop for MmapChunk {
 }
 
 impl Chunk for MmapChunk {
-    fn get_slice(&self) -> &[u8] {
+    fn slice(&self) -> &[u8] {
         trace!(
             "Loaded contents of chunk {} -  size: {}",
             self.digest,
@@ -81,7 +81,7 @@ impl MemChunk {
 }
 
 impl Chunk for MemChunk {
-    fn get_slice(&self) -> &[u8] {
+    fn slice(&self) -> &[u8] {
         trace!(
             "Loaded contents of chunk {} -  size: {}",
             self.digest,
@@ -121,7 +121,7 @@ mod tests {
                 let cnk = MmapChunk::try_new(hash(MSG), MSG.len(), fname.clone(), true);
                 if let Ok(cnk) = cnk {
                     let cnk = Box::new(cnk);
-                    assert_eq!(MSG, cnk.get_slice());
+                    assert_eq!(MSG, cnk.slice());
                 }
             }
         }
@@ -132,6 +132,6 @@ mod tests {
         const MSG: &[u8] = b"alabalaportocala";
 
         let cnk = MemChunk::new(hash(MSG), MSG.to_owned());
-        assert_eq!(MSG, cnk.get_slice());
+        assert_eq!(MSG, cnk.slice());
     }
 }

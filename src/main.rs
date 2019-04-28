@@ -56,11 +56,10 @@ fn main() -> DenebResult<()> {
     let handle2 = handle.clone();
     listen(app.directories.workspace.join("cmd.sock"), move |cmd| {
         match cmd {
-            Command::Status => {}
-            Command::Ping => return handle2.ping(),
-            Command::Commit => {}
+            Command::Status => Ok("".to_string()),
+            Command::Ping => handle2.ping(),
+            Command::Commit => handle2.commit(),
         }
-        Ok("".to_string())
     })?;
 
     let options = Fs::make_options(&[

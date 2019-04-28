@@ -32,18 +32,18 @@ impl Catalog for MemCatalog {
         }
     }
 
-    fn get_max_index(&self) -> u64 {
+    fn max_index(&self) -> u64 {
         self.max_index
     }
 
-    fn get_inode(&self, index: u64) -> DenebResult<INode> {
+    fn inode(&self, index: u64) -> DenebResult<INode> {
         self.inodes
             .get(&index)
             .cloned()
             .ok_or_else(|| CatalogError::INodeRead(index).into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
+    fn dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
         Ok(self
             .dir_entries
             .get(&parent)
@@ -51,7 +51,7 @@ impl Catalog for MemCatalog {
             .cloned())
     }
 
-    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
+    fn dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         self.dir_entries
             .get(&parent)
             .map(|entries| {
@@ -63,9 +63,9 @@ impl Catalog for MemCatalog {
             .ok_or_else(|| CatalogError::DEntryRead(parent).into())
     }
 
-    fn add_inode(&mut self, inode: INode) -> DenebResult<()> {
+    fn add_inode(&mut self, inode: &INode) -> DenebResult<()> {
         let index = inode.attributes.index;
-        self.inodes.insert(index, inode);
+        self.inodes.insert(index, inode.clone());
         if index > self.max_index {
             self.max_index = index;
         }
@@ -87,6 +87,12 @@ impl Catalog for MemCatalog {
 
         inode.attributes.nlink += 1;
 
+        Ok(())
+    }
+
+    fn remove_inode(&mut self, index: u64) -> DenebResult<()> {
+        self.inodes.remove(&index);
+        self.dir_entries.remove(&index);
         Ok(())
     }
 }

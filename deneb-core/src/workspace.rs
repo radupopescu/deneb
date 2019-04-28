@@ -1,9 +1,17 @@
-mod dir_workspace;
-mod file_workspace;
-pub(in crate) use dir_workspace::*;
-pub(in crate) use file_workspace::*;
+mod commit;
+mod dir;
+mod file;
+mod inode;
+
+pub(in crate) use commit::Summary as CommitSummary;
 
 use {
+    self::{
+        commit::commit_workspace,
+        dir::{DirEntry, Workspace as DirWorkspace},
+        file::Workspace as FileWorkspace,
+        inode::Workspace as INodeWorkspace,
+    },
     crate::{
         catalog::{open_catalog, Catalog, CatalogType, IndexGenerator},
         errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError},
@@ -27,14 +35,20 @@ use {
     time::now_utc,
 };
 
+const MANIFEST_PATH: &str = "data/manifest";
+const REFLOG_PATH: &str = "data/reflog";
+
 pub(in crate) struct Workspace {
     catalog: Box<dyn Catalog>,
     store: Rc<RefCell<Box<dyn Store>>>,
+    manifest: Manifest,
     index_generator: IndexGenerator,
     dirs: HashMap<u64, DirWorkspace>,
     files: HashMap<u64, FileWorkspace>,
-    inodes: HashMap<u64, INode>,
+    inodes: HashMap<u64, INodeWorkspace>,
     deleted_inodes: HashSet<u64>,
+    work_dir: PathBuf,
+    dirty: bool,
 }
 
 impl Workspace {
@@ -53,13 +67,12 @@ impl Workspace {
         let catalog_path = catalog_root.join("current_catalog");
         info!("Catalog path: {:?}", catalog_path);
 
-        let manifest_path = work_dir.to_path_buf().join("manifest");
+        let manifest_path = work_dir.to_path_buf().join(MANIFEST_PATH);
         info!("Manifest path: {:?}", manifest_path);
 
         // Create the file metadata catalog and populate it with the contents of "sync_dir"
         if let Some(sync_dir) = sync_dir {
             {
-                //use std::ops::DerefMut;
                 let mut catalog = open_catalog(catalog_type, catalog_path.as_path(), true)?;
                 populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
                 info!(
@@ -73,60 +86,45 @@ impl Workspace {
             let chunk_descriptor = store.put_file(&mut f)?;
 
             // Create and save the repository manifest
-            let manifest = Manifest::new(chunk_descriptor.digest, None, now_utc());
-            manifest.save(manifest_path.as_path())?;
+            let manifest = Manifest::new(chunk_descriptor.digest, now_utc()).serialize()?;
+            store.write_special_file(&manifest_path, &mut &manifest[..], false)?;
         }
 
         // Load the repository manifest
-        let manifest = Manifest::load(manifest_path.as_path())?;
+        let buf = store.read_special_file(&manifest_path)?;
+        let manifest = Manifest::deserialize(&buf)?;
 
         // Get the catalog out of storage and open it
         {
             let root_hash = manifest.root_hash;
-            let chunk = store.get_chunk(&root_hash)?;
-            atomic_write(catalog_path.as_path(), chunk.get_slice())?;
+            let chunk = store.chunk(&root_hash)?;
+            atomic_write(catalog_path.as_path(), chunk.slice())?;
         }
 
         let catalog = open_catalog(catalog_type, catalog_path.as_path(), false)?;
         catalog.show_stats();
 
-        let index_generator = IndexGenerator::starting_at(catalog.get_max_index());
+        let index_generator = IndexGenerator::starting_at(catalog.max_index());
 
         let ws = Workspace {
             catalog,
             store: Rc::new(RefCell::new(store)),
+            manifest,
             index_generator,
             dirs: HashMap::new(),
             files: HashMap::new(),
             inodes: HashMap::new(),
             deleted_inodes: HashSet::new(),
+            work_dir,
+            dirty: false,
         };
 
         Ok(ws)
     }
 
-    // Note: We perform inefficient double lookups since Catalog::get_inode returns a Result
-    //       and can't be used inside Entry::or_insert_with
-    #[allow(clippy::map_entry)]
-    pub(in crate) fn get_inode(&mut self, index: u64) -> DenebResult<INode> {
-        if !self.inodes.contains_key(&index) {
-            let inode = self.catalog.get_inode(index)?;
-            self.inodes.insert(index, inode);
-        }
-        self.inodes
-            .get(&index)
-            .cloned()
-            .ok_or_else(|| WorkspaceError::INodeLookup(index).into())
-    }
-
-    pub(in crate) fn update_inode(&mut self, index: u64, inode: &INode) -> DenebResult<()> {
-        self.inodes.insert(index, inode.clone());
-        Ok(())
-    }
-
     pub(in crate) fn get_attr(&mut self, index: u64) -> DenebResult<FileAttributes> {
-        let inode = self.get_inode(index)?;
-        Ok(inode.attributes)
+        let ws = self.inode_ws(index)?;
+        Ok(ws.inode().attributes)
     }
 
     pub(in crate) fn set_attr(
@@ -134,10 +132,9 @@ impl Workspace {
         index: u64,
         changes: &FileAttributeChanges,
     ) -> DenebResult<FileAttributes> {
-        let mut inode = self.get_inode(index)?;
-        inode.attributes.update(changes);
-        let attrs = inode.attributes;
-        self.update_inode(index, &inode)?;
+        let ws = self.inode_ws_mut(index)?;
+        ws.update_attributes(changes);
+        let attrs = ws.inode().attributes;
 
         if let Some(new_size) = changes.size {
             if let Some(ref mut ws) = self.files.get_mut(&index) {
@@ -146,6 +143,9 @@ impl Workspace {
                 return Err(WorkspaceError::FileLookup(index).into());
             }
         }
+
+        self.dirty = true;
+
         Ok(attrs)
     }
 
@@ -155,13 +155,13 @@ impl Workspace {
         name: &OsStr,
     ) -> DenebResult<Option<FileAttributes>> {
         let index = if let Some(ws) = self.dirs.get(&parent) {
-            ws.get_entries()
+            ws.entries()
                 .iter()
                 .find(|DirEntry { name: ref n, .. }| n == &PathBuf::from(name))
                 .map(|&DirEntry { index, .. }| index)
         } else {
             self.catalog
-                .get_dir_entry_index(parent, PathBuf::from(name).as_path())?
+                .dir_entry_index(parent, PathBuf::from(name).as_path())?
         };
         if let Some(index) = index {
             self.get_attr(index).map(Some)
@@ -170,18 +170,18 @@ impl Workspace {
         }
     }
 
-    // Note: We perform inefficient double lookups since Catalog::get_dir_entries returns
+    // Note: We perform inefficient double lookups since Catalog::dir_entries returns
     //       a Result and can't be used inside Entry::or_insert_with
     #[allow(clippy::map_entry)]
     pub(in crate) fn open_dir(&mut self, index: u64) -> DenebResult<()> {
         if !self.dirs.contains_key(&index) {
             let entries = self
                 .catalog
-                .get_dir_entries(index)?
+                .dir_entries(index)?
                 .iter()
                 .map(|&(ref name, idx)| {
-                    if let Ok(inode) = self.get_inode(idx) {
-                        DirEntry::new(idx, name.clone(), inode.attributes.kind)
+                    if let Ok(ws) = self.inode_ws(idx) {
+                        DirEntry::new(idx, name.clone(), ws.inode().attributes.kind)
                     } else {
                         panic!("Fatal engine error. Could not retrieve inode {}", idx)
                     }
@@ -200,18 +200,19 @@ impl Workspace {
     pub(in crate) fn read_dir(&self, index: u64) -> DenebResult<Vec<(PathBuf, u64, FileType)>> {
         self.dirs
             .get(&index)
-            .map(DirWorkspace::get_entries_tuple)
+            .map(DirWorkspace::entries_tuple)
             .ok_or_else(|| WorkspaceError::DirLookup(index).into())
     }
 
-    // Note: We perform inefficient double lookups since Catalog::get_inode returns
+    // Note: We perform inefficient double lookups since Catalog::inode returns
     //       a Result and can't be used inside Entry::or_insert_with
     #[allow(clippy::map_entry)]
     pub(in crate) fn open_file(&mut self, index: u64, _flags: u32) -> DenebResult<()> {
         if !self.files.contains_key(&index) {
-            let inode = self.get_inode(index)?;
-            self.files
-                .insert(index, FileWorkspace::try_new(&inode, &self.store)?);
+            let store = Rc::clone(&self.store);
+            let iws = self.inode_ws(index)?;
+            let fws = FileWorkspace::try_new(iws.inode(), store, false)?;
+            self.files.insert(index, fws);
         }
         Ok(())
     }
@@ -239,11 +240,11 @@ impl Workspace {
                 .ok_or_else(|| WorkspaceError::FileLookup(index))?;
             ws.write_at(offset, data)
         };
-        let mut inode = self.get_inode(index)?;
-        if inode.attributes.size != new_size {
-            inode.attributes.size = new_size;
-            self.update_inode(index, &inode)?;
-        }
+        let ws = self.inode_ws_mut(index)?;
+        ws.update_size(new_size);
+
+        self.dirty = true;
+
         Ok(written)
     }
 
@@ -263,7 +264,7 @@ impl Workspace {
         mode: u32,
         _flags: u32,
     ) -> DenebResult<(u64, FileAttributes)> {
-        let index = self.index_generator.get_next();
+        let index = self.index_generator.next();
 
         // Create new inode
         let mut attributes = FileAttributes::default();
@@ -277,21 +278,24 @@ impl Workspace {
         attributes.nlink = 1;
         attributes.uid = get_euid();
         attributes.gid = get_egid();
+        let kind = attributes.kind;
         let inode = INode::new(attributes, vec![]);
-        self.inodes.insert(index, inode.clone());
+        let ws = FileWorkspace::try_new(&inode, Rc::clone(&self.store), true)?;
+        self.inodes.insert(index, INodeWorkspace::new(inode, true));
 
         // Create new file workspace
-        let ws = FileWorkspace::try_new(&inode, &self.store)?;
         self.files.insert(index, ws);
 
         // Update the parent directory workspace
         self.open_dir(parent)?;
 
         if let Some(ws) = self.dirs.get_mut(&parent) {
-            ws.add_entry(index, PathBuf::from(name), inode.attributes.kind);
+            ws.add_entry(index, PathBuf::from(name), kind);
         } else {
             return Err(WorkspaceError::DirLookup(parent).into());
         }
+
+        self.dirty = true;
 
         Ok((index, attributes))
     }
@@ -302,7 +306,7 @@ impl Workspace {
         name: &OsStr,
         mode: u32,
     ) -> DenebResult<FileAttributes> {
-        let index = self.index_generator.get_next();
+        let index = self.index_generator.next();
 
         // Create new inode
         let mut attributes = FileAttributes::default();
@@ -318,7 +322,8 @@ impl Workspace {
         attributes.uid = get_euid();
         attributes.gid = get_egid();
         let inode = INode::new(attributes, vec![]);
-        self.inodes.insert(index, inode.clone());
+        self.inodes
+            .insert(index, INodeWorkspace::new(inode.clone(), true));
 
         // Create new dir workspace
         let mut ws = DirWorkspace::new(&[]);
@@ -335,6 +340,8 @@ impl Workspace {
             return Err(WorkspaceError::DirLookup(parent).into());
         }
 
+        self.dirty = true;
+
         Ok(attributes)
     }
 
@@ -343,7 +350,7 @@ impl Workspace {
         if let Some(ws) = self.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
             let index = ws
-                .get_entry_index(&pname)
+                .entry_index(&pname)
                 .ok_or_else(|| DirWorkspaceEntryLookupError {
                     parent,
                     name: name.to_owned(),
@@ -353,6 +360,9 @@ impl Workspace {
         } else {
             return Err(WorkspaceError::DirLookup(parent).into());
         }
+
+        self.dirty = true;
+
         Ok(())
     }
 
@@ -380,7 +390,7 @@ impl Workspace {
         let src_entry = if let Some(ws) = self.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
             let entry =
-                ws.get_entry(&pname)
+                ws.entry(&pname)
                     .cloned()
                     .ok_or_else(|| DirWorkspaceEntryLookupError {
                         parent,
@@ -397,7 +407,7 @@ impl Workspace {
         let old_entry_type = self
             .dirs
             .get(&new_parent)
-            .and_then(|ws| ws.get_entry(&new_name))
+            .and_then(|ws| ws.entry(&new_name))
             .map(|&DirEntry { entry_type, .. }| entry_type);
 
         if let Some(entry_type) = old_entry_type {
@@ -417,11 +427,38 @@ impl Workspace {
             .ok_or_else(|| WorkspaceError::DirLookup(new_parent))?;
         ws.add_entry(src_entry.index, new_name.clone(), src_entry.entry_type);
 
+        self.dirty = true;
+
         Ok(())
     }
 
-    pub(in crate) fn commit(&mut self) -> DenebResult<String> {
-        info!("Committing the current state of the workspace.");
-        Ok("Commit finished.".to_string())
+    pub(in crate) fn commit(&mut self) -> DenebResult<CommitSummary> {
+        return commit_workspace(self)
+    }
+
+    // Note: We perform inefficient double lookups since Catalog::inode returns a Result
+    //       and can't be used inside Entry::or_insert_with
+    #[allow(clippy::map_entry)]
+    fn inode_ws(&mut self, index: u64) -> DenebResult<&INodeWorkspace> {
+        if !self.inodes.contains_key(&index) {
+            let inode = self.catalog.inode(index)?;
+            self.inodes.insert(index, INodeWorkspace::new(inode, false));
+        }
+        self.inodes
+            .get(&index)
+            .ok_or_else(|| WorkspaceError::INodeLookup(index).into())
+    }
+
+    // Note: We perform inefficient double lookups since Catalog::inode returns a Result
+    //       and can't be used inside Entry::or_insert_with
+    #[allow(clippy::map_entry)]
+    fn inode_ws_mut(&mut self, index: u64) -> DenebResult<&mut INodeWorkspace> {
+        if !self.inodes.contains_key(&index) {
+            let inode = self.catalog.inode(index)?;
+            self.inodes.insert(index, INodeWorkspace::new(inode, false));
+        }
+        self.inodes
+            .get_mut(&index)
+            .ok_or_else(|| WorkspaceError::INodeLookup(index).into())
     }
 }

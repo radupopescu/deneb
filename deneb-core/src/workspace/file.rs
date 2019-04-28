@@ -6,12 +6,19 @@ use {
         store::{Chunk, Store},
     },
     log::trace,
-    std::{cell::RefCell, cmp::min, collections::HashMap, rc::Rc, sync::Arc},
+    std::{
+        cell::RefCell,
+        cmp::min,
+        collections::HashMap,
+        io::{Error as IoError, ErrorKind, Read, Result as IoResult},
+        rc::Rc,
+        sync::Arc,
+    },
 };
 
 /// A type which offers read/write operations on a file in the repository
 ///
-/// A `FileWorkspace` represents a superposition of a lower layer,
+/// A `Workspace` represents a superposition of a lower layer,
 /// made up of immutable file chunks, and an upper layer storing the
 /// modifications applied to the lower layer. It is similar in concept
 /// to a union file-system such as Aufs or OverlayFS, only limited to the
@@ -19,16 +26,22 @@ use {
 ///
 /// Its implementation is based on interior mutability - caching of
 /// unpackaged chunks in the lower layer is done transparently to the
-/// client of the `FileWorkspace`.
-pub(crate) struct FileWorkspace {
+/// client of the `Workspace`.
+pub(crate) struct Workspace {
     lower: RefCell<Lower>,
     upper: Vec<u8>,
     piece_table: Vec<Piece>,
-    size: u64,
+    pub(crate) size: u64,
+    pub(crate) dirty: bool,
 }
 
-impl FileWorkspace {
-    /// Create a new `FileWorkspace` for an `INode`
+pub(crate) struct WorkspaceReader<'reader> {
+    ws: &'reader Workspace,
+    cursor: usize,
+}
+
+impl Workspace {
+    /// Create a new `Workspace` for an `INode`
     ///
     /// Constructs a new workspace object for the file described by
     /// `inode`. The function takes a reference-counted pointer to a
@@ -36,8 +49,9 @@ impl FileWorkspace {
     /// up the lower, immutable, layer
     pub(crate) fn try_new(
         inode: &INode,
-        store: &Rc<RefCell<Box<dyn Store>>>,
-    ) -> DenebResult<FileWorkspace> {
+        store: Rc<RefCell<Box<dyn Store>>>,
+        dirty: bool,
+    ) -> DenebResult<Workspace> {
         let lower = Lower::try_new(inode.chunks.as_slice(), store)?;
         let piece_table = inode
             .chunks
@@ -58,12 +72,20 @@ impl FileWorkspace {
             inode.attributes.size,
             lower.chunks.len()
         );
-        Ok(FileWorkspace {
+        Ok(Workspace {
             lower: RefCell::new(lower),
             upper: vec![],
             piece_table,
             size: inode.attributes.size,
+            dirty,
         })
+    }
+
+    pub(crate) fn reader(&self) -> WorkspaceReader {
+        return WorkspaceReader {
+            ws: self,
+            cursor: 0,
+        };
     }
 
     /// Read `size` number of bytes, starting at `offset`
@@ -100,6 +122,8 @@ impl FileWorkspace {
             });
         }
         self.size = new_size;
+
+        self.dirty = true;
     }
 
     /// Write the contents of buffer into the workspace, starting at `offset`
@@ -172,6 +196,8 @@ impl FileWorkspace {
         // Replace the old piece table with the new one
         self.piece_table = new_piece_table;
 
+        self.dirty = true;
+
         (buf_size as u32, self.size)
     }
 
@@ -193,7 +219,7 @@ impl FileWorkspace {
                     let mut lower = self.lower.borrow_mut();
                     lower.load_chunk(chunk_index)?;
                     let chunk = &lower.chunks[&chunk_index];
-                    let slice = chunk.get_slice();
+                    let slice = chunk.slice();
                     buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
                 }
                 PieceTarget::Upper => {
@@ -207,6 +233,20 @@ impl FileWorkspace {
             }
         }
         Ok(buffer)
+    }
+}
+
+impl<'reader> Read for WorkspaceReader<'reader> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        let res = self.ws.read_at(self.cursor, buf.len());
+        match res {
+            Ok(data) => {
+                buf[0..data.len()].copy_from_slice(data.as_slice());
+                self.cursor += data.len();
+                Ok(data.len())
+            }
+            Err(e) => Err(IoError::new(ErrorKind::Other, e.compat()))
+        }
     }
 }
 
@@ -244,7 +284,7 @@ struct PieceSlice {
     end: usize,
 }
 
-/// The lower, immutable, layer of a `FileWorkspace` object
+/// The lower, immutable, layer of a `Workspace` object
 ///
 /// The lower layer represents a vector of file `Chunk` objects. Each
 /// chunk is wrapped in a `RefCell`, to allow certain mutable
@@ -259,7 +299,7 @@ impl Lower {
     /// Construct the lower layer using a provided list of `ChunkDescriptor`
     fn try_new(
         chunk_descriptors: &[ChunkDescriptor],
-        store: &Rc<RefCell<Box<dyn Store>>>,
+        store: Rc<RefCell<Box<dyn Store>>>,
     ) -> DenebResult<Lower> {
         let digests = chunk_descriptors
             .iter()
@@ -268,7 +308,7 @@ impl Lower {
         Ok(Lower {
             digests,
             chunks: HashMap::new(),
-            store: Rc::clone(store),
+            store,
         })
     }
 
@@ -277,7 +317,7 @@ impl Lower {
     fn load_chunk(&mut self, index: usize) -> DenebResult<()> {
         let digest = self.digests[index];
         if !self.chunks.contains_key(&index) {
-            let chunk = self.store.borrow().get_chunk(&digest)?;
+            let chunk = self.store.borrow().chunk(&digest)?;
             self.chunks.insert(index, chunk);
         }
         Ok(())
@@ -340,7 +380,7 @@ mod tests {
     use crate::inode::FileAttributes;
     use crate::store::{open_store, StoreType};
 
-    fn make_test_workspace() -> DenebResult<FileWorkspace> {
+    fn make_test_workspace() -> DenebResult<Workspace> {
         let mut store = open_store(StoreType::InMemory, "/", 10000)?;
 
         let mut names: Vec<&[u8]> = vec![b"ala", b"bala", b"portocala"];
@@ -351,7 +391,7 @@ mod tests {
         let mut attributes = FileAttributes::default();
         attributes.size = 16;
         let inode = INode { attributes, chunks };
-        FileWorkspace::try_new(&inode, &Rc::new(RefCell::new(store)))
+        Workspace::try_new(&inode, Rc::new(RefCell::new(store)), false)
     }
 
     #[test]
@@ -375,7 +415,7 @@ mod tests {
             attributes: FileAttributes::default(),
             chunks: vec![],
         };
-        let mut ws = FileWorkspace::try_new(&inode, &Rc::new(RefCell::new(store)))?;
+        let mut ws = Workspace::try_new(&inode, Rc::new(RefCell::new(store)), false)?;
 
         assert_eq!(ws.write_at(0, b"written"), (7, 7));
 

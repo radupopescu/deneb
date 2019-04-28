@@ -46,6 +46,8 @@ pub enum StoreError {
     ChunkGet(String),
     #[fail(display = "Put error for: {}", _0)]
     ChunkPut(String),
+    #[fail(display = "Get error for file: {:?}", _0)]
+    FileGet(PathBuf),
 }
 
 // Catalog errors
@@ -64,6 +66,8 @@ pub enum CatalogError {
     INodeRead(u64),
     #[fail(display = "INode write error for index: {}", _0)]
     INodeWrite(u64),
+    #[fail(display = "INode delete error for index: {}", _0)]
+    INodeDelete(u64),
     #[fail(display = "Dir entry read error for index: {}", _0)]
     DEntryRead(u64),
     #[fail(display = "Dir entry write error for index: {}", _0)]

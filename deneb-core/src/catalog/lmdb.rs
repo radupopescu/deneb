@@ -80,7 +80,7 @@ impl LmdbCatalog {
 
 impl Catalog for LmdbCatalog {
     fn show_stats(&self) {
-        let env_info = get_env_info(&self.env);
+        let env_info = env_info(&self.env);
         info!("Environment information:");
         info!("  Map size: {}", env_info.me_mapsize);
         info!("  Last used page: {}", env_info.me_last_pgno);
@@ -91,7 +91,7 @@ impl Catalog for LmdbCatalog {
         info!("  Maximum number of readers: {}", env_info.me_maxreaders);
         info!("  Current number of readers: {}", env_info.me_numreaders);
 
-        let stats = get_env_stat(&self.env);
+        let stats = env_stat(&self.env);
         info!("Environment stats:");
         info!("  Size of database page: {}", stats.ms_psize);
         info!("  Depth of B-tree: {}", stats.ms_depth);
@@ -103,11 +103,11 @@ impl Catalog for LmdbCatalog {
         info!("Catalog version: {}", self.version);
     }
 
-    fn get_max_index(&self) -> u64 {
+    fn max_index(&self) -> u64 {
         self.max_index
     }
 
-    fn get_inode(&self, index: u64) -> DenebResult<INode> {
+    fn inode(&self, index: u64) -> DenebResult<INode> {
         let reader = self.env.begin_ro_txn()?;
         let buffer = reader
             .get(self.inodes, &format!("{}", index))
@@ -117,7 +117,7 @@ impl Catalog for LmdbCatalog {
             .map_err(|e| e.into())
     }
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
+    fn dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {
         let reader = self.env.begin_ro_txn()?;
         let buffer = reader
             .get(self.dir_entries, &format!("{}", parent))
@@ -127,7 +127,7 @@ impl Catalog for LmdbCatalog {
         Ok(entries.get(name).cloned())
     }
 
-    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
+    fn dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>> {
         let reader = self.env.begin_ro_txn()?;
         let buffer = reader
             .get(self.dir_entries, &format!("{}", parent))
@@ -140,7 +140,7 @@ impl Catalog for LmdbCatalog {
             .collect::<Vec<(PathBuf, u64)>>())
     }
 
-    fn add_inode(&mut self, inode: INode) -> DenebResult<()> {
+    fn add_inode(&mut self, inode: &INode) -> DenebResult<()> {
         let index = inode.attributes.index;
         let buffer = serialize(&inode).context(CatalogError::INodeSerialization(index))?;
 
@@ -228,6 +228,20 @@ impl Catalog for LmdbCatalog {
         writer.commit()?;
         Ok(())
     }
+
+    fn remove_inode(&mut self, index: u64) -> DenebResult<()> {
+        let mut writer = self.env.begin_rw_txn()?;
+
+        writer
+            .del(self.inodes, &format!("{}", index), None)
+            .context(CatalogError::INodeDelete(index))?;
+        writer
+            .del(self.dir_entries, &format!("{}", index), None)
+            .context(CatalogError::INodeDelete(index))?;
+
+        writer.commit()?;
+        Ok(())
+    }
 }
 
 fn init_db<P: AsRef<Path>>(
@@ -256,7 +270,7 @@ fn try_create_db(env: &Environment, name: &str) -> Result<Database, LmdbError> {
     env.create_db(Some(name), DatabaseFlags::empty())
 }
 
-fn get_env_info(env: &Environment) -> MDB_envinfo {
+fn env_info(env: &Environment) -> MDB_envinfo {
     let mut env_info;
     unsafe {
         env_info = ::std::mem::zeroed::<MDB_envinfo>();
@@ -265,7 +279,7 @@ fn get_env_info(env: &Environment) -> MDB_envinfo {
     env_info
 }
 
-fn get_env_stat(env: &Environment) -> MDB_stat {
+fn env_stat(env: &Environment) -> MDB_stat {
     let mut env_stat;
     unsafe {
         env_stat = ::std::mem::zeroed::<MDB_stat>();
@@ -304,8 +318,8 @@ mod tests {
                         let attrs2 = FileAttributes::with_stats(stats2, 3);
                         let inode1 = INode::new(attrs1, vec![]);
                         let inode2 = INode::new(attrs2, vec![]);
-                        assert!(catalog.add_inode(inode1).is_ok());
-                        assert!(catalog.add_inode(inode2).is_ok());
+                        assert!(catalog.add_inode(&inode1).is_ok());
+                        assert!(catalog.add_inode(&inode2).is_ok());
                     }
                 }
             }
@@ -313,7 +327,7 @@ mod tests {
                 let catalog = open_catalog(CatalogType::Lmdb, &catalog_path, false);
                 assert!(catalog.is_ok());
                 if let Ok(catalog) = catalog {
-                    assert_eq!(catalog.get_max_index(), 3);
+                    assert_eq!(catalog.max_index(), 3);
                 }
             }
         }

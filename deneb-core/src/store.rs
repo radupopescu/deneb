@@ -40,7 +40,7 @@ pub trait Store: Send {
     ///
     /// The method returns the "unpacked" chunks wrapped in an `Arc`,
     /// allowing implementations to cache the results.
-    fn get_chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>>;
+    fn chunk(&self, digest: &Digest) -> DenebResult<Arc<dyn Chunk>>;
 
     /// Write a single chunk into the repository
     ///
@@ -71,4 +71,17 @@ pub trait Store: Send {
         }
         Ok(descriptors)
     }
+
+    /// Read a special file from outside of the content-addressed area of the store
+    fn read_special_file(&self, file_name: &Path) -> DenebResult<Vec<u8>>;
+
+    /// Write a special file outside of the content-addresed area of the store
+    ///
+    /// Special files are the repository manifest, reflog etc.
+    fn write_special_file(
+        &mut self,
+        file_name: &Path,
+        data: &mut dyn Read,
+        append: bool,
+    ) -> DenebResult<()>;
 }

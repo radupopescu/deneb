@@ -28,17 +28,19 @@ pub fn open_catalog<P: AsRef<Path>>(
 pub trait Catalog: Send {
     fn show_stats(&self) {}
 
-    fn get_max_index(&self) -> u64;
+    fn max_index(&self) -> u64;
 
-    fn get_inode(&self, index: u64) -> DenebResult<INode>;
+    fn inode(&self, index: u64) -> DenebResult<INode>;
 
-    fn get_dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>>;
+    fn dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>>;
 
-    fn get_dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>>;
+    fn dir_entries(&self, parent: u64) -> DenebResult<Vec<(PathBuf, u64)>>;
 
-    fn add_inode(&mut self, inode: INode) -> DenebResult<()>;
+    fn add_inode(&mut self, inode: &INode) -> DenebResult<()>;
 
     fn add_dir_entry(&mut self, parent: u64, name: &Path, index: u64) -> DenebResult<()>;
+
+    fn remove_inode(&mut self, index: u64) -> DenebResult<()>;
 }
 
 #[derive(Copy, Clone)]
@@ -57,7 +59,10 @@ impl IndexGenerator {
         IndexGenerator { current_index: i0 }
     }
 
-    pub fn get_next(&mut self) -> u64 {
+    pub fn next(&mut self) -> u64 {
+        if self.current_index == std::u64::MAX {
+            panic!("Index generator: max index reached.")
+        }
         self.current_index += 1;
         self.current_index
     }
