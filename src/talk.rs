@@ -1,7 +1,7 @@
 use {
     bincode::{deserialize, serialize},
     deneb_core::errors::DenebResult,
-    log::info,
+    log::{error, info},
     serde::{Deserialize, Serialize},
     std::{
         fs::remove_file,
@@ -26,15 +26,21 @@ where
     A: Fn(Command) -> DenebResult<String> + Send + 'static,
 {
     spawn(move || {
-        remove_file(&socket_file)?;
-        let listener = UnixListener::bind(socket_file)?;
-        for stream in listener.incoming() {
-            let mut socket = stream?;
-            let mut bytes = Vec::new();
-            socket.read_to_end(&mut bytes)?;
-            let cmd = deserialize(&bytes)?;
-            let reply = action(cmd)?;
-            socket.write_all(reply.as_bytes())?;
+        let _ = remove_file(&socket_file);
+        match UnixListener::bind(socket_file) {
+            Ok(listener) => {
+                for stream in listener.incoming() {
+                    let mut socket = stream?;
+                    let mut bytes = Vec::new();
+                    socket.read_to_end(&mut bytes)?;
+                    let cmd = deserialize(&bytes)?;
+                    let reply = action(cmd)?;
+                    socket.write_all(reply.as_bytes())?;
+                }
+            }
+            Err(e) => {
+                error!("Could not bind listener socket: {}", e);
+            }
         }
         let ret: DenebResult<()> = Ok(());
         ret
