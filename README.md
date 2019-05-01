@@ -45,13 +45,24 @@ $ cargo test --all -- --ignored
 
 ## Running
 
-To run Deneb with the default settings:
-
+Deneb can be started with the default settings by running:
 ```
-$ cargo run
+$ cargo run --bin deneb
+```
+This mounts a Deneb repository at `Deneb::mount`. To stop this instance, just unmount the repository:
+```
+$ umount ~/Deneb/main
 ```
 
-**Note:** There is basic write support available inside the mount point, but the persistence of the changes between runs hasn't yet been implemented.
+During development, Deneb can be started without forking into the background:
+```
+$ cargo run --bin deneb -- --foreground
+```
+
+By default, any changes to the contents of the Deneb repository are committed to disk every 5 seconds. The `deneb-cli` commandline utility can instruct a Deneb instance to commit any outstanding changes:
+```
+$ cargo run --bin deneb-cli -- commit
+```
 
 ## License and authorship
 
