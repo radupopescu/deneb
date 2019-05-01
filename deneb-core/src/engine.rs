@@ -15,7 +15,7 @@ use {
     },
     crossbeam_channel::bounded as channel,
     failure::{Error, ResultExt},
-    log::{debug, info},
+    log::info,
     std::{
         path::PathBuf,
         thread::{spawn, JoinHandle},
@@ -252,7 +252,6 @@ impl RequestHandler<Rename> for Engine {
 
 impl RequestHandler<Commit> for Engine {
     fn handle(&mut self, _request: &Commit) -> DenebResult<CommitSummary> {
-        debug!("Engine received commit request.");
         self.workspace
             .commit()
             .context(EngineError::Commit)
@@ -262,7 +261,6 @@ impl RequestHandler<Commit> for Engine {
 
 impl RequestHandler<Ping> for Engine {
     fn handle(&mut self, _request: &Ping) -> DenebResult<String> {
-        debug!("Engine received ping request.");
         Ok("Pong".to_string())
     }
 }

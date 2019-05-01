@@ -12,7 +12,7 @@ mod config;
 
 const DEFAULT_LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const DEFAULT_CHUNK_SIZE: usize = 4_194_304;
-const DEFAULT_AUTO_COMMIT_INTERVAL: usize = 300; // 5 min interval
+const DEFAULT_AUTO_COMMIT_INTERVAL: usize = 5; // 5 sec interval
 
 pub struct App {
     pub settings: Settings,
