@@ -238,7 +238,8 @@ impl Workspace {
 
 impl<'reader> Read for WorkspaceReader<'reader> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        let res = self.ws.read_at(self.cursor, buf.len());
+        let read_size = std::cmp::min(self.ws.size as usize - self.cursor, buf.len());
+        let res = self.ws.read_at(self.cursor, read_size);
         match res {
             Ok(data) => {
                 buf[0..data.len()].copy_from_slice(data.as_slice());
