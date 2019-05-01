@@ -22,7 +22,7 @@ use {
         util::{atomic_write, get_egid, get_euid},
     },
     failure::ResultExt,
-    log::info,
+    log::{error, info},
     nix::libc::mode_t,
     std::{
         cell::RefCell,
@@ -433,7 +433,13 @@ impl Workspace {
     }
 
     pub(in crate) fn commit(&mut self) -> DenebResult<CommitSummary> {
-        return commit_workspace(self)
+        match commit_workspace(self) {
+            Ok(summary) => Ok(summary),
+            Err(e) => {
+                error!("Error encountered during commit: {}", e);
+                Err(e)
+            }
+        }
     }
 
     // Note: We perform inefficient double lookups since Catalog::inode returns a Result

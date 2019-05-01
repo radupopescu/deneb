@@ -1,7 +1,6 @@
 use {
     super::{Workspace, MANIFEST_PATH, REFLOG_PATH},
     crate::{
-        cas::Digest,
         errors::DenebResult, inode::ChunkDescriptor, workspace::inode::Workspace as INodeWorkspace,
     },
     log::debug,
@@ -22,7 +21,7 @@ pub(in crate) struct Summary {
     files_written: usize,
     chunks_written: usize,
     dir_entries_added: usize,
-    new_root_hash: Option<Digest>,
+    new_root_hash: Option<String>,
 }
 
 impl Summary {
@@ -66,11 +65,10 @@ pub(super) fn commit_workspace(ws: &mut Workspace) -> DenebResult<Summary> {
     prune_inodes(ws, &mut summary)?;
 
     let updates = write_file_data(ws, &mut summary)?;
-
     update_chunks(ws, &updates.new_chunks, &mut summary)?;
 
-    write_dirs(ws, &mut summary)?;
     write_inodes(ws, &mut summary)?;
+    write_dirs(ws, &mut summary)?;
 
     finalize(ws, &mut summary)?;
 
@@ -184,7 +182,7 @@ fn finalize(ws: &mut Workspace, summary: &mut Summary) -> DenebResult<()> {
     let buf = ws.manifest.serialize()?;
     store.write_special_file(&manifest_path, &mut (&buf[..]), false)?;
 
-    summary.new_root_hash = Some(ws.manifest.root_hash);
+    summary.new_root_hash = Some(ws.manifest.root_hash.to_string());
 
     Ok(())
 }
