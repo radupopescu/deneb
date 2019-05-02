@@ -1,10 +1,10 @@
 use {
-    structopt::StructOpt,
     deneb::{
         app::Directories,
         talk::{ask, Command},
     },
     deneb_core::errors::DenebResult,
+    structopt::StructOpt,
 };
 
 #[derive(StructOpt)]

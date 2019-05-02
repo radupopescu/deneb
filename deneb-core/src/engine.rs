@@ -11,7 +11,7 @@ use {
         catalog::CatalogType,
         errors::{DenebResult, EngineError},
         store::StoreType,
-        workspace::{Workspace, CommitSummary},
+        workspace::{CommitSummary, Workspace},
     },
     crossbeam_channel::bounded as channel,
     failure::{Error, ResultExt},

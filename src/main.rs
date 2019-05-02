@@ -54,13 +54,14 @@ fn main() -> DenebResult<()> {
 
     // Start a listener for commands received from deneb-cli
     let handle2 = handle.clone();
-    listen(app.directories.workspace.join("cmd.sock"), move |cmd| {
-        match cmd {
+    listen(
+        app.directories.workspace.join("cmd.sock"),
+        move |cmd| match cmd {
             Command::Status => Ok("".to_string()),
             Command::Ping => handle2.ping(),
             Command::Commit => handle2.commit(),
-        }
-    })?;
+        },
+    )?;
 
     let options = Fs::make_options(&[
         "negative_vncache".to_string(),

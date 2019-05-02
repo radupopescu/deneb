@@ -8,8 +8,8 @@ use {
         collections::HashMap,
         fmt::{Display, Formatter, Result as FmtResult},
         fs::File,
-        path::PathBuf,
         io::Write,
+        path::PathBuf,
     },
     time::now_utc,
 };

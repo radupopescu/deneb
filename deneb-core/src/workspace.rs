@@ -389,13 +389,13 @@ impl Workspace {
 
         let src_entry = if let Some(ws) = self.dirs.get_mut(&parent) {
             let pname = PathBuf::from(name);
-            let entry =
-                ws.entry(&pname)
-                    .cloned()
-                    .ok_or_else(|| DirWorkspaceEntryLookupError {
-                        parent,
-                        name: name.to_owned(),
-                    })?;
+            let entry = ws
+                .entry(&pname)
+                .cloned()
+                .ok_or_else(|| DirWorkspaceEntryLookupError {
+                    parent,
+                    name: name.to_owned(),
+                })?;
             ws.remove_entry(&pname);
             entry
         } else {

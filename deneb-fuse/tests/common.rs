@@ -1,11 +1,7 @@
 #![allow(dead_code)]
 
 use {
-    deneb_core::{
-        cas::hash,
-        errors::DenebResult,
-        util::atomic_write,
-    },
+    deneb_core::{cas::hash, errors::DenebResult, util::atomic_write},
     failure::bail,
     quickcheck::{Arbitrary, Gen, RngCore},
     rand::{thread_rng, Rng},

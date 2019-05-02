@@ -246,7 +246,7 @@ impl<'reader> Read for WorkspaceReader<'reader> {
                 self.cursor += data.len();
                 Ok(data.len())
             }
-            Err(e) => Err(IoError::new(ErrorKind::Other, e.compat()))
+            Err(e) => Err(IoError::new(ErrorKind::Other, e.compat())),
         }
     }
 }
