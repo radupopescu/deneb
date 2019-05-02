@@ -149,7 +149,7 @@ fn write_dirs(ws: &mut Workspace, summary: &mut Summary) -> DenebResult<()> {
 
 // Write inode workspaces to the catalog
 fn write_inodes(ws: &mut Workspace, summary: &mut Summary) -> DenebResult<()> {
-    for (_, iws) in &ws.inodes {
+    for iws in ws.inodes.values() {
         if iws.dirty {
             ws.catalog.add_inode(iws.inode())?;
             summary.inodes_updated += 1;

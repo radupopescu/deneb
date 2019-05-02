@@ -82,10 +82,10 @@ impl Workspace {
     }
 
     pub(crate) fn reader(&self) -> WorkspaceReader {
-        return WorkspaceReader {
+        WorkspaceReader {
             ws: self,
             cursor: 0,
-        };
+        }
     }
 
     /// Read `size` number of bytes, starting at `offset`

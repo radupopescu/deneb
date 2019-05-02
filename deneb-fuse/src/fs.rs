@@ -68,12 +68,15 @@ impl<'a> Fs {
         engine_handle: Handle,
         options: &[String],
     ) -> DenebResult<Session<'a>> {
-        let opts = options.iter().map(|o| o.as_ref()).collect::<Vec<&OsStr>>();
+        let opts = options
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect::<Vec<&OsStr>>();
         let fs = Fs { engine_handle };
         unsafe {
             spawn_mount(fs, mount_point, &opts)
                 .map(|s| Session::new(s, mount_point))
-                .map_err(|e| e.into())
+                .map_err(std::convert::Into::into)
         }
     }
 
@@ -82,9 +85,12 @@ impl<'a> Fs {
         engine_handle: Handle,
         options: &[String],
     ) -> DenebResult<()> {
-        let opts = options.iter().map(|o| o.as_ref()).collect::<Vec<&OsStr>>();
+        let opts = options
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect::<Vec<&OsStr>>();
         let fs = Fs { engine_handle };
-        mount(fs, mount_point, &opts).map_err(|e| e.into())
+        mount(fs, mount_point, &opts).map_err(std::convert::Into::into)
     }
 
     pub fn make_options(opts: &[String]) -> Vec<String> {

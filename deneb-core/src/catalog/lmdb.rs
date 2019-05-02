@@ -114,7 +114,7 @@ impl Catalog for LmdbCatalog {
             .context(CatalogError::INodeRead(index))?;
         deserialize::<INode>(buffer)
             .context(CatalogError::INodeDeserialization(index))
-            .map_err(|e| e.into())
+            .map_err(std::convert::Into::into)
     }
 
     fn dir_entry_index(&self, parent: u64, name: &Path) -> DenebResult<Option<u64>> {

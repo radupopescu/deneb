@@ -30,15 +30,15 @@ impl Manifest {
         let mut f = File::open(manifest_file)?;
         let mut m = String::new();
         let _ = f.read_to_string(&mut m)?;
-        toml::from_str(m.as_str()).map_err(|e| e.into())
+        toml::from_str(m.as_str()).map_err(std::convert::Into::into)
     }
 
     pub fn serialize(&self) -> DenebResult<Vec<u8>> {
-        toml::to_vec(self).map_err(|e| e.into())
+        toml::to_vec(self).map_err(std::convert::Into::into)
     }
 
     pub fn deserialize(s: &[u8]) -> DenebResult<Manifest> {
-        toml::from_slice(s).map_err(|e| e.into())
+        toml::from_slice(s).map_err(std::convert::Into::into)
     }
 }
 
