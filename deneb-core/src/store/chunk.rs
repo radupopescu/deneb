@@ -2,12 +2,18 @@ use {
     crate::{cas::Digest, errors::DenebResult},
     log::trace,
     memmap::Mmap,
-    std::{fs::File, path::PathBuf},
+    std::{
+        fs::{remove_file, File},
+        os::unix::fs::FileExt,
+        path::PathBuf,
+    },
 };
 
 /// An trait for accessing the contents of chunks stored in a repository
 ///
 pub trait Chunk: Send + Sync {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize>;
+
     /// Return the content of the chunk in a slice
     ///
     fn slice(&self) -> &[u8];
@@ -15,9 +21,49 @@ pub trait Chunk: Send + Sync {
     fn size(&self) -> usize;
 }
 
+pub(crate) struct DiskChunk {
+    size: usize,
+    disk_path: PathBuf,
+    file_handle: File,
+}
+
+impl DiskChunk {
+    pub(crate) fn try_new(size: usize, disk_path: PathBuf) -> DenebResult<DiskChunk> {
+        let file_handle = File::open(&disk_path)?;
+        Ok(DiskChunk {
+            size,
+            disk_path,
+            file_handle,
+        })
+    }
+}
+
+impl Drop for DiskChunk {
+    fn drop(&mut self) {
+        trace!("Removing chunk file: {:?}", &self.disk_path);
+        let _ = remove_file(&self.disk_path);
+    }
+}
+
+impl Chunk for DiskChunk {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize> {
+        self.file_handle
+            .read_at(buf, offset)
+            .map_err(std::convert::Into::into)
+    }
+
+    fn slice(&self) -> &[u8] {
+        &[]
+    }
+
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+
 pub(crate) struct MmapChunk {
     digest: Digest,
-    pub size: usize,
+    size: usize,
     disk_path: PathBuf,
     map: Mmap,
     own_file: bool,
@@ -55,6 +101,10 @@ impl Drop for MmapChunk {
 }
 
 impl Chunk for MmapChunk {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize> {
+        Ok(0)
+    }
+
     fn slice(&self) -> &[u8] {
         trace!(
             "Loaded contents of chunk {} -  size: {}",
@@ -81,6 +131,11 @@ impl MemChunk {
 }
 
 impl Chunk for MemChunk {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize> {
+        buf.copy_from_slice(&self.data.as_slice()[offset as usize..offset as usize + buf.len()]);
+        Ok(buf.len())
+    }
+
     fn slice(&self) -> &[u8] {
         trace!(
             "Loaded contents of chunk {} -  size: {}",
