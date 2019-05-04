@@ -98,7 +98,9 @@ impl Workspace {
         {
             let root_hash = manifest.root_hash;
             let chunk = store.chunk(&root_hash)?;
-            atomic_write(catalog_path.as_path(), chunk.slice())?;
+            let mut buf = vec![0; chunk.size()];
+            chunk.read_at(&mut buf, 0)?;
+            atomic_write(catalog_path.as_path(), buf.as_slice())?;
         }
 
         let catalog = open_catalog(catalog_type, catalog_path.as_path(), false)?;

@@ -219,8 +219,9 @@ impl Workspace {
                     let mut lower = self.lower.borrow_mut();
                     lower.load_chunk(chunk_index)?;
                     let chunk = &lower.chunks[&chunk_index];
-                    let slice = chunk.slice();
-                    buffer.extend_from_slice(&slice[(piece.offset + begin)..(piece.offset + end)]);
+                    let old_size = buffer.len();
+                    buffer.resize(buffer.len() + end - begin, 0);
+                    chunk.read_at(&mut buffer[old_size..], piece.offset as u64)?;
                 }
                 PieceTarget::Upper => {
                     buffer.extend_from_slice(

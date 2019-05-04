@@ -1,5 +1,5 @@
 use {
-    crate::{cas::Digest, errors::DenebResult},
+    crate::errors::DenebResult,
     log::trace,
     std::{
         fs::{remove_file, File},
@@ -12,10 +12,6 @@ use {
 ///
 pub trait Chunk: Send + Sync {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize>;
-
-    /// Return the content of the chunk in a slice
-    ///
-    fn slice(&self) -> &[u8];
 
     fn size(&self) -> usize;
 }
@@ -51,23 +47,18 @@ impl Chunk for DiskChunk {
             .map_err(std::convert::Into::into)
     }
 
-    fn slice(&self) -> &[u8] {
-        &[]
-    }
-
     fn size(&self) -> usize {
         self.size
     }
 }
 
 pub(crate) struct MemChunk {
-    digest: Digest,
     data: Vec<u8>,
 }
 
 impl MemChunk {
-    pub(crate) fn new(digest: Digest, data: Vec<u8>) -> MemChunk {
-        MemChunk { digest, data }
+    pub(crate) fn new(data: Vec<u8>) -> MemChunk {
+        MemChunk { data }
     }
 }
 
@@ -75,15 +66,6 @@ impl Chunk for MemChunk {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize> {
         buf.copy_from_slice(&self.data.as_slice()[offset as usize..offset as usize + buf.len()]);
         Ok(buf.len())
-    }
-
-    fn slice(&self) -> &[u8] {
-        trace!(
-            "Loaded contents of chunk {} -  size: {}",
-            self.digest,
-            self.data.len(),
-        );
-        self.data.as_slice()
     }
 
     fn size(&self) -> usize {
@@ -98,36 +80,36 @@ mod tests {
 
     use super::{Chunk, DiskChunk, MemChunk};
 
-    use crate::cas::hash;
+    use crate::errors::DenebResult;
 
     #[test]
-    fn mmap_chunk() {
+    fn disk_chunk() -> DenebResult<()> {
         const MSG: &[u8] = b"alabalaportocala";
 
-        let tmp = TempDir::new("chunks");
-        if let Ok(tmp) = tmp {
-            let fname = tmp.path().join("c1");
-            let f = OpenOptions::new()
-                .write(true)
-                .read(true)
-                .create(true)
-                .open(&fname);
-            if let Ok(mut f) = f {
-                let _ = f.write(MSG);
-                let cnk = DiskChunk::try_new(MSG.len(), fname.clone());
-                if let Ok(cnk) = cnk {
-                    let cnk = Box::new(cnk);
-                    assert_eq!(MSG, cnk.slice());
-                }
-            }
-        }
+        let tmp = TempDir::new("chunks")?;
+        let fname = tmp.path().join("c1");
+        let mut f = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(&fname)?;
+        f.write(MSG)?;
+        let cnk = DiskChunk::try_new(MSG.len(), fname.clone())?;
+        let cnk = Box::new(cnk);
+        let mut buf = vec![0; cnk.size()];
+        cnk.read_at(&mut buf, 0)?;
+        assert_eq!(MSG, buf.as_slice());
+        Ok(())
     }
 
     #[test]
-    fn mem_chunk() {
+    fn mem_chunk() -> DenebResult<()> {
         const MSG: &[u8] = b"alabalaportocala";
 
-        let cnk = MemChunk::new(hash(MSG), MSG.to_owned());
-        assert_eq!(MSG, cnk.slice());
+        let cnk = MemChunk::new(MSG.to_owned());
+        let mut buf = vec![0; cnk.size()];
+        cnk.read_at(&mut buf, 0)?;
+        assert_eq!(MSG, buf.as_slice());
+        Ok(())
     }
 }

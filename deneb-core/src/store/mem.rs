@@ -46,7 +46,7 @@ impl Store for MemStore {
     fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
         self.objects
             .entry(*digest)
-            .or_insert_with(|| Arc::new(MemChunk::new(*digest, contents)));
+            .or_insert_with(|| Arc::new(MemChunk::new(contents)));
         Ok(())
     }
 
@@ -89,7 +89,9 @@ mod tests {
         let mut v1: &[u8] = BYTES;
         let descriptors = store.put_file_chunked(&mut v1)?;
         let v2 = store.chunk(&descriptors[0].digest)?;
-        assert_eq!(BYTES, v2.slice());
+        let mut buf = vec![0; v2.size()];
+        v2.read_at(&mut buf, 0)?;
+        assert_eq!(BYTES, buf.as_slice());
         Ok(())
     }
 }

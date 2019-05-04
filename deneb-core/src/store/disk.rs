@@ -94,10 +94,6 @@ impl Store for DiskStore {
         } else {
             let full_path = self.unpack_chunk(digest)?;
             let file_stats = stat(full_path.as_path())?;
-            // Note: once compression and/or encryption are implemented, the MmapChunk::new
-            //       function can be called with true as a last parameter, ensuring that the
-            //       unpacked chunk files are deleted when the last reference to the chunk
-            //       goes away.
             let chunk = DiskChunk::try_new(file_stats.st_size as usize, full_path)?;
             cache.put(*digest, Arc::new(chunk));
             cache
@@ -163,7 +159,9 @@ mod tests {
         let mut v1: &[u8] = BYTES;
         let descriptors = store.put_file_chunked(&mut v1)?;
         let v2 = store.chunk(&descriptors[0].digest)?;
-        assert_eq!(BYTES, v2.slice());
+        let mut buf = vec![0; v2.size()];
+        v2.read_at(&mut buf, 0)?;
+        assert_eq!(BYTES, buf.as_slice());
         Ok(())
     }
 }
