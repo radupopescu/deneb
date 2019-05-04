@@ -92,7 +92,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn manifest_serde() {
+    fn manifest_serde() -> DenebResult<()> {
         let fake_stuff = vec![0 as u8; 100];
         let digest = hash(fake_stuff.as_slice());
         let mut manifest = Manifest::new(digest, now_utc());
@@ -105,44 +105,33 @@ mod tests {
             ts.tm_nsec = 0;
         }
         println!("Manifest  (original): {:?}", manifest);
-        let manifest_text = toml::to_string(&manifest);
-        assert!(manifest_text.is_ok());
-        if let Ok(manifest_text) = manifest_text {
-            println!("Manifest (serialized): {:?}", manifest_text);
-            let manifest2 = toml::from_str(manifest_text.as_str());
-            assert!(manifest2.is_ok());
-            if let Ok(manifest2) = manifest2 {
-                println!("Manifest (recovered): {:?}", manifest2);
-                assert_eq!(manifest, manifest2);
-            }
-        }
+        let manifest_text = toml::to_string(&manifest)?;
+        println!("Manifest (serialized): {:?}", manifest_text);
+        let manifest2 = toml::from_str(manifest_text.as_str())?;
+        println!("Manifest (recovered): {:?}", manifest2);
+        assert_eq!(manifest, manifest2);
+
+        Ok(())
     }
 
     #[test]
-    fn manifest_save_load() {
-        let tmp = TempDir::new("/tmp/deneb_manifest_test");
-        assert!(tmp.is_ok());
-        if let Ok(prefix) = tmp {
-            let fake_stuff = vec![0 as u8; 100];
-            let digest = hash(fake_stuff.as_slice());
-            let mut manifest1 = Manifest::new(digest, now_utc());
-            {
-                let ts = &mut manifest1.timestamp;
-                ts.tm_yday = 0;
-                ts.tm_isdst = 0;
-                ts.tm_utcoff = 0;
-                ts.tm_nsec = 0;
-            }
-            let manifest_file = prefix.path().to_owned().join("manifest");
-            let ret = manifest1.save(manifest_file.as_path());
-            assert!(ret.is_ok());
-            if ret.is_ok() {
-                let manifest2 = Manifest::load(manifest_file.as_path());
-                assert!(manifest2.is_ok());
-                if let Ok(manifest2) = manifest2 {
-                    assert_eq!(manifest1, manifest2);
-                }
-            }
+    fn manifest_save_load() -> DenebResult<()> {
+        let tmp = TempDir::new("/tmp/deneb_manifest_test")?;
+        let fake_stuff = vec![0 as u8; 100];
+        let digest = hash(fake_stuff.as_slice());
+        let mut manifest1 = Manifest::new(digest, now_utc());
+        {
+            let ts = &mut manifest1.timestamp;
+            ts.tm_yday = 0;
+            ts.tm_isdst = 0;
+            ts.tm_utcoff = 0;
+            ts.tm_nsec = 0;
         }
+        let manifest_file = tmp.path().to_owned().join("manifest");
+        manifest1.save(manifest_file.as_path())?;
+        let manifest2 = Manifest::load(manifest_file.as_path())?;
+        assert_eq!(manifest1, manifest2);
+
+        Ok(())
     }
 }

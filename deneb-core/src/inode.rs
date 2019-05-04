@@ -234,23 +234,23 @@ struct TimespecDef {
 
 #[cfg(test)]
 mod tests {
-    use nix::sys::stat::lstat;
-
-    use super::*;
+    use {super::*, crate::errors::DenebResult, nix::sys::stat::lstat};
 
     #[test]
-    fn mode_to_file_type_test() {
-        let stats = lstat("/usr").unwrap();
+    fn mode_to_file_type_test() -> DenebResult<()> {
+        let stats = lstat("/usr")?;
         assert_eq!(mode_to_file_type(stats.st_mode), FileType::Directory);
 
-        let stats = lstat("/etc/hosts").unwrap();
+        let stats = lstat("/etc/hosts")?;
         assert_eq!(mode_to_file_type(stats.st_mode), FileType::RegularFile);
+
+        Ok(())
     }
 
     #[test]
-    fn mode_to_permissions_test() {
-        let stats = lstat("/etc/hosts").unwrap();
+    fn mode_to_permissions_test() -> DenebResult<()> {
+        let stats = lstat("/etc/hosts")?;
         assert_eq!(mode_to_permissions(stats.st_mode), 0o644);
+        Ok(())
     }
-
 }

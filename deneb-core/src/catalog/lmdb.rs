@@ -298,38 +298,26 @@ mod tests {
     use crate::inode::FileAttributes;
 
     #[test]
-    fn lmdb_catalog_create_then_reopen() {
-        let tmp = TempDir::new("/tmp/deneb_lmdb_test");
-        assert!(tmp.is_ok());
-        if let Ok(prefix) = tmp {
-            let catalog_path = prefix.path().to_owned().join("test-lmdb-catalog");
-            {
-                let catalog = open_catalog(CatalogType::Lmdb, &catalog_path, true);
-                assert!(catalog.is_ok());
-                if let Ok(mut catalog) = catalog {
-                    catalog.show_stats();
+    fn lmdb_catalog_create_then_reopen() -> DenebResult<()> {
+        let tmp = TempDir::new("/tmp/deneb_lmdb_test")?;
+        let catalog_path = tmp.path().to_owned().join("test-lmdb-catalog");
+        {
+            let mut catalog = open_catalog(CatalogType::Lmdb, &catalog_path, true)?;
+            catalog.show_stats();
 
-                    let stats1 = lstat(Path::new("/tmp/"));
-                    let stats2 = lstat(Path::new("/usr/"));
-                    assert!(stats1.is_ok());
-                    assert!(stats2.is_ok());
-                    if let (Ok(stats1), Ok(stats2)) = (stats1, stats2) {
-                        let attrs1 = FileAttributes::with_stats(stats1, 2);
-                        let attrs2 = FileAttributes::with_stats(stats2, 3);
-                        let inode1 = INode::new(attrs1, vec![]);
-                        let inode2 = INode::new(attrs2, vec![]);
-                        assert!(catalog.add_inode(&inode1).is_ok());
-                        assert!(catalog.add_inode(&inode2).is_ok());
-                    }
-                }
-            }
-            {
-                let catalog = open_catalog(CatalogType::Lmdb, &catalog_path, false);
-                assert!(catalog.is_ok());
-                if let Ok(catalog) = catalog {
-                    assert_eq!(catalog.max_index(), 3);
-                }
-            }
+            let stats1 = lstat(Path::new("/tmp/"))?;
+            let stats2 = lstat(Path::new("/usr/"))?;
+            let attrs1 = FileAttributes::with_stats(stats1, 2);
+            let attrs2 = FileAttributes::with_stats(stats2, 3);
+            let inode1 = INode::new(attrs1, vec![]);
+            let inode2 = INode::new(attrs2, vec![]);
+            assert!(catalog.add_inode(&inode1).is_ok());
+            assert!(catalog.add_inode(&inode2).is_ok());
         }
+        {
+            let catalog = open_catalog(CatalogType::Lmdb, &catalog_path, false)?;
+            assert_eq!(catalog.max_index(), 3);
+        }
+        Ok(())
     }
 }

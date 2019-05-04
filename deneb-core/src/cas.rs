@@ -119,17 +119,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn digest_to_string_and_back() {
+    fn digest_to_string_and_back() -> DenebResult<()> {
         let digest = hash("some_key".as_ref());
         let serialized = digest.to_string();
         #[rustfmt::skip]
         assert_eq!(serialized, "41bcc5cb17c49e80e1f20fde666dedad51bc35f146051da2689419948c07a4974e65be08e41fc194126a3e162aee9165271a32119e0cd369e587cf519a68e293");
 
-        let deserialized = digest_from_slice(serialized.as_bytes());
-        assert!(deserialized.is_ok());
-        if let Ok(deserialized) = deserialized {
-            assert_eq!(digest, deserialized);
-        }
+        let deserialized = digest_from_slice(serialized.as_bytes())?;
+        assert_eq!(digest, deserialized);
+        Ok(())
     }
 
     fn helper(file_size: usize, chunk_size: u64) -> DenebResult<bool> {
@@ -151,12 +149,10 @@ mod tests {
     }
 
     #[test]
-    fn digest_small_file_gives_single_chunk() {
-        let res = helper(5, 10);
-        assert!(res.is_ok());
-        if let Ok(res) = res {
-            assert!(res);
-        }
+    fn digest_small_file_gives_single_chunk() -> DenebResult<()> {
+        let res = helper(5, 10)?;
+        assert!(res);
+        Ok(())
     }
 
     #[test]
