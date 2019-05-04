@@ -1,7 +1,6 @@
 use {
     crate::{cas::Digest, errors::DenebResult},
     log::trace,
-    memmap::Mmap,
     std::{
         fs::{remove_file, File},
         os::unix::fs::FileExt,
@@ -61,64 +60,6 @@ impl Chunk for DiskChunk {
     }
 }
 
-pub(crate) struct MmapChunk {
-    digest: Digest,
-    size: usize,
-    disk_path: PathBuf,
-    map: Mmap,
-    own_file: bool,
-}
-
-impl MmapChunk {
-    pub(crate) fn try_new(
-        digest: Digest,
-        size: usize,
-        disk_path: PathBuf,
-        own_file: bool,
-    ) -> DenebResult<MmapChunk> {
-        let f = File::open(&disk_path)?;
-        let map = unsafe { Mmap::map(&f) }?;
-        Ok(MmapChunk {
-            digest,
-            size,
-            disk_path,
-            map,
-            own_file,
-        })
-    }
-}
-
-impl Drop for MmapChunk {
-    fn drop(&mut self) {
-        if self.own_file {
-            if ::std::fs::remove_file(&self.disk_path).is_ok() {
-                trace!("Removing chunk file: {:?}", &self.disk_path);
-            } else {
-                panic!("Could not remove chunk file {:?}", &self.disk_path);
-            }
-        }
-    }
-}
-
-impl Chunk for MmapChunk {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> DenebResult<usize> {
-        Ok(0)
-    }
-
-    fn slice(&self) -> &[u8] {
-        trace!(
-            "Loaded contents of chunk {} -  size: {}",
-            self.digest,
-            self.size
-        );
-        self.map.as_ref()
-    }
-
-    fn size(&self) -> usize {
-        self.size
-    }
-}
-
 pub(crate) struct MemChunk {
     digest: Digest,
     data: Vec<u8>,
@@ -155,7 +96,7 @@ mod tests {
     use std::{fs::OpenOptions, io::Write};
     use tempdir::TempDir;
 
-    use super::{Chunk, MemChunk, MmapChunk};
+    use super::{Chunk, DiskChunk, MemChunk};
 
     use crate::cas::hash;
 
@@ -173,7 +114,7 @@ mod tests {
                 .open(&fname);
             if let Ok(mut f) = f {
                 let _ = f.write(MSG);
-                let cnk = MmapChunk::try_new(hash(MSG), MSG.len(), fname.clone(), true);
+                let cnk = DiskChunk::try_new(MSG.len(), fname.clone());
                 if let Ok(cnk) = cnk {
                     let cnk = Box::new(cnk);
                     assert_eq!(MSG, cnk.slice());

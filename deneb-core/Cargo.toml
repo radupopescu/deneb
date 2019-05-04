@@ -13,7 +13,6 @@ lmdb = "^0.8.0"
 lmdb-sys = "^0.8.0"
 lru = "^0.1.0"
 log = "^0.4.0"
-memmap = "^0.7.0"
 nix = "^0.13.0"
 rust_sodium = "^0.10.0"
 serde = { version = "^1.0.0", features = ["derive"] }

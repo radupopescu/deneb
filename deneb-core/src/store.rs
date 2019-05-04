@@ -7,7 +7,7 @@ use {
     std::{io::Read, path::Path, sync::Arc},
 };
 
-pub(crate) use self::chunk::{Chunk, MemChunk, MmapChunk};
+pub(crate) use self::chunk::{Chunk, DiskChunk, MemChunk};
 
 mod chunk;
 mod disk;

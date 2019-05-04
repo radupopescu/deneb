@@ -1,5 +1,5 @@
 use {
-    super::{Chunk, MmapChunk, Store},
+    super::{Chunk, DiskChunk, Store},
     crate::{
         cas::Digest,
         errors::{DenebResult, StoreError},
@@ -10,7 +10,7 @@ use {
     nix::sys::stat::stat,
     std::{
         cell::RefCell,
-        fs::{create_dir_all, File, OpenOptions},
+        fs::{copy as file_copy, create_dir_all, File, OpenOptions},
         io::{Read, Write},
         path::{Path, PathBuf},
         sync::Arc,
@@ -18,6 +18,7 @@ use {
 };
 
 const OBJECT_PATH: &str = "data";
+const SCRATCH_PATH: &str = "scratch";
 const PREFIX_SIZE: usize = 2;
 
 const CACHE_MAX_OBJECTS: usize = 100;
@@ -35,6 +36,7 @@ pub(super) struct DiskStore {
     chunk_size: usize,
     root_dir: PathBuf,
     object_dir: PathBuf,
+    scratch_dir: PathBuf,
     cache: RefCell<LruCache<Digest, Arc<dyn Chunk>>>,
 }
 
@@ -42,14 +44,17 @@ impl DiskStore {
     pub(super) fn try_new(dir: &Path, chunk_size: usize) -> DenebResult<DiskStore> {
         let root_dir = dir;
         let object_dir = root_dir.join(OBJECT_PATH);
+        let scratch_dir = root_dir.join(SCRATCH_PATH);
 
         // Create object dir
         create_dir_all(&object_dir)?;
+        create_dir_all(&scratch_dir)?;
 
         Ok(DiskStore {
             chunk_size,
             root_dir: root_dir.to_owned(),
             object_dir,
+            scratch_dir,
             cache: RefCell::new(LruCache::new(CACHE_MAX_OBJECTS)),
         })
     }
@@ -60,9 +65,17 @@ impl DiskStore {
         let mut prefix1 = digest.to_string();
         let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
         let file_name = prefix2.split_off(PREFIX_SIZE);
-        let directory = self.object_dir.join(prefix1).join(prefix2);
+        let directory = PathBuf::from(prefix1).join(prefix2);
         let file_path = directory.join(file_name);
         (file_path, directory)
+    }
+
+    fn unpack_chunk(&self, digest: &Digest) -> DenebResult<PathBuf> {
+        let (path_suffix, dir) = self.digest_to_path(digest);
+        let unpacked = self.scratch_dir.join(&path_suffix);
+        create_dir_all(self.scratch_dir.join(dir))?;
+        file_copy(self.object_dir.join(&path_suffix), &unpacked)?;
+        Ok(unpacked)
     }
 }
 
@@ -79,13 +92,13 @@ impl Store for DiskStore {
                 .map(Arc::clone)
                 .ok_or_else(|| StoreError::ChunkGet(digest.to_string()).into())
         } else {
-            let (full_path, _) = self.digest_to_path(digest);
+            let full_path = self.unpack_chunk(digest)?;
             let file_stats = stat(full_path.as_path())?;
             // Note: once compression and/or encryption are implemented, the MmapChunk::new
             //       function can be called with true as a last parameter, ensuring that the
             //       unpacked chunk files are deleted when the last reference to the chunk
             //       goes away.
-            let chunk = MmapChunk::try_new(*digest, file_stats.st_size as usize, full_path, false)?;
+            let chunk = DiskChunk::try_new(file_stats.st_size as usize, full_path)?;
             cache.put(*digest, Arc::new(chunk));
             cache
                 .get(digest)
@@ -95,8 +108,9 @@ impl Store for DiskStore {
     }
 
     fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
-        let (full_path, directory) = self.digest_to_path(&digest);
-        create_dir_all(&directory)?;
+        let (path_suffix, directory) = self.digest_to_path(&digest);
+        let full_path = self.object_dir.join(path_suffix);
+        create_dir_all(self.object_dir.join(directory))?;
         atomic_write(full_path.as_path(), contents.as_slice())?;
         trace!("Chunk written: {:?}", full_path);
         Ok(())
