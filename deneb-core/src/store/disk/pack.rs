@@ -29,7 +29,7 @@ use {
 
 const PREFIX_SIZE: usize = 2;
 
-pub(crate) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Digest> {
+pub(in super) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Digest> {
     let digest = hash(contents);
     let (path_suffix, directory) = digest_to_path(&digest);
     let full_path = data_root.join(path_suffix);
@@ -39,7 +39,7 @@ pub(crate) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Diges
     Ok(digest)
 }
 
-pub(crate) fn unpack_chunk(
+pub(in super) fn unpack_chunk(
     digest: &Digest,
     data_root: &Path,
     scratch_root: &Path,
