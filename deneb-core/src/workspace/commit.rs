@@ -3,7 +3,6 @@ use {
     crate::{
         errors::DenebResult, inode::ChunkDescriptor, workspace::inode::Workspace as INodeWorkspace,
     },
-    log::debug,
     std::{
         collections::HashMap,
         fmt::{Display, Formatter, Result as FmtResult},
@@ -16,6 +15,7 @@ use {
 
 #[derive(Debug)]
 pub(in crate) struct Summary {
+    noop: bool,
     inodes_deleted: usize,
     inodes_updated: usize,
     files_written: usize,
@@ -33,6 +33,7 @@ impl Summary {
 impl Default for Summary {
     fn default() -> Summary {
         Summary {
+            noop: true,
             inodes_deleted: 0,
             inodes_updated: 0,
             files_written: 0,
@@ -58,9 +59,10 @@ pub(super) fn commit_workspace(ws: &mut Workspace) -> DenebResult<Summary> {
     let mut summary = Summary::new();
 
     if !ws.dirty {
-        debug!("Workspace is not dirty. Nothing to commit.");
         return Ok(summary);
     }
+
+    summary.noop = false;
 
     prune_inodes(ws, &mut summary)?;
 
