@@ -1,8 +1,9 @@
 use {
     super::{Chunk, DiskChunk, Store},
     crate::{
-        cas::Digest,
+        cas::{hash, Digest},
         errors::{DenebResult, StoreError},
+        inode::ChunkDescriptor,
         util::atomic_write,
     },
     log::trace,
@@ -59,19 +60,8 @@ impl DiskStore {
         })
     }
 
-    /// Given a Digest, returns the absolute file path and the directory path
-    /// corresponding to the object in the store
-    fn digest_to_path(&self, digest: &Digest) -> (PathBuf, PathBuf) {
-        let mut prefix1 = digest.to_string();
-        let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
-        let file_name = prefix2.split_off(PREFIX_SIZE);
-        let directory = PathBuf::from(prefix1).join(prefix2);
-        let file_path = directory.join(file_name);
-        (file_path, directory)
-    }
-
     fn unpack_chunk(&self, digest: &Digest) -> DenebResult<PathBuf> {
-        let (path_suffix, dir) = self.digest_to_path(digest);
+        let (path_suffix, dir) = digest_to_path(digest);
         let unpacked = self.scratch_dir.join(&path_suffix);
         create_dir_all(self.scratch_dir.join(dir))?;
         file_copy(self.object_dir.join(&path_suffix), &unpacked)?;
@@ -103,13 +93,17 @@ impl Store for DiskStore {
         }
     }
 
-    fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
-        let (path_suffix, directory) = self.digest_to_path(&digest);
+    fn put_chunk(&mut self, contents: &[u8]) -> DenebResult<ChunkDescriptor> {
+        let digest = hash(contents);
+        let (path_suffix, directory) = digest_to_path(&digest);
         let full_path = self.object_dir.join(path_suffix);
         create_dir_all(self.object_dir.join(directory))?;
-        atomic_write(full_path.as_path(), contents.as_slice())?;
+        atomic_write(full_path.as_path(), contents)?;
         trace!("Chunk written: {:?}", full_path);
-        Ok(())
+        Ok(ChunkDescriptor {
+            digest,
+            size: contents.len(),
+        })
     }
 
     fn read_special_file(&self, file_name: &Path) -> DenebResult<Vec<u8>> {
@@ -143,6 +137,17 @@ impl Store for DiskStore {
         trace!("Special file written: {:?}", full_path);
         Ok(())
     }
+}
+
+/// Given a Digest, returns the absolute file path and the directory path
+/// corresponding to the object in the store
+fn digest_to_path(digest: &Digest) -> (PathBuf, PathBuf) {
+    let mut prefix1 = digest.to_string();
+    let mut prefix2 = prefix1.split_off(PREFIX_SIZE);
+    let file_name = prefix2.split_off(PREFIX_SIZE);
+    let directory = PathBuf::from(prefix1).join(prefix2);
+    let file_path = directory.join(file_name);
+    (file_path, directory)
 }
 
 #[cfg(test)]

@@ -16,12 +16,18 @@ pub fn hash(msg: &[u8]) -> Digest {
     Digest(sodium_hash(msg))
 }
 
-pub(crate) fn read_chunks<R: ::std::io::Read>(
+/// Reads bytes from an input source and produces a series of chunks
+///
+/// Reads bytes from an input source into a buffer. Each time the buffer
+/// is full, or when there are no more bytes to be read from the input,
+/// the given processing function will be called to operate on the contents
+/// of the buffer
+pub(crate) fn read_chunked<R: ::std::io::Read>(
     mut reader: R,
     buffer: &mut [u8],
-) -> Result<Vec<(Digest, Vec<u8>)>, DenebError> {
+    mut processor: impl FnMut(&[u8]) -> DenebResult<()>,
+) -> DenebResult<()> {
     let chunk_size = buffer.len();
-    let mut chunks = Vec::new();
     let mut offset = 0;
     loop {
         match reader.read(&mut buffer[offset..]) {
@@ -29,7 +35,7 @@ pub(crate) fn read_chunks<R: ::std::io::Read>(
                 if n > 0 {
                     offset += n;
                     if offset == chunk_size {
-                        chunks.push(hash_buf(&buffer[0..offset]));
+                        processor(&buffer[0..offset])?;
                         offset = 0;
                     }
                 } else if n == 0 {
@@ -41,17 +47,17 @@ pub(crate) fn read_chunks<R: ::std::io::Read>(
                     // Retry if interrupted
                     continue;
                 } else {
-                    return Err(DenebError::DiskIO);
+                    return Err(DenebError::DiskIO.into());
                 }
             }
         }
     }
 
     if offset > 0 {
-        chunks.push(hash_buf(&buffer[0..offset]));
+        processor(&buffer[0..offset])?;
     }
 
-    Ok(chunks)
+    Ok(())
 }
 
 impl Display for Digest {
@@ -106,11 +112,6 @@ fn digest_from_slice(s: &[u8]) -> DenebResult<Digest> {
     }
 }
 
-fn hash_buf(buffer: &[u8]) -> (Digest, Vec<u8>) {
-    let digest = hash(buffer);
-    (digest, buffer.to_vec())
-}
-
 #[cfg(test)]
 mod tests {
     use quickcheck::{QuickCheck, RngCore, StdGen, TestResult};
@@ -134,7 +135,12 @@ mod tests {
         let mut contents = vec![0 as u8; file_size];
         thread_rng().fill_bytes(contents.as_mut());
         let mut buffer = vec![0 as u8; chunk_size as usize];
-        let chunks = read_chunks(contents.as_slice(), buffer.as_mut_slice())?;
+        let mut chunks = vec![];
+        read_chunked(contents.as_slice(), buffer.as_mut_slice(), |s| {
+            let digest = hash(s);
+            chunks.push((digest, s.to_vec()));
+            Ok(())
+        })?;
 
         let mut combined_chunks = Vec::new();
         for &(_, ref data) in &chunks {

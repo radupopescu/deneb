@@ -1,8 +1,9 @@
 use {
     super::{Chunk, MemChunk, Store},
     crate::{
-        cas::Digest,
+        cas::{hash, Digest},
         errors::{DenebResult, StoreError},
+        inode::ChunkDescriptor,
     },
     std::{
         collections::HashMap,
@@ -43,11 +44,15 @@ impl Store for MemStore {
 
     // Note: can this be improved by inserting chunks as the become available from
     //       read_chunks?
-    fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()> {
+    fn put_chunk(&mut self, contents: &[u8]) -> DenebResult<ChunkDescriptor> {
+        let digest = hash(contents);
         self.objects
-            .entry(*digest)
+            .entry(digest)
             .or_insert_with(|| Arc::new(MemChunk::new(contents)));
-        Ok(())
+        Ok(ChunkDescriptor {
+            digest,
+            size: contents.len(),
+        })
     }
 
     fn read_special_file(&self, file_name: &Path) -> DenebResult<Vec<u8>> {

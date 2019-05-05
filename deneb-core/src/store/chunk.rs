@@ -57,8 +57,10 @@ pub(crate) struct MemChunk {
 }
 
 impl MemChunk {
-    pub(crate) fn new(data: Vec<u8>) -> MemChunk {
-        MemChunk { data }
+    pub(crate) fn new(data: &[u8]) -> MemChunk {
+        MemChunk {
+            data: data.to_vec(),
+        }
     }
 }
 
@@ -106,7 +108,7 @@ mod tests {
     fn mem_chunk() -> DenebResult<()> {
         const MSG: &[u8] = b"alabalaportocala";
 
-        let cnk = MemChunk::new(MSG.to_owned());
+        let cnk = MemChunk::new(MSG);
         let mut buf = vec![0; cnk.size()];
         cnk.read_at(&mut buf, 0)?;
         assert_eq!(MSG, buf.as_slice());

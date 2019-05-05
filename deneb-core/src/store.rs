@@ -1,6 +1,6 @@
 use {
     crate::{
-        cas::{hash, read_chunks, Digest},
+        cas::{read_chunked, Digest},
         errors::DenebResult,
         inode::ChunkDescriptor,
     },
@@ -44,17 +44,14 @@ pub trait Store: Send {
 
     /// Write a single chunk into the repository
     ///
-    fn put_chunk(&mut self, digest: &Digest, contents: Vec<u8>) -> DenebResult<()>;
+    fn put_chunk(&mut self, contents: &[u8]) -> DenebResult<ChunkDescriptor>;
 
     /// Write a file into the repository without chunking
     ///
     fn put_file(&mut self, data: &mut dyn Read) -> DenebResult<ChunkDescriptor> {
         let mut buf = vec![];
-        let n = data.read_to_end(&mut buf)?;
-        let digest = hash(buf.as_slice());
-        let descriptor = ChunkDescriptor { digest, size: n };
-        self.put_chunk(&digest, buf)?;
-        Ok(descriptor)
+        data.read_to_end(&mut buf)?;
+        Ok(self.put_chunk(buf.as_slice())?)
     }
 
     /// Write a file into the repository with chunking
@@ -62,13 +59,10 @@ pub trait Store: Send {
     fn put_file_chunked(&mut self, data: &mut dyn Read) -> DenebResult<Vec<ChunkDescriptor>> {
         let mut descriptors = vec![];
         let mut buf = vec![0 as u8; self.chunk_size()];
-        for (digest, obj) in read_chunks(data, buf.as_mut_slice())? {
-            descriptors.push(ChunkDescriptor {
-                digest,
-                size: obj.len(),
-            });
-            self.put_chunk(&digest, obj)?;
-        }
+        read_chunked(data, buf.as_mut_slice(), |s| {
+            descriptors.push(self.put_chunk(s)?);
+            Ok(())
+        })?;
         Ok(descriptors)
     }
 
