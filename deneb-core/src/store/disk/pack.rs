@@ -2,11 +2,16 @@ use {
     crate::{
         cas::{hash, Digest},
         errors::DenebResult,
-        util::atomic_write,
+        util::create_temp_file,
     },
+    failure::ResultExt,
     log::trace,
+    scopeguard::defer,
+    serde::{Deserialize, Serialize},
     std::{
-        fs::{copy as file_copy, create_dir_all},
+        cell::Cell,
+        fs::{create_dir_all, remove_file, rename},
+        io::Write,
         path::{Path, PathBuf},
     },
 };
@@ -28,18 +33,61 @@ use {
 /// copy of the chunk data into the "scratch" area of the store.
 
 const PREFIX_SIZE: usize = 2;
+const MIN_COMPRESSION_THRESHOLD: usize = 1024 * 1024;
 
-pub(in super) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Digest> {
+/// The header is written at the beginning of each packed chunk file. It
+/// contains the packing parameters for the chunk:
+/// - whether compression was used
+/// - nonce used for encryption
+#[derive(Serialize, Deserialize)]
+struct Header {
+    compressed: bool,
+}
+
+pub(super) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Digest> {
     let digest = hash(contents);
     let (path_suffix, directory) = digest_to_path(&digest);
     let full_path = data_root.join(path_suffix);
+    // ensure all needed dirs are created in the data dir
     create_dir_all(data_root.join(directory))?;
-    atomic_write(full_path.as_path(), contents)?;
+
+    // the header contains the packing parameters
+    let mut header = Header { compressed: false };
+
+    if contents.len() >= MIN_COMPRESSION_THRESHOLD {
+        header.compressed = true;
+    }
+
+    // Create the temporary file and set up an RAII guard to delete it
+    // in case of errors
+    let cleanup = Cell::new(true);
+    let (mut f, temp_path) = create_temp_file(&full_path)?;
+    defer! {{
+        if cleanup.get() {
+            remove_file(&temp_path).expect("could not delete temporary file");
+        }
+    }}
+
+    // the header is written without compression or encryption
+    let hd = bincode::serialize(&header)?;
+    std::io::copy(&mut hd.as_slice(), &mut f).context("could not write chunk header")?;
+
+    if header.compressed {
+        write_body(&contents, snap::Writer::new(f))?;
+    } else {
+        write_body(&contents, f)?;
+    }
+
+    rename(&temp_path, &full_path)?;
+
+    // Packing was successful. Disable RAII cleanup guard
+    cleanup.set(false);
+
     trace!("Chunk written: {:?}", full_path);
     Ok(digest)
 }
 
-pub(in super) fn unpack_chunk(
+pub(super) fn unpack_chunk(
     digest: &Digest,
     data_root: &Path,
     scratch_root: &Path,
@@ -47,7 +95,7 @@ pub(in super) fn unpack_chunk(
     let (path_suffix, dir) = digest_to_path(digest);
     let unpacked = scratch_root.join(&path_suffix);
     create_dir_all(scratch_root.join(dir))?;
-    file_copy(data_root.join(&path_suffix), &unpacked)?;
+    std::fs::copy(data_root.join(&path_suffix), &unpacked)?;
     Ok(unpacked)
 }
 
@@ -60,4 +108,9 @@ fn digest_to_path(digest: &Digest) -> (PathBuf, PathBuf) {
     let directory = PathBuf::from(prefix1).join(prefix2);
     let file_path = directory.join(file_name);
     (file_path, directory)
+}
+
+fn write_body(mut contents: &[u8], mut w: impl Write) -> DenebResult<()> {
+    std::io::copy(&mut (contents), &mut w).context("could not write chunk body")?;
+    Ok(())
 }

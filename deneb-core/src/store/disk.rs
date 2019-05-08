@@ -1,8 +1,8 @@
 mod pack;
 
 use {
-    super::{Chunk, DiskChunk, Store},
     self::pack::{pack_chunk, unpack_chunk},
+    super::{Chunk, DiskChunk, Store},
     crate::{
         cas::Digest,
         errors::{DenebResult, StoreError},

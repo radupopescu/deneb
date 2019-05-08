@@ -4,7 +4,9 @@ use {
         libc::{getegid, geteuid, gid_t, uid_t},
         unistd::mkstemp,
     },
+    scopeguard::defer,
     std::{
+        cell::Cell,
         fs::{remove_file, rename, File},
         io::Write,
         os::unix::io::FromRawFd,
@@ -19,11 +21,15 @@ use {
 /// the temporary file is atomically renamed to the final file name.
 pub fn atomic_write(file_name: &Path, bytes: &[u8]) -> DenebResult<()> {
     let (mut f, temp_path) = create_temp_file(file_name)?;
-    if let Ok(()) = f.write_all(bytes) {
-        rename(temp_path, file_name)?;
-    } else {
-        remove_file(temp_path)?;
-    }
+    let cleanup = Cell::new(true);
+    defer! {{
+        if cleanup.get() {
+            remove_file(&temp_path).expect("could not delete temporary file");
+        }
+    }};
+    f.write_all(bytes)?;
+    rename(&temp_path, file_name)?;
+    cleanup.set(false);
     Ok(())
 }
 
@@ -45,7 +51,7 @@ pub(crate) fn get_euid() -> uid_t {
 }
 
 // Can this be made faster? Is it worth it?
-fn create_temp_file(prefix: &Path) -> Result<(File, PathBuf), UnixError> {
+pub(crate) fn create_temp_file(prefix: &Path) -> Result<(File, PathBuf), UnixError> {
     let mut template = prefix.as_os_str().to_os_string();
     template.push("_XXXXXX");
     let (fd, temp_path) = mkstemp(template.as_os_str())?;
