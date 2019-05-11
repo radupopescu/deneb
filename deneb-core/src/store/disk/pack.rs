@@ -10,8 +10,8 @@ use {
     serde::{Deserialize, Serialize},
     std::{
         cell::Cell,
-        fs::{create_dir_all, remove_file, rename},
-        io::Write,
+        fs::{create_dir_all, remove_file, rename, File},
+        io::{Read, Write},
         path::{Path, PathBuf},
     },
 };
@@ -33,30 +33,26 @@ use {
 /// copy of the chunk data into the "scratch" area of the store.
 
 const PREFIX_SIZE: usize = 2;
-const MIN_COMPRESSION_THRESHOLD: usize = 1024 * 1024;
 
 /// The header is written at the beginning of each packed chunk file. It
 /// contains the packing parameters for the chunk:
 /// - whether compression was used
 /// - nonce used for encryption
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Header {
     compressed: bool,
 }
 
-pub(super) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Digest> {
+pub(super) fn pack_chunk(
+    contents: &[u8],
+    packed_root: &Path,
+    compressed: bool,
+) -> DenebResult<Digest> {
     let digest = hash(contents);
     let (path_suffix, directory) = digest_to_path(&digest);
-    let full_path = data_root.join(path_suffix);
+    let full_path = packed_root.join(path_suffix);
     // ensure all needed dirs are created in the data dir
-    create_dir_all(data_root.join(directory))?;
-
-    // the header contains the packing parameters
-    let mut header = Header { compressed: false };
-
-    if contents.len() >= MIN_COMPRESSION_THRESHOLD {
-        header.compressed = true;
-    }
+    create_dir_all(packed_root.join(directory))?;
 
     // Create the temporary file and set up an RAII guard to delete it
     // in case of errors
@@ -68,11 +64,15 @@ pub(super) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Diges
         }
     }}
 
-    // the header is written without compression or encryption
-    let hd = bincode::serialize(&header)?;
-    std::io::copy(&mut hd.as_slice(), &mut f).context("could not write chunk header")?;
+    // the header contains the packing parameters (compression, encryption
+    // nonce)
+    let header = Header { compressed };
 
-    if header.compressed {
+    // the header is written after its size, without compression or encryption
+    let header = bincode::serialize(&header)?;
+    std::io::copy(&mut header.as_slice(), &mut f).context("could not write chunk header")?;
+
+    if compressed {
         write_body(&contents, snap::Writer::new(f))?;
     } else {
         write_body(&contents, f)?;
@@ -89,14 +89,39 @@ pub(super) fn pack_chunk(contents: &[u8], data_root: &Path) -> DenebResult<Diges
 
 pub(super) fn unpack_chunk(
     digest: &Digest,
-    data_root: &Path,
-    scratch_root: &Path,
+    packed_root: &Path,
+    unpacked_root: &Path,
 ) -> DenebResult<PathBuf> {
     let (path_suffix, dir) = digest_to_path(digest);
-    let unpacked = scratch_root.join(&path_suffix);
-    create_dir_all(scratch_root.join(dir))?;
-    std::fs::copy(data_root.join(&path_suffix), &unpacked)?;
-    Ok(unpacked)
+    let unpacked_file_name = unpacked_root.join(&path_suffix);
+    create_dir_all(unpacked_root.join(dir))?;
+
+    let mut packed = File::open(packed_root.join(&path_suffix))?;
+
+    let header = bincode::deserialize_from::<_, Header>(Read::by_ref(&mut packed))?;
+
+    // Create the temporary file and set up an RAII guard to delete it
+    // in case of errors
+    let cleanup = Cell::new(true);
+    let (unpacked, temp_path) = create_temp_file(&unpacked_file_name)?;
+    defer! {{
+        if cleanup.get() {
+            remove_file(&temp_path).expect("could not delete temporary file");
+        }
+    }}
+
+    if header.compressed {
+        read_body(snap::Reader::new(packed), unpacked)?;
+    } else {
+        read_body(packed, unpacked)?;
+    }
+
+    rename(&temp_path, &unpacked_file_name)?;
+
+    // Packing was successful. Disable RAII cleanup guard
+    cleanup.set(false);
+
+    Ok(unpacked_file_name)
 }
 
 /// Given a Digest, returns the absolute file path and the directory path
@@ -113,4 +138,66 @@ fn digest_to_path(digest: &Digest) -> (PathBuf, PathBuf) {
 fn write_body(mut contents: &[u8], mut w: impl Write) -> DenebResult<()> {
     std::io::copy(&mut (contents), &mut w).context("could not write chunk body")?;
     Ok(())
+}
+
+fn read_body(mut src: impl Read, mut dst: impl Write) -> DenebResult<()> {
+    std::io::copy(&mut src, &mut dst).context("could not read chunk body")?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use {crate::cas::hash, rand::{thread_rng, RngCore}, super::*, tempdir::TempDir};
+
+    const TEST_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB
+
+    #[test]
+    fn pack_unpack_uncompressed() -> DenebResult<()> {
+        let tmp = TempDir::new("chunk_packing_uncompressed")?;
+        let packed_root = tmp.path().join("packed");
+        let unpacked_root = tmp.path().join("unpacked");
+        create_dir_all(&packed_root)?;
+        create_dir_all(&unpacked_root)?;
+
+        let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
+        thread_rng().fill_bytes(data.as_mut());
+
+        let digest_in = pack_chunk(&data, &packed_root, false)?;
+        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root)?;
+
+        let mut f = File::open(unpacked)?;
+        let mut read_back = vec![];
+        f.read_to_end(read_back.as_mut())?;
+
+        let digest_out = hash(&read_back);
+
+        assert_eq!(digest_in, digest_out);
+
+        Ok(())
+    }
+
+    #[test]
+    fn pack_unpack_compressed() -> DenebResult<()> {
+        let tmp = TempDir::new("chunk_packing_uncompressed")?;
+        let packed_root = tmp.path().join("packed");
+        let unpacked_root = tmp.path().join("unpacked");
+        create_dir_all(&packed_root)?;
+        create_dir_all(&unpacked_root)?;
+
+        let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
+        thread_rng().fill_bytes(data.as_mut());
+
+        let digest_in = pack_chunk(&data, &packed_root, true)?;
+        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root)?;
+
+        let mut f = File::open(unpacked)?;
+        let mut read_back = vec![];
+        f.read_to_end(read_back.as_mut())?;
+
+        let digest_out = hash(&read_back);
+
+        assert_eq!(digest_in, digest_out);
+
+        Ok(())
+    }
 }

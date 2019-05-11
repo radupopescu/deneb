@@ -23,8 +23,8 @@ use {
 
 const OBJECT_PATH: &str = "data";
 const SCRATCH_PATH: &str = "scratch";
-
 const CACHE_MAX_OBJECTS: usize = 100;
+const MIN_COMPRESSION_THRESHOLD: usize = 1024 * 1024;
 
 /// A disk-based implementation of the `Store` trait.
 ///
@@ -88,7 +88,12 @@ impl Store for DiskStore {
     }
 
     fn put_chunk(&mut self, contents: &[u8]) -> DenebResult<ChunkDescriptor> {
-        let digest = pack_chunk(contents, &self.object_dir)?;
+        let compressed = contents.len() > MIN_COMPRESSION_THRESHOLD;
+        let digest = pack_chunk(
+            contents,
+            &self.object_dir,
+            compressed,
+        )?;
         Ok(ChunkDescriptor {
             digest,
             size: contents.len(),
