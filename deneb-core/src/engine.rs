@@ -9,6 +9,7 @@ use {
     },
     crate::{
         catalog::CatalogType,
+        crypt::EncryptionKey,
         errors::{DenebResult, EngineError},
         store::StoreType,
         workspace::{CommitSummary, Workspace},
@@ -32,10 +33,12 @@ mod requests;
 mod timer;
 
 /// Start engine with pre-built catalog and store
+#[allow(clippy::too_many_arguments)]
 pub fn start_engine(
     catalog_type: CatalogType,
     store_type: StoreType,
     work_dir: PathBuf,
+    encryption_key: Option<EncryptionKey>,
     sync_dir: Option<PathBuf>,
     chunk_size: usize,
     cmd_queue_size: usize,
@@ -46,7 +49,14 @@ pub fn start_engine(
     let engine_hd = Handle::new(cmd_tx, quit_rx);
     let timer_engine_hd = engine_hd.clone();
     let _: JoinHandle<DenebResult<()>> = spawn(move || {
-        let ws = Workspace::new(catalog_type, store_type, work_dir, sync_dir, chunk_size);
+        let ws = Workspace::new(
+            catalog_type,
+            store_type,
+            work_dir,
+            encryption_key,
+            sync_dir,
+            chunk_size,
+        );
         if ws.is_err() {
             panic!("Could not initialize workspace. Engine will not start.");
         }

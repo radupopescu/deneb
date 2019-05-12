@@ -14,6 +14,7 @@ use {
     },
     crate::{
         catalog::{open_catalog, Catalog, CatalogType, IndexGenerator},
+        crypt::EncryptionKey,
         errors::{DenebResult, DirWorkspaceEntryLookupError, EngineError, WorkspaceError},
         inode::{mode_to_permissions, FileAttributeChanges, FileAttributes, FileType, INode},
         manifest::Manifest,
@@ -56,11 +57,12 @@ impl Workspace {
         catalog_type: CatalogType,
         store_type: StoreType,
         work_dir: PathBuf,
+        encryption_key: Option<EncryptionKey>,
         sync_dir: Option<PathBuf>,
         chunk_size: usize,
     ) -> DenebResult<Workspace> {
         // Create an object store
-        let mut store = open_store(store_type, &work_dir, chunk_size)?;
+        let mut store = open_store(store_type, &work_dir, encryption_key, chunk_size)?;
 
         let catalog_root = work_dir.join("scratch");
         create_dir_all(catalog_root.as_path())?;

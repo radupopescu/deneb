@@ -2,6 +2,7 @@ use {
     super::{Chunk, MemChunk, Store},
     crate::{
         cas::{hash, Digest},
+        crypt::EncryptionKey,
         errors::{DenebResult, StoreError},
         inode::ChunkDescriptor,
     },
@@ -21,7 +22,7 @@ pub(super) struct MemStore {
 }
 
 impl MemStore {
-    pub(super) fn new(chunk_size: usize) -> MemStore {
+    pub(super) fn new(_encryption_key: Option<EncryptionKey>, chunk_size: usize) -> MemStore {
         MemStore {
             chunk_size,
             objects: HashMap::new(),
@@ -90,7 +91,7 @@ mod tests {
     #[test]
     fn memstore_create_put_get() -> DenebResult<()> {
         const BYTES: &[u8] = b"alabalaportocala";
-        let mut store: MemStore = MemStore::new(10000);
+        let mut store: MemStore = MemStore::new(None, 10000);
         let mut v1: &[u8] = BYTES;
         let descriptors = store.put_file_chunked(&mut v1)?;
         let v2 = store.chunk(&descriptors[0].digest)?;

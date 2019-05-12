@@ -5,6 +5,7 @@ use {
     super::{Chunk, DiskChunk, Store},
     crate::{
         cas::Digest,
+        crypt::EncryptionKey,
         errors::{DenebResult, StoreError},
         inode::ChunkDescriptor,
         util::atomic_write,
@@ -36,6 +37,7 @@ const MIN_COMPRESSION_THRESHOLD: usize = 1024 * 1024;
 /// The full path at which a file with the digest "abcdefg123456" is stored is:
 /// "`root_dir`/data/ab/cdefg123456"
 pub(super) struct DiskStore {
+    encryption_key: Option<EncryptionKey>,
     chunk_size: usize,
     root_dir: PathBuf,
     object_dir: PathBuf,
@@ -44,7 +46,11 @@ pub(super) struct DiskStore {
 }
 
 impl DiskStore {
-    pub(super) fn try_new(dir: &Path, chunk_size: usize) -> DenebResult<DiskStore> {
+    pub(super) fn try_new(
+        dir: &Path,
+        encryption_key: Option<EncryptionKey>,
+        chunk_size: usize,
+    ) -> DenebResult<DiskStore> {
         let root_dir = dir;
         let object_dir = root_dir.join(OBJECT_PATH);
         let scratch_dir = root_dir.join(SCRATCH_PATH);
@@ -54,6 +60,7 @@ impl DiskStore {
         create_dir_all(&scratch_dir)?;
 
         Ok(DiskStore {
+            encryption_key,
             chunk_size,
             root_dir: root_dir.to_owned(),
             object_dir,
@@ -76,7 +83,12 @@ impl Store for DiskStore {
                 .map(Arc::clone)
                 .ok_or_else(|| StoreError::ChunkGet(digest.to_string()).into())
         } else {
-            let full_path = unpack_chunk(digest, &self.object_dir, &self.scratch_dir)?;
+            let full_path = unpack_chunk(
+                digest,
+                &self.object_dir,
+                &self.scratch_dir,
+                self.encryption_key.as_ref(),
+            )?;
             let file_stats = stat(full_path.as_path())?;
             let chunk = DiskChunk::try_new(file_stats.st_size as usize, full_path)?;
             cache.put(*digest, Arc::new(chunk));
@@ -93,6 +105,7 @@ impl Store for DiskStore {
             contents,
             &self.object_dir,
             compressed,
+            self.encryption_key.as_ref(),
         )?;
         Ok(ChunkDescriptor {
             digest,
@@ -143,7 +156,7 @@ mod tests {
     fn diskstore_create_put_get() -> DenebResult<()> {
         const BYTES: &[u8] = b"alabalaportocala";
         let temp_dir = TempDir::new("/tmp/deneb_test_diskstore")?;
-        let mut store = DiskStore::try_new(temp_dir.path(), 10000)?;
+        let mut store = DiskStore::try_new(temp_dir.path(), None, 10000)?;
         let mut v1: &[u8] = BYTES;
         let descriptors = store.put_file_chunked(&mut v1)?;
         let v2 = store.chunk(&descriptors[0].digest)?;

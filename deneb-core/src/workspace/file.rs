@@ -383,7 +383,7 @@ mod tests {
     use crate::store::{open_store, StoreType};
 
     fn make_test_workspace() -> DenebResult<Workspace> {
-        let mut store = open_store(StoreType::InMemory, "/", 10000)?;
+        let mut store = open_store(StoreType::InMemory, "/", None, 10000)?;
 
         let mut names: Vec<&[u8]> = vec![b"ala", b"bala", b"portocala"];
         let mut chunks = vec![];
@@ -411,7 +411,7 @@ mod tests {
 
     #[test]
     fn write_into_empty() -> DenebResult<()> {
-        let store = open_store(StoreType::InMemory, "/", 10000)?;
+        let store = open_store(StoreType::InMemory, "/", None, 10000)?;
 
         let inode = INode {
             attributes: FileAttributes::default(),

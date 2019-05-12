@@ -1,4 +1,5 @@
 use {
+    deneb_core::errors::{DenebError, DenebResult},
     log::LevelFilter,
     serde::{Deserialize, Serialize},
     std::{
@@ -9,8 +10,6 @@ use {
     structopt::StructOpt,
     toml,
 };
-
-use deneb_core::errors::{DenebError, DenebResult};
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Flew into the light of Deneb")]
@@ -111,7 +110,7 @@ impl ConfigFile {
     }
 }
 
-pub(super) fn parse_log_level_str(s: &str) -> Result<LevelFilter, DenebError> {
+fn parse_log_level_str(s: &str) -> Result<LevelFilter, DenebError> {
     match s {
         "off" => Ok(LevelFilter::Off),
         "error" => Ok(LevelFilter::Error),

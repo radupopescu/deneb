@@ -46,6 +46,7 @@ fn main() -> DenebResult<()> {
         CatalogType::Lmdb,
         StoreType::OnDisk,
         app.directories.workspace.clone(),
+        Some(app.settings.encryption_key.clone()),
         app.settings.sync_dir.clone(),
         app.settings.chunk_size,
         1000,

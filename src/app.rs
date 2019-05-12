@@ -1,11 +1,16 @@
 use {
     self::config::{CommandLine, ConfigFile},
-    deneb_core::errors::DenebResult,
+    deneb_core::{crypt::EncryptionKey, errors::DenebResult},
     directories::ProjectDirs,
     dirs::home_dir,
     failure::err_msg,
     log::{info, LevelFilter},
-    std::{fs::create_dir_all, path::PathBuf},
+    std::{
+        fs::{create_dir_all, File, OpenOptions},
+        io::{Read, Write},
+        os::unix::fs::OpenOptionsExt,
+        path::{Path, PathBuf},
+    },
 };
 
 mod config;
@@ -42,6 +47,12 @@ impl App {
         // Save new config file
         cfg_file.save(&config_file_name)?;
 
+        // Save the encryption key
+        write_encryption_key(
+            &settings.encryption_key,
+            &settings.config_dir.join("encryption_key"),
+        )?;
+
         Ok(App {
             settings,
             directories,
@@ -74,6 +85,7 @@ pub struct Settings {
     pub instance_name: String,
     pub config_dir: PathBuf,
     pub mount_point: PathBuf,
+    pub encryption_key: EncryptionKey,
     pub log_level: LevelFilter,
     pub chunk_size: usize,
     pub sync_dir: Option<PathBuf>,
@@ -125,10 +137,14 @@ impl Settings {
         let force_unmount = cmd_line.force_unmount;
         let foreground = cmd_line.foreground;
 
+        let encryption_key = read_encryption_key(&config_dir.join("encryption_key"))
+            .unwrap_or_else(|_| EncryptionKey::new());
+
         Settings {
             instance_name,
             config_dir,
             mount_point,
+            encryption_key,
             log_level,
             chunk_size,
             sync_dir,
@@ -187,4 +203,21 @@ fn organization() -> &'static str {
 
 fn application() -> &'static str {
     "Deneb"
+}
+
+fn read_encryption_key(key_file: &Path) -> DenebResult<EncryptionKey> {
+    let mut f = File::open(key_file)?;
+    let mut buf = vec![];
+    f.read_to_end(&mut buf)?;
+    EncryptionKey::from_slice(buf.as_slice()).map_err(std::convert::Into::into)
+}
+
+fn write_encryption_key(key: &EncryptionKey, key_file: &Path) -> DenebResult<()> {
+    let mut f = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .mode(0o600)
+        .open(key_file)?;
+    f.write_all(key.as_slice())?;
+    Ok(())
 }

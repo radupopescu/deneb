@@ -1,6 +1,7 @@
 use {
     crate::{
         cas::{hash, Digest},
+        crypt::EncryptionKey,
         errors::DenebResult,
         util::create_temp_file,
     },
@@ -47,6 +48,7 @@ pub(super) fn pack_chunk(
     contents: &[u8],
     packed_root: &Path,
     compressed: bool,
+    _encryption_key: Option<&EncryptionKey>,
 ) -> DenebResult<Digest> {
     let digest = hash(contents);
     let (path_suffix, directory) = digest_to_path(&digest);
@@ -91,6 +93,7 @@ pub(super) fn unpack_chunk(
     digest: &Digest,
     packed_root: &Path,
     unpacked_root: &Path,
+    _encryption_key: Option<&EncryptionKey>,
 ) -> DenebResult<PathBuf> {
     let (path_suffix, dir) = digest_to_path(digest);
     let unpacked_file_name = unpacked_root.join(&path_suffix);
@@ -147,7 +150,12 @@ fn read_body(mut src: impl Read, mut dst: impl Write) -> DenebResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use {crate::cas::hash, rand::{thread_rng, RngCore}, super::*, tempdir::TempDir};
+    use {
+        super::*,
+        crate::cas::hash,
+        rand::{thread_rng, RngCore},
+        tempdir::TempDir,
+    };
 
     const TEST_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB
 
@@ -162,8 +170,8 @@ mod tests {
         let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
         thread_rng().fill_bytes(data.as_mut());
 
-        let digest_in = pack_chunk(&data, &packed_root, false)?;
-        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root)?;
+        let digest_in = pack_chunk(&data, &packed_root, false, None)?;
+        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, None)?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];
@@ -187,8 +195,8 @@ mod tests {
         let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
         thread_rng().fill_bytes(data.as_mut());
 
-        let digest_in = pack_chunk(&data, &packed_root, true)?;
-        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root)?;
+        let digest_in = pack_chunk(&data, &packed_root, true, None)?;
+        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, None)?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];

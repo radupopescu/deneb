@@ -1,6 +1,7 @@
 use {
     crate::{
         cas::{read_chunked, Digest},
+        crypt::EncryptionKey,
         errors::DenebResult,
         inode::ChunkDescriptor,
     },
@@ -22,11 +23,16 @@ pub enum StoreType {
 pub fn open_store<P: AsRef<Path>>(
     store_type: StoreType,
     dir: P,
+    encryption_key: Option<EncryptionKey>,
     chunk_size: usize,
 ) -> DenebResult<Box<dyn Store>> {
     Ok(match store_type {
-        StoreType::InMemory => Box::new(mem::MemStore::new(chunk_size)),
-        StoreType::OnDisk => Box::new(disk::DiskStore::try_new(dir.as_ref(), chunk_size)?),
+        StoreType::InMemory => Box::new(mem::MemStore::new(encryption_key, chunk_size)),
+        StoreType::OnDisk => Box::new(disk::DiskStore::try_new(
+            dir.as_ref(),
+            encryption_key,
+            chunk_size,
+        )?),
     })
 }
 
