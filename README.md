@@ -4,12 +4,17 @@
 
 ## Overview
 
-Deneb is a tool for synchronizing directories across multiple computers. The main way to use Deneb is through its file system interface.
+Deneb is a tool for synchronizing directories across multiple computers, offering a file system interface, and using end-to-end encryption.
 
-**Work-in-progress**: the project is currently in the early stages of
-development, most
+### Work-in-progress
+
+The project is currently under active development, some
 [functionality](https://github.com/radupopescu/deneb/blob/master/doc/design.md)
 is still missing.
+
+Local operation (file system interface, data storage, compression, encryption, persistence, etc.) is implemented. Network functions (distribution, synchronization, etc.) are under development.
+
+Deneb is only usable for development and experimentation, no important or valuable data should be stored in Deneb. Use at your own risk.
 
 ## Building
 
