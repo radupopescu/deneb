@@ -104,6 +104,7 @@ impl Store for DiskStore {
         let digest = pack_chunk(
             contents,
             &self.object_dir,
+            &self.scratch_dir,
             compressed,
             self.encryption_key.as_ref(),
         )?;

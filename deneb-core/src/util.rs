@@ -53,7 +53,7 @@ pub(crate) fn get_euid() -> uid_t {
 // Can this be made faster? Is it worth it?
 pub(crate) fn create_temp_file(prefix: &Path) -> Result<(File, PathBuf), UnixError> {
     let mut template = prefix.as_os_str().to_os_string();
-    template.push("_XXXXXX");
+    template.push("_XXXXXXXXX");
     let (fd, temp_path) = mkstemp(template.as_os_str())?;
     let f = unsafe { File::from_raw_fd(fd) };
     Ok((f, temp_path))

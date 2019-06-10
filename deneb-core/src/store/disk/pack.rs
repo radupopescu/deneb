@@ -56,25 +56,10 @@ struct Header {
 pub(super) fn pack_chunk(
     contents: &[u8],
     packed_root: &Path,
+    scratch_root: &Path,
     compressed: bool,
     encryption_key: Option<&EncryptionKey>,
 ) -> DenebResult<Digest> {
-    let digest = hash(contents);
-    let (path_suffix, directory) = digest_to_path(&digest);
-    let full_path = packed_root.join(path_suffix);
-    // ensure all needed dirs are created in the data dir
-    create_dir_all(packed_root.join(directory))?;
-
-    // Create the temporary file and set up an RAII guard to delete it
-    // in case of errors
-    let cleanup = Cell::new(true);
-    let (mut f, temp_path) = create_temp_file(&full_path)?;
-    defer! {{
-        if cleanup.get() {
-            remove_file(&temp_path).expect("could not delete temporary file");
-        }
-    }}
-
     // Optionally encrypt the body of the chunk
     let (contents, nonce) = if let Some(key) = encryption_key {
         let nonce = Nonce::new();
@@ -88,16 +73,35 @@ pub(super) fn pack_chunk(
     // nonce)
     let header = Header { compressed, nonce };
 
+    let mut buffer = Vec::new();
+
     // the header is written without compression or encryption
     let header = bincode::serialize(&header)?;
-    std::io::copy(&mut header.as_slice(), &mut f).context("could not write chunk header")?;
+    std::io::copy(&mut header.as_slice(), &mut buffer).context("could not write chunk header")?;
 
     if compressed {
-        copy_body(&mut contents.as_slice(), &mut snap::Writer::new(f))?;
+        copy_body(&mut contents.as_slice(), &mut snap::Writer::new(&mut buffer))?;
     } else {
-        copy_body(&mut contents.as_slice(), &mut f)?;
+        copy_body(&mut contents.as_slice(), &mut buffer)?;
     }
 
+    let digest = hash(buffer.as_slice());
+    let (path_suffix, directory) = digest_to_path(&digest);
+    let full_path = packed_root.join(path_suffix);
+    // ensure all needed dirs are created in the data dir
+    create_dir_all(packed_root.join(directory))?;
+
+    // Create the temporary file and set up an RAII guard to delete it
+    // in case of errors
+    let cleanup = Cell::new(true);
+    let (mut f, temp_path) = create_temp_file(&scratch_root.join("chunk"))?;
+    defer! {{
+        if cleanup.get() {
+            remove_file(&temp_path).expect("could not delete temporary file");
+        }
+    }}
+
+    copy_body(&mut buffer.as_slice(), &mut f)?;
     rename(&temp_path, &full_path)?;
 
     // Packing was successful. Disable RAII cleanup guard
@@ -187,22 +191,25 @@ mod tests {
         let tmp = TempDir::new("chunk_packing_uncompressed")?;
         let packed_root = tmp.path().join("packed");
         let unpacked_root = tmp.path().join("unpacked");
+        let scratch_root = tmp.path().join("scratch");
         create_dir_all(&packed_root)?;
         create_dir_all(&unpacked_root)?;
+        create_dir_all(&scratch_root)?;
 
         let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
         thread_rng().fill_bytes(data.as_mut());
+        let hash_in = hash(&data);
 
-        let digest_in = pack_chunk(&data, &packed_root, false, None)?;
-        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, None)?;
+        let digest = pack_chunk(&data, &packed_root, &scratch_root, false, None)?;
+        let unpacked = unpack_chunk(&digest, &packed_root, &unpacked_root, None)?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];
         f.read_to_end(read_back.as_mut())?;
 
-        let digest_out = hash(&read_back);
+        let hash_out = hash(&read_back);
 
-        assert_eq!(digest_in, digest_out);
+        assert_eq!(hash_in, hash_out);
 
         Ok(())
     }
@@ -212,24 +219,27 @@ mod tests {
         let tmp = TempDir::new("chunk_packing_uncompressed_encrypted")?;
         let packed_root = tmp.path().join("packed");
         let unpacked_root = tmp.path().join("unpacked");
+        let scratch_root = tmp.path().join("scratch");
         create_dir_all(&packed_root)?;
         create_dir_all(&unpacked_root)?;
+        create_dir_all(&scratch_root)?;
 
         let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
         thread_rng().fill_bytes(data.as_mut());
+        let hash_in = hash(&data);
 
         let key = Some(EncryptionKey::new());
 
-        let digest_in = pack_chunk(&data, &packed_root, false, key.as_ref())?;
-        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, key.as_ref())?;
+        let digest = pack_chunk(&data, &packed_root, &scratch_root, false, key.as_ref())?;
+        let unpacked = unpack_chunk(&digest, &packed_root, &unpacked_root, key.as_ref())?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];
         f.read_to_end(read_back.as_mut())?;
 
-        let digest_out = hash(&read_back);
+        let hash_out = hash(&read_back);
 
-        assert_eq!(digest_in, digest_out);
+        assert_eq!(hash_in, hash_out);
 
         Ok(())
     }
@@ -239,22 +249,25 @@ mod tests {
         let tmp = TempDir::new("chunk_packing_compressed")?;
         let packed_root = tmp.path().join("packed");
         let unpacked_root = tmp.path().join("unpacked");
+        let scratch_root = tmp.path().join("scratch");
         create_dir_all(&packed_root)?;
         create_dir_all(&unpacked_root)?;
+        create_dir_all(&scratch_root)?;
 
         let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
         thread_rng().fill_bytes(data.as_mut());
+        let hash_in = hash(&data);
 
-        let digest_in = pack_chunk(&data, &packed_root, true, None)?;
-        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, None)?;
+        let digest = pack_chunk(&data, &packed_root, &scratch_root, true, None)?;
+        let unpacked = unpack_chunk(&digest, &packed_root, &unpacked_root, None)?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];
         f.read_to_end(read_back.as_mut())?;
 
-        let digest_out = hash(&read_back);
+        let hash_out = hash(&read_back);
 
-        assert_eq!(digest_in, digest_out);
+        assert_eq!(hash_in, hash_out);
 
         Ok(())
     }
@@ -264,24 +277,27 @@ mod tests {
         let tmp = TempDir::new("chunk_packing_compressed_encrypted")?;
         let packed_root = tmp.path().join("packed");
         let unpacked_root = tmp.path().join("unpacked");
+        let scratch_root = tmp.path().join("scratch");
         create_dir_all(&packed_root)?;
         create_dir_all(&unpacked_root)?;
+        create_dir_all(&scratch_root)?;
 
         let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
         thread_rng().fill_bytes(data.as_mut());
+        let hash_in = hash(&data);
 
         let key = Some(EncryptionKey::new());
 
-        let digest_in = pack_chunk(&data, &packed_root, true, key.as_ref())?;
-        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, key.as_ref())?;
+        let digest = pack_chunk(&data, &packed_root, &scratch_root, true, key.as_ref())?;
+        let unpacked = unpack_chunk(&digest, &packed_root, &unpacked_root, key.as_ref())?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];
         f.read_to_end(read_back.as_mut())?;
 
-        let digest_out = hash(&read_back);
+        let hash_out = hash(&read_back);
 
-        assert_eq!(digest_in, digest_out);
+        assert_eq!(hash_in, hash_out);
 
         Ok(())
     }
