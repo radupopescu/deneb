@@ -12,6 +12,8 @@ use {
     deneb_fuse::fs::Fs,
     failure::ResultExt,
     log::info,
+    std::fs::remove_dir_all,
+    scopeguard::defer,
 };
 
 fn main() -> DenebResult<()> {
@@ -40,6 +42,11 @@ fn main() -> DenebResult<()> {
 
     info!("Welcome to Deneb!");
     app.print_settings();
+
+    // Install an RAII guard that deletes the scratch dir at program exit
+    defer! {{
+        let _ = remove_dir_all(&app.directories.workspace.join("scratch"));
+    }}
 
     // Create the file system data structure
     let handle = start_engine(
