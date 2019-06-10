@@ -27,13 +27,13 @@ mod workspace;
 
 #[derive(Debug, Fail)]
 pub enum DenebCoreInitError {
-    #[fail(display = "Could not initialize the rust_sodium library")]
+    #[fail(display = "Could not initialize the sodiumoxide library")]
     RustSodium,
 }
 
 pub fn init() -> DenebResult<()> {
-    // Initialize the rust_sodium library (needed to make all its functions thread-safe)
-    rust_sodium::init().map_err(|_| DenebCoreInitError::RustSodium)?;
+    // Initialize the sodiumoxide library (needed to make all its functions thread-safe)
+    sodiumoxide::init().map_err(|_| DenebCoreInitError::RustSodium)?;
 
     Ok(())
 }

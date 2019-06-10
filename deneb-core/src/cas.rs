@@ -1,7 +1,7 @@
 use {
     crate::errors::{DenebError, DenebResult},
     data_encoding::HEXLOWER,
-    rust_sodium::crypto::hash::{hash as sodium_hash, sha512::Digest as SodiumDigest},
+    sodiumoxide::crypto::hash::{hash as sodium_hash, sha512::Digest as SodiumDigest},
     serde::{
         de::{Error, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
