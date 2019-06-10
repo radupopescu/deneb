@@ -1,11 +1,11 @@
 use {
     crate::errors::{DenebError, DenebResult},
     data_encoding::HEXLOWER,
-    sodiumoxide::crypto::hash::{hash as sodium_hash, sha512::Digest as SodiumDigest},
     serde::{
         de::{Error, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
     },
+    sodiumoxide::crypto::hash::{hash as sodium_hash, sha512::Digest as SodiumDigest},
     std::fmt::{Display, Formatter, Result as FmtResult},
 };
 

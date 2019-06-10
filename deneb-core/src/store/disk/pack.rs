@@ -80,7 +80,10 @@ pub(super) fn pack_chunk(
     std::io::copy(&mut header.as_slice(), &mut buffer).context("could not write chunk header")?;
 
     if compressed {
-        copy_body(&mut contents.as_slice(), &mut snap::Writer::new(&mut buffer))?;
+        copy_body(
+            &mut contents.as_slice(),
+            &mut snap::Writer::new(&mut buffer),
+        )?;
     } else {
         copy_body(&mut contents.as_slice(), &mut buffer)?;
     }

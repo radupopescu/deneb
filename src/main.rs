@@ -12,8 +12,8 @@ use {
     deneb_fuse::fs::Fs,
     failure::ResultExt,
     log::info,
-    std::fs::remove_dir_all,
     scopeguard::defer,
+    std::fs::remove_dir_all,
 };
 
 fn main() -> DenebResult<()> {

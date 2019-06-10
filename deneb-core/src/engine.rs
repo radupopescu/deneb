@@ -278,7 +278,8 @@ impl RequestHandler<Ping> for Engine {
 impl RequestHandler<StopEngine> for Engine {
     fn handle(&mut self, _request: &StopEngine) -> DenebResult<()> {
         info!("StopEngine request received.");
-        let _ = self.workspace
+        let _ = self
+            .workspace
             .commit()
             .context(EngineError::Commit)
             .map_err(Error::from);

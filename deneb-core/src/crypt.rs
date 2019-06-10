@@ -48,16 +48,20 @@ pub fn encrypt(msg: &[u8], nonce: &Nonce, key: &EncryptionKey) -> Vec<u8> {
     seal(msg, &nonce.0, &key.0)
 }
 
-pub fn decrypt(cyphertext: &[u8], nonce: &Nonce, key: &EncryptionKey) -> Result<Vec<u8>, DecryptionError> {
+pub fn decrypt(
+    cyphertext: &[u8],
+    nonce: &Nonce,
+    key: &EncryptionKey,
+) -> Result<Vec<u8>, DecryptionError> {
     open(cyphertext, &nonce.0, &key.0).map_err(|_| DecryptionError)
 }
 
 #[cfg(test)]
 mod tests {
     use {
+        super::*,
         crate::errors::*,
         rand::{thread_rng, RngCore},
-        super::*
     };
 
     const TEST_CHUNK_SIZE: usize = 1024 * 1024; // 1 MB
