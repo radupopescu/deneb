@@ -1,11 +1,11 @@
 use {
     crate::{
         cas::{hash, Digest},
-        crypt::EncryptionKey,
+        crypt::{decrypt, encrypt, EncryptionKey, Nonce},
         errors::DenebResult,
         util::create_temp_file,
     },
-    failure::ResultExt,
+    failure::{Fail, ResultExt},
     log::trace,
     scopeguard::defer,
     serde::{Deserialize, Serialize},
@@ -35,6 +35,14 @@ use {
 
 const PREFIX_SIZE: usize = 2;
 
+#[derive(Debug, Fail)]
+#[fail(display = "Missing encryption key")]
+pub struct MissingKeyError;
+
+#[derive(Debug, Fail)]
+#[fail(display = "Chunk body I/O error")]
+pub struct ChunkIOError;
+
 /// The header is written at the beginning of each packed chunk file. It
 /// contains the packing parameters for the chunk:
 /// - whether compression was used
@@ -42,13 +50,14 @@ const PREFIX_SIZE: usize = 2;
 #[derive(Deserialize, Serialize)]
 struct Header {
     compressed: bool,
+    nonce: Option<Nonce>,
 }
 
 pub(super) fn pack_chunk(
     contents: &[u8],
     packed_root: &Path,
     compressed: bool,
-    _encryption_key: Option<&EncryptionKey>,
+    encryption_key: Option<&EncryptionKey>,
 ) -> DenebResult<Digest> {
     let digest = hash(contents);
     let (path_suffix, directory) = digest_to_path(&digest);
@@ -66,18 +75,27 @@ pub(super) fn pack_chunk(
         }
     }}
 
+    // Optionally encrypt the body of the chunk
+    let (contents, nonce) = if let Some(key) = encryption_key {
+        let nonce = Nonce::new();
+        let ciphertext = encrypt(contents, &nonce, key);
+        (ciphertext, Some(nonce))
+    } else {
+        (contents.to_owned(), None)
+    };
+
     // the header contains the packing parameters (compression, encryption
     // nonce)
-    let header = Header { compressed };
+    let header = Header { compressed, nonce };
 
-    // the header is written after its size, without compression or encryption
+    // the header is written without compression or encryption
     let header = bincode::serialize(&header)?;
     std::io::copy(&mut header.as_slice(), &mut f).context("could not write chunk header")?;
 
     if compressed {
-        write_body(&contents, snap::Writer::new(f))?;
+        copy_body(&mut contents.as_slice(), &mut snap::Writer::new(f))?;
     } else {
-        write_body(&contents, f)?;
+        copy_body(&mut contents.as_slice(), &mut f)?;
     }
 
     rename(&temp_path, &full_path)?;
@@ -93,7 +111,7 @@ pub(super) fn unpack_chunk(
     digest: &Digest,
     packed_root: &Path,
     unpacked_root: &Path,
-    _encryption_key: Option<&EncryptionKey>,
+    encryption_key: Option<&EncryptionKey>,
 ) -> DenebResult<PathBuf> {
     let (path_suffix, dir) = digest_to_path(digest);
     let unpacked_file_name = unpacked_root.join(&path_suffix);
@@ -103,21 +121,31 @@ pub(super) fn unpack_chunk(
 
     let header = bincode::deserialize_from::<_, Header>(Read::by_ref(&mut packed))?;
 
+    let mut buffer = Vec::new();
+    if header.compressed {
+        copy_body(&mut snap::Reader::new(packed), &mut buffer)?;
+    } else {
+        copy_body(&mut packed, &mut buffer)?;
+    }
+
+    let body = if let Some(nonce) = header.nonce {
+        let key = encryption_key.ok_or(MissingKeyError)?;
+        decrypt(&buffer, &nonce, &key)
+    } else {
+        Ok(buffer)
+    }?;
+
     // Create the temporary file and set up an RAII guard to delete it
     // in case of errors
     let cleanup = Cell::new(true);
-    let (unpacked, temp_path) = create_temp_file(&unpacked_file_name)?;
+    let (mut unpacked, temp_path) = create_temp_file(&unpacked_file_name)?;
     defer! {{
         if cleanup.get() {
             remove_file(&temp_path).expect("could not delete temporary file");
         }
     }}
 
-    if header.compressed {
-        read_body(snap::Reader::new(packed), unpacked)?;
-    } else {
-        read_body(packed, unpacked)?;
-    }
+    copy_body(&mut body.as_slice(), &mut unpacked)?;
 
     rename(&temp_path, &unpacked_file_name)?;
 
@@ -138,13 +166,8 @@ fn digest_to_path(digest: &Digest) -> (PathBuf, PathBuf) {
     (file_path, directory)
 }
 
-fn write_body(mut contents: &[u8], mut w: impl Write) -> DenebResult<()> {
-    std::io::copy(&mut (contents), &mut w).context("could not write chunk body")?;
-    Ok(())
-}
-
-fn read_body(mut src: impl Read, mut dst: impl Write) -> DenebResult<()> {
-    std::io::copy(&mut src, &mut dst).context("could not read chunk body")?;
+fn copy_body(src: &mut impl Read, dst: &mut impl Write) -> DenebResult<()> {
+    std::io::copy(src, dst).context(ChunkIOError)?;
     Ok(())
 }
 
@@ -185,8 +208,35 @@ mod tests {
     }
 
     #[test]
+    fn pack_unpack_uncompressed_encrypted() -> DenebResult<()> {
+        let tmp = TempDir::new("chunk_packing_uncompressed_encrypted")?;
+        let packed_root = tmp.path().join("packed");
+        let unpacked_root = tmp.path().join("unpacked");
+        create_dir_all(&packed_root)?;
+        create_dir_all(&unpacked_root)?;
+
+        let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
+        thread_rng().fill_bytes(data.as_mut());
+
+        let key = Some(EncryptionKey::new());
+
+        let digest_in = pack_chunk(&data, &packed_root, false, key.as_ref())?;
+        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, key.as_ref())?;
+
+        let mut f = File::open(unpacked)?;
+        let mut read_back = vec![];
+        f.read_to_end(read_back.as_mut())?;
+
+        let digest_out = hash(&read_back);
+
+        assert_eq!(digest_in, digest_out);
+
+        Ok(())
+    }
+
+    #[test]
     fn pack_unpack_compressed() -> DenebResult<()> {
-        let tmp = TempDir::new("chunk_packing_uncompressed")?;
+        let tmp = TempDir::new("chunk_packing_compressed")?;
         let packed_root = tmp.path().join("packed");
         let unpacked_root = tmp.path().join("unpacked");
         create_dir_all(&packed_root)?;
@@ -197,6 +247,33 @@ mod tests {
 
         let digest_in = pack_chunk(&data, &packed_root, true, None)?;
         let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, None)?;
+
+        let mut f = File::open(unpacked)?;
+        let mut read_back = vec![];
+        f.read_to_end(read_back.as_mut())?;
+
+        let digest_out = hash(&read_back);
+
+        assert_eq!(digest_in, digest_out);
+
+        Ok(())
+    }
+
+    #[test]
+    fn pack_unpack_compressed_encrypted() -> DenebResult<()> {
+        let tmp = TempDir::new("chunk_packing_compressed_encrypted")?;
+        let packed_root = tmp.path().join("packed");
+        let unpacked_root = tmp.path().join("unpacked");
+        create_dir_all(&packed_root)?;
+        create_dir_all(&unpacked_root)?;
+
+        let mut data = vec![0 as u8; TEST_CHUNK_SIZE];
+        thread_rng().fill_bytes(data.as_mut());
+
+        let key = Some(EncryptionKey::new());
+
+        let digest_in = pack_chunk(&data, &packed_root, true, key.as_ref())?;
+        let unpacked = unpack_chunk(&digest_in, &packed_root, &unpacked_root, key.as_ref())?;
 
         let mut f = File::open(unpacked)?;
         let mut read_back = vec![];

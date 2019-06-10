@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 fuse = "^0.3.0"
-nix = "^0.13.0"
+nix = "^0.14.0"
 time = "^0.1.0"
 
 deneb-core = { path = "../deneb-core" }
