@@ -64,7 +64,6 @@ impl App {
         info!("Work dir: {:?}", self.directories.workspace);
         info!("Mount point: {:?}", self.directories.mount_point);
         info!("Chunk size: {:?}", self.settings.chunk_size);
-        info!("Sync dir: {:?}", self.settings.sync_dir);
         info!("Force unmount: {}", self.settings.force_unmount);
         if self.settings.auto_commit_interval > 0 {
             info!(
@@ -88,7 +87,6 @@ pub struct Settings {
     pub encryption_key: EncryptionKey,
     pub log_level: LevelFilter,
     pub chunk_size: usize,
-    pub sync_dir: Option<PathBuf>,
     pub force_unmount: bool,
     pub auto_commit_interval: usize,
     pub foreground: bool,
@@ -133,7 +131,6 @@ impl Settings {
                 .get_or_insert(DEFAULT_AUTO_COMMIT_INTERVAL),
         );
 
-        let sync_dir = cmd_line.sync_dir.clone();
         let force_unmount = cmd_line.force_unmount;
         let foreground = cmd_line.foreground;
 
@@ -147,7 +144,6 @@ impl Settings {
             encryption_key,
             log_level,
             chunk_size,
-            sync_dir,
             force_unmount,
             auto_commit_interval,
             foreground,

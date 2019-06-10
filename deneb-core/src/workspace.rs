@@ -29,8 +29,8 @@ use {
         cell::RefCell,
         collections::{HashMap, HashSet},
         ffi::OsStr,
-        fs::{create_dir_all, File},
-        path::PathBuf,
+        fs::{create_dir_all, remove_dir_all, File},
+        path::{Path, PathBuf},
         rc::Rc,
     },
     time::now_utc,
@@ -74,22 +74,29 @@ impl Workspace {
 
         // Create the file metadata catalog and populate it with the contents of "sync_dir"
         if let Some(sync_dir) = sync_dir {
-            {
-                let mut catalog = open_catalog(catalog_type, catalog_path.as_path(), true)?;
-                populate_with_dir(&mut *catalog, &mut *store, sync_dir.as_path(), chunk_size)?;
-                info!(
-                    "Catalog populated with contents of {:?}",
-                    sync_dir.as_path()
-                );
-            }
+            init(
+                &mut *store,
+                catalog_type,
+                catalog_path.as_path(),
+                manifest_path.as_path(),
+                sync_dir.as_path(),
+                chunk_size,
+            )?;
+        }
 
-            // Save the generated catalog as a content-addressed chunk in the store.
-            let mut f = File::open(catalog_path.as_path())?;
-            let chunk_descriptor = store.put_file(&mut f)?;
-
-            // Create and save the repository manifest
-            let manifest = Manifest::new(chunk_descriptor.digest, now_utc()).serialize()?;
-            store.write_special_file(&manifest_path, &mut &manifest[..], false)?;
+        // If there is no work dir yet (first start, no sync_dir) create and initialize the repository
+        if !manifest_path.exists() {
+            let empty_dir = work_dir.join("empty_dir");
+            create_dir_all(&empty_dir)?;
+            init(
+                &mut *store,
+                catalog_type,
+                catalog_path.as_path(),
+                manifest_path.as_path(),
+                empty_dir.as_path(),
+                chunk_size,
+            )?;
+            remove_dir_all(&empty_dir)?;
         }
 
         // Load the repository manifest
@@ -471,4 +478,27 @@ impl Workspace {
             .get_mut(&index)
             .ok_or_else(|| WorkspaceError::INodeLookup(index).into())
     }
+}
+
+fn init(
+    store: &mut dyn Store,
+    catalog_type: CatalogType,
+    catalog_path: &Path,
+    manifest_path: &Path,
+    sync_dir: &Path,
+    chunk_size: usize,
+) -> DenebResult<()> {
+    let mut catalog = open_catalog(catalog_type, catalog_path, true)?;
+    populate_with_dir(&mut *catalog, store, sync_dir, chunk_size)?;
+    info!("Catalog populated with contents of {:?}", sync_dir);
+
+    // Save the generated catalog as a content-addressed chunk in the store.
+    let mut f = File::open(catalog_path)?;
+    let chunk_descriptor = store.put_file(&mut f)?;
+
+    // Create and save the repository manifest
+    let manifest = Manifest::new(chunk_descriptor.digest, now_utc()).serialize()?;
+    store.write_special_file(&manifest_path, &mut &manifest[..], false)?;
+
+    Ok(())
 }

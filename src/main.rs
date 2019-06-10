@@ -54,7 +54,7 @@ fn main() -> DenebResult<()> {
         StoreType::OnDisk,
         app.directories.workspace.clone(),
         Some(app.settings.encryption_key.clone()),
-        app.settings.sync_dir.clone(),
+        None,
         app.settings.chunk_size,
         1000,
         app.settings.auto_commit_interval,
