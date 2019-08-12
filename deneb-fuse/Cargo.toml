@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 fuse = "^0.3.0"
-nix = "^0.14.0"
+nix = "^0.15.0"
 time = "^0.1.0"
 
 deneb-core = { path = "../deneb-core" }
@@ -16,7 +16,7 @@ copy_dir = "^0.1.0"
 failure = "^0.1.0"
 log = "^0.4.0"
 quickcheck = "^0.8.0"
-rand = "^0.6.0"
+rand = "^0.7.0"
 tempdir = "^0.3.0"
 uuid = { version = "^0.7.0", features = ["v4"]}
 
