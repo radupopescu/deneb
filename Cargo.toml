@@ -44,7 +44,7 @@ dirs = "^2.0.0"
 failure = "^0.1.0"
 log = "^0.4.0"
 log4rs = "^0.8.0"
-nix = "^0.15.0"
+nix = "^0.20.2"
 scopeguard = "^1.0.0"
 serde = { version = "^1.0.0", features = ["derive"] }
 structopt = "^0.2.0"
